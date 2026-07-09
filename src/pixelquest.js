@@ -2278,6 +2278,7 @@ export class PixelQuest {
 
   toggleDebugScreen() {
     this.cfg.debugScreen = !this.cfg.debugScreen;
+    if (this.cfg.debugScreen) this.debugPage = 0; // always open on the main page
     // the DOM idle-hint / controls panels sit above the canvas — hide them
     // while the debug screen is up so it reads cleanly
     if (typeof document !== "undefined") {
@@ -2291,7 +2292,16 @@ export class PixelQuest {
     return this.cfg.debugScreen;
   }
 
+  // debug-screen paging (← / → while the D screen is up): 0 = overview, 1 = cameo/easter-egg asset status
+  debugScreenOpen() { return !!this.cfg.debugScreen; }
+  cycleDebugPage(dir) {
+    const N = 2;
+    this.debugPage = ((((this.debugPage || 0) + dir) % N) + N) % N;
+    return this.debugPage;
+  }
+
   drawDebugScreen(ctx, w, h) {
+    if ((this.debugPage || 0) === 1) { this.drawDebugEggs(ctx, w, h); return; }
     const sum = this.assets.summary();
     const a = this.adventure, orb = a?.orb, mood = a?.mood;
     const G = "rgba(90,230,120,1)", A = "rgba(255,200,90,1)", R = "rgba(255,90,90,1)";
@@ -2307,7 +2317,7 @@ export class PixelQuest {
     ctx.fillStyle = G; ctx.fillText("● textured", 230, 20);
     ctx.fillStyle = A; ctx.fillText("● baked", 330, 20);
     ctx.fillStyle = R; ctx.fillText("● procedural (needs art)", 415, 20);
-    ctx.fillStyle = "rgba(150,160,185,0.9)"; ctx.textAlign = "right"; ctx.fillText("press D to close", w - 18, 20); ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(150,160,185,0.9)"; ctx.textAlign = "right"; ctx.fillText("page 1/2  ← →  ·  D close", w - 18, 20); ctx.textAlign = "left";
     ctx.font = "12.5px monospace";
     const lh = 16, top = 48;
 
@@ -2347,6 +2357,7 @@ export class PixelQuest {
     yB += 6; secHdr(xB, yB, "CAMEOS / EASTER EGGS"); yB += lh;
     const nEv = this.events?.defs?.length || 63;
     rowAt(xB, yB, R, `${nEv} events`, "OLD"); yB += lh;
+    ctx.fillStyle = "rgba(150,190,255,0.95)"; ctx.fillText("→ press → for per-event status", xB + 15, yB); yB += lh;
     ctx.fillStyle = "rgba(150,160,182,0.8)"; ctx.fillText("moon flybys, dragon, giant,", xB + 15, yB); yB += lh - 3;
     ctx.fillText("jukebox, boulder chase, …", xB + 15, yB);
 
@@ -2370,8 +2381,69 @@ export class PixelQuest {
     kv("assets", `${sum.external} img · ${sum.procedural} old`);
     yC += 6; hdr("KEYS");
     ctx.fillStyle = "rgba(195,200,215,0.9)";
-    for (const l of ["D  close", "B / ⇧B  biome", "1–5  jump biome", "J  arrival", "H  controls"]) { ctx.fillText(l, xC, yC); yC += lh; }
+    for (const l of ["D  close", "← →  page", "B / ⇧B  biome", "1–5  jump biome", "J  arrival", "H  controls"]) { ctx.fillText(l, xC, yC); yC += lh; }
 
+    ctx.restore();
+  }
+
+  // Debug page 2 — per-event asset status for every cameo / easter egg.
+  // An event is "image" once its def names an `asset` sprite that is loaded,
+  // "missing" if it names one that failed to load, else "procedural".
+  drawDebugEggs(ctx, w, h) {
+    const G = "rgba(90,230,120,1)", A = "rgba(255,200,90,1)", R = "rgba(255,90,90,1)";
+    const defs = (this.events && this.events.defs) || [];
+    const stateOf = (d) => (d.asset && this.assets.ready(d.asset)) ? "img" : (d.asset ? "miss" : "proc");
+    const colOf = (s) => (s === "img" ? G : s === "miss" ? A : R);
+    const wordOf = (s) => (s === "img" ? "image" : s === "miss" ? "missing" : "proc");
+
+    ctx.save();
+    ctx.fillStyle = "rgba(6,9,16,0.96)"; ctx.fillRect(0, 0, w, h);
+    ctx.textBaseline = "top"; ctx.textAlign = "left";
+    ctx.font = "bold 16px monospace";
+    ctx.fillStyle = "rgba(255,255,255,0.96)"; ctx.fillText("EASTER EGGS — ASSET STATUS", 20, 16);
+    const nImg = defs.filter((d) => stateOf(d) === "img").length;
+    const nMiss = defs.filter((d) => stateOf(d) === "miss").length;
+    const nProc = defs.length - nImg - nMiss;
+    ctx.font = "12px monospace";
+    ctx.fillStyle = G; ctx.fillText(`● ${nImg} image`, 300, 20);
+    ctx.fillStyle = A; ctx.fillText(`● ${nMiss} missing`, 392, 20);
+    ctx.fillStyle = R; ctx.fillText(`● ${nProc} procedural`, 500, 20);
+    ctx.fillStyle = "rgba(150,160,185,0.9)"; ctx.textAlign = "right";
+    ctx.fillText("page 2/2  ← →  ·  D close", w - 18, 20); ctx.textAlign = "left";
+
+    // group events by category, then flow the grouped list into columns
+    const order = ["hero", "sky", "background", "ground", "prop", "weather", "obstacle", "battle", "landmark", "transition"];
+    const byCat = new Map();
+    for (const d of defs) { if (!byCat.has(d.category)) byCat.set(d.category, []); byCat.get(d.category).push(d); }
+    const cats = [...order.filter((c) => byCat.has(c)), ...[...byCat.keys()].filter((c) => !order.includes(c))];
+    const items = [];
+    for (const c of cats) { items.push({ hdr: `${c.toUpperCase()} (${byCat.get(c).length})` }); for (const d of byCat.get(c)) items.push({ def: d }); }
+
+    const top = 48, lh = 15, botM = 18;
+    const rowsPerCol = Math.max(6, Math.floor((h - top - botM) / lh));
+    const numCols = Math.max(1, Math.ceil(items.length / rowsPerCol));
+    const colW = Math.min(250, (w - 36) / numCols);
+    const nameChars = Math.max(8, Math.floor((colW - 66) / 7.1));
+
+    ctx.font = "12px monospace";
+    for (let i = 0; i < items.length; i++) {
+      const col = Math.floor(i / rowsPerCol), row = i % rowsPerCol;
+      const x = 20 + col * colW, y = top + row * lh;
+      const it = items[i];
+      if (it.hdr) {
+        ctx.font = "bold 11px monospace"; ctx.fillStyle = "rgba(150,190,255,0.95)";
+        ctx.fillText(it.hdr, x, y); ctx.font = "12px monospace";
+        continue;
+      }
+      const d = it.def, s = stateOf(d), c = colOf(s);
+      ctx.fillStyle = c; ctx.fillText("●", x, y);
+      let nm = d.name || d.id;
+      if (nm.length > nameChars) nm = nm.slice(0, nameChars - 1) + "…";
+      ctx.fillStyle = s === "proc" ? "rgba(190,190,200,0.8)" : "rgba(222,222,230,0.96)";
+      ctx.fillText(nm, x + 13, y);
+      ctx.textAlign = "right"; ctx.fillStyle = c;
+      ctx.fillText(wordOf(s), x + colW - 10, y); ctx.textAlign = "left";
+    }
     ctx.restore();
   }
 }

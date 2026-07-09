@@ -26,11 +26,20 @@ export function initKeyboardControls(controller, { toggleMic, pixelquest }) {
     switch (e.key) {
       case "ArrowRight":
         e.preventDefault();
-        controller.nextMode();
+        // in Pixel Quest with the debug screen up, arrows page the debug app
+        if (pixelquest && controller.currentModeId === "pixelquest" && pixelquest.debugScreenOpen()) {
+          pixelquest.cycleDebugPage(1);
+        } else {
+          controller.nextMode();
+        }
         break;
       case "ArrowLeft":
         e.preventDefault();
-        controller.previousMode();
+        if (pixelquest && controller.currentModeId === "pixelquest" && pixelquest.debugScreenOpen()) {
+          pixelquest.cycleDebugPage(-1);
+        } else {
+          controller.previousMode();
+        }
         break;
       case "ArrowDown":
         e.preventDefault();

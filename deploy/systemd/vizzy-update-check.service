@@ -1,0 +1,19 @@
+# Vizzy — background update check + stage. Triggered by vizzy-update-check.timer.
+# Exits cleanly (0) when offline or when no newer version is available. Only
+# stages into next/; never switches the running app.
+[Unit]
+Description=Vizzy — background update check and stage
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+Group=pi
+WorkingDirectory=/opt/vizzy/current
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+Environment=VIZZY_ROOT=/opt/vizzy
+Environment=VIZZY_AUTO_UPDATE=true
+# set VIZZY_UPDATE_MANIFEST_URL (and any overrides) here:
+EnvironmentFile=-/opt/vizzy/state/vizzy.env
+ExecStart=/usr/bin/env bun run update:check

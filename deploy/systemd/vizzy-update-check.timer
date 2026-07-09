@@ -1,0 +1,14 @@
+# Vizzy — run the update check shortly after boot (once the network is up) and
+# then every 6 hours. Persistent=true catches up on a missed run after downtime.
+[Unit]
+Description=Vizzy — periodic update check
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=6h
+RandomizedDelaySec=5min
+Persistent=true
+Unit=vizzy-update-check.service
+
+[Install]
+WantedBy=timers.target

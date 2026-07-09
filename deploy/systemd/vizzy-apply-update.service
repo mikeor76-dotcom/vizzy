@@ -1,0 +1,21 @@
+# Vizzy — apply a staged update (or recover a failed one) before the app starts.
+# Ordered Before=vizzy.service so the swap happens while the app is NOT running.
+[Unit]
+Description=Vizzy — apply staged update / recover before launch
+Before=vizzy.service
+After=local-fs.target
+ConditionPathExists=/opt/vizzy/current
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=pi
+Group=pi
+WorkingDirectory=/opt/vizzy/current
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+Environment=VIZZY_ROOT=/opt/vizzy
+EnvironmentFile=-/opt/vizzy/state/vizzy.env
+ExecStart=/usr/bin/env bun run update:apply
+
+[Install]
+WantedBy=multi-user.target

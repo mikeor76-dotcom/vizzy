@@ -1,0 +1,16 @@
+# Vizzy — automatic rollback backstop. Triggered by vizzy.service's OnFailure=
+# when the app crash-loops before the smoke test can roll it back itself.
+# Restores backup/ -> current/ and restarts the app on the previous good version.
+[Unit]
+Description=Vizzy — roll back to last known good version
+
+[Service]
+Type=oneshot
+User=pi
+Group=pi
+WorkingDirectory=/opt/vizzy/current
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+Environment=VIZZY_ROOT=/opt/vizzy
+EnvironmentFile=-/opt/vizzy/state/vizzy.env
+ExecStart=/usr/bin/env bun run update:rollback
+ExecStartPost=/usr/bin/systemctl restart vizzy.service

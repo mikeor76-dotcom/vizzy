@@ -1,0 +1,36 @@
+# Vizzy — the appliance app. Serves /opt/vizzy/current and self-heals.
+#
+# Install:  sudo cp deploy/systemd/*.{service,timer} /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now vizzy.service
+#
+# Adjust User=/Group= and the bun PATH for your Pi (see deploy/install.sh, which
+# does this for you). /opt/vizzy must be writable by this user.
+[Unit]
+Description=Vizzy audio visualizer (appliance)
+Wants=network-online.target vizzy-apply-update.service
+After=network-online.target vizzy-apply-update.service
+# crash-loop guard: if it fails to start N times, give up and roll back
+StartLimitIntervalSec=120
+StartLimitBurst=4
+OnFailure=vizzy-rollback.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/vizzy/current
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+Environment=VIZZY_ROOT=/opt/vizzy
+Environment=VIZZY_APP_PORT=3000
+Environment=VIZZY_HEALTH_URL=http://localhost:3000/health
+# operator overrides (manifest URL, auto-update flag, etc.) live here:
+EnvironmentFile=-/opt/vizzy/state/vizzy.env
+ExecStart=/usr/bin/env bun run start
+# smoke-test the running version; on failure this rolls back + exits non-zero so
+# the Restart below brings up the restored (previous, working) version.
+ExecStartPost=/usr/bin/env bun run update:confirm
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -7,7 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "art:import": "bun scripts/import-art.mjs"
+    "start": "bun scripts/serve.mjs",
+    "serve": "bun scripts/serve.mjs",
+    "art:import": "bun scripts/import-art.mjs",
+    "update:check": "bun scripts/updater/check.mjs",
+    "update:stage": "bun scripts/updater/stage.mjs",
+    "update:apply": "bun scripts/updater/apply.mjs",
+    "update:confirm": "bun scripts/updater/confirm.mjs",
+    "update:rollback": "bun scripts/updater/rollback.mjs",
+    "update:status": "bun scripts/updater/status.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.3",

@@ -254,6 +254,7 @@ export class Synthwave {
   drawSun(ctx, w, h, cx, horizon) {
     // the sun itself is rock-solid: no pulsing, no audio in its size or glow
     const r = Math.min(w, h) * 0.19;
+    this.sunR = r; // the horizon wave reads this to carve its keep-out gap
     const sy = horizon - r * 0.32; // sitting on the horizon
 
     // the sun proper lives above the horizon...
@@ -359,16 +360,14 @@ export class Synthwave {
     ctx.restore();
   }
 
-  // Two waveforms, both mirrored outward from the sun: a taller, muted
-  // purple-grey range further back (wider spread, slower/hazier motion —
-  // parallax depth), and a shorter, vivid range in front whose color
-  // matches the sun itself. Bass bins (the first ~15% of the frequency
-  // array) drive the tall spikes flanking the center on both layers; the
-  // mapping sweeps into mid/treble toward the edges as amplitude tapers.
-  // Both sit directly on the horizon — the strict zero-point — and return
-  // flat there in silence.
+  // Two waveforms that FRAME the sun instead of covering it. Each stays flat on
+  // the horizon across the sun's width (a keep-out gap) and only rises into
+  // reactive peaks on the flanks — so the sun is never obscured, at any volume.
+  // Bass reads on the inner peaks just BESIDE the sun, sweeping into mid/treble
+  // toward the screen edges. A taller, hazier purple-grey range sits behind a
+  // shorter, vivid sun-matched range. Both return flat in silence.
   drawHorizonWave(ctx, w, h, cx, horizon, dt) {
-    const N = 48; // vertices across the width
+    const N = 64; // vertices across the width (enough to resolve the gap smoothly)
     if (!this.wavePts || this.wavePts.length !== N) {
       this.wavePts = new Float32Array(N); // front layer
       this.wavePts2 = new Float32Array(N); // back layer
@@ -378,24 +377,30 @@ export class Synthwave {
     const bassMax = Math.floor(this.freq.length * 0.15); // "0 to ~15%" bass region
     const usableMax = Math.floor(this.freq.length * 0.55); // outer ceiling before the empty top end
 
+    // sun keep-out: flat gap across the sun's width, wings ramping up outside it
+    const r = this.sunR || Math.min(w, h) * 0.19;
+    const gapHalf = r * 1.12; // half-width of the flat zone (sun radius + margin)
+    const rampW = r * 1.3; // how far the wings take to rise from the gap edge
+    const smoothstep = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+
     const sampleLayer = (pts, ampFalloff, smoothing) => {
       for (let i = 0; i < N; i++) {
         const x = (i / (N - 1)) * w;
-        const edge = Math.min(1, Math.abs(x - cx) / half); // 0 at the sun -> 1 at the edges
-        // central region reads the bass bins; outer regions sweep up into
-        // mid/treble as edge -> 1, mirrored on both sides of center
-        const bin = 1 + Math.floor(edge * edge * (usableMax - bassMax) + edge * bassMax);
+        const d = Math.abs(x - cx);
+        const mask = smoothstep(gapHalf, gapHalf + rampW, d); // 0 over the sun -> 1 outside
+        const wing = clamp01((d - gapHalf) / (half - gapHalf)); // 0 by the sun -> 1 at the edge
+        // inner wing reads bass, sweeping up into mid/treble toward the edge
+        const bin = 1 + Math.floor(wing * wing * (usableMax - bassMax) + wing * bassMax);
         const byteVal = this.freq[Math.min(this.freq.length - 1, bin)] / 255; // 0..255 -> 0..1
-        const ampScale = 1 - edge * ampFalloff;
-        const target = clamp01(byteVal * this.gain) * ampScale;
+        const ampScale = 1 - wing * ampFalloff; // tallest right beside the sun, tapering outward
+        const target = clamp01(byteVal * this.gain) * ampScale * mask;
         pts[i] += (target - pts[i]) * (1 - smoothing);
       }
     };
-    // back layer: taper barely at all (stays tall out to the edges), and
-    // reacts more slowly — a hazier range with its own lagging inertia
-    sampleLayer(this.wavePts2, 0.32, 0.9);
-    // front layer: per spec, lerp smoothing factor 0.8
-    sampleLayer(this.wavePts, 0.72, 0.8);
+    // back layer: taper less (stays taller toward the edges), reacts slower
+    sampleLayer(this.wavePts2, 0.4, 0.9);
+    // front layer: vivid, tapers more
+    sampleLayer(this.wavePts, 0.6, 0.8);
 
     const buildPts = (data, maxHeight) => {
       const pts = [];
@@ -428,7 +433,9 @@ export class Synthwave {
     // back layer: a gray shadow (contrasting with the front layer's
     // sun-matched color) — a thin, faint rim keeps it readable against the
     // near-black sky without turning it into a second colored wave
-    const backHeight = h * 0.56;
+    // heights scale with the sun so a full-amplitude wing rises to roughly the
+    // sun's top and frames it, rather than a fixed fraction of the screen
+    const backHeight = Math.min(h * 0.5, r * 2.0);
     const backPts = buildPts(this.wavePts2, backHeight);
     traceFill(backPts);
     ctx.fillStyle = "rgba(72, 70, 78, 0.75)";
@@ -445,7 +452,7 @@ export class Synthwave {
     ctx.stroke();
 
     // front layer: vivid, matching the sun's own gradient, with a soft bloom
-    const maxHeight = h * 0.42;
+    const maxHeight = Math.min(h * 0.42, r * 1.55);
     const frontPts = buildPts(this.wavePts, maxHeight);
     traceFill(frontPts);
     const waveGrad = ctx.createLinearGradient(0, horizon - maxHeight, 0, horizon);

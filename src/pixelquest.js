@@ -1106,6 +1106,10 @@ export class PixelQuest {
   }
 
   drawWindmill(o, pal, x, gy) {
+    if (this.useAssets() && this.assets.ready("windmill")) {
+      this.assets.drawSprite(o, "windmill", "idle", this.t, x, gy + 1, { anchor: "bottom-center" });
+      return;
+    }
     const S = this.S;
     const h = Math.round(14 * S);
     // tapered tower
@@ -1143,6 +1147,15 @@ export class PixelQuest {
     if (biome === "moonlit-town") return this.drawCampfireLamp(o, pal, x, gy);
     if (biome === "arcade-ruins") return this.drawCampfireCabinet(o, pal, x, gy);
     if (biome === "castle-approach") return this.drawCampfireBrazier(o, pal, x, gy);
+    if (this.useAssets() && this.assets.ready("campfire")) {
+      // warm glow pool + rising embers layered live on the imported campfire
+      o.fillStyle = this.col(pal.torch, 0.08 + this.bass.value * 0.05 + this.kickPulse * 0.13);
+      o.fillRect(x - 6, gy - 11, 16, 11);
+      this.assets.drawSprite(o, "campfire", "idle", this.t, x, gy + 1, { anchor: "bottom-center" });
+      if (this.particles.length < 90 && Math.random() < 0.04 + this.bass.value * 0.05)
+        this.particles.push({ kind: "ember", x: x + 1, y: gy - 8, vx: (Math.random() - 0.5) * 4, vy: -8 - Math.random() * 6, age: 0, life: 0.9 });
+      return;
+    }
     const fl = 0.5 + 0.5 * Math.sin(this.t * 11 + x) + this.kickPulse;
     // warm glow pool, pumping on the kick
     o.fillStyle = this.col(pal.torch, 0.09 + this.bass.value * 0.05 + this.kickPulse * 0.14);
@@ -1211,6 +1224,14 @@ export class PixelQuest {
   }
 
   drawCampfireBrazier(o, pal, x, gy) {
+    if (this.useAssets() && this.assets.ready("brazier")) {
+      o.fillStyle = this.col(pal.torch, 0.08 + this.bass.value * 0.05 + this.kickPulse * 0.14);
+      o.fillRect(x - 5, gy - 16, 14, 16);
+      this.assets.drawSprite(o, "brazier", "idle", this.t, x, gy + 1, { anchor: "bottom-center" });
+      if (this.particles.length < 90 && Math.random() < 0.04 + this.bass.value * 0.05)
+        this.particles.push({ kind: "ember", x: x + 1, y: gy - 12, vx: (Math.random() - 0.5) * 3, vy: -7 - Math.random() * 5, age: 0, life: 0.8 });
+      return;
+    }
     const fl = 0.5 + 0.5 * Math.sin(this.t * 10 + x) + this.kickPulse;
     o.fillStyle = this.col(pal.propDark);
     o.fillRect(x + 1, gy - 6, 1, 6); // stand
@@ -1225,6 +1246,10 @@ export class PixelQuest {
   }
 
   drawSnail(o, pal, x, gy) {
+    if (this.useAssets() && this.assets.ready("snail")) {
+      this.assets.drawSprite(o, "snail", "idle", this.t, x, gy + 1, { anchor: "bottom-center" });
+      return;
+    }
     // a snail. wearing a tiny fedora. no further questions.
     o.fillStyle = "rgb(150,170,110)";
     o.fillRect(x, gy - 2, 6, 2); // body

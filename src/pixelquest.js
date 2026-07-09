@@ -1595,8 +1595,17 @@ export class PixelQuest {
         : this.t < (this._storyRestUntil || 0) ? "rest"
         : (this.cruise || 0) < 4 ? "idle"
         : "walk";
-      // walk steps with his actual stride (heroFrame), so the 2-frame cycle
-      // syncs to ground speed instead of flickering on a fixed fps clock
+      // WALK: a dedicated fluid 6-frame cycle. Drive the frame from a continuous
+      // stride phase (heroFrame + heroAnimT, +1 per step) so it flows with ground
+      // speed. Full cycle = 2 steps = 6 frames. Falls back to the traveler sheet's
+      // 2-frame walk if the walk sheet is missing.
+      if (anim === "walk" && this.assets.ready("heroWalk")) {
+        const wp = this.heroFrame + this.heroAnimT;
+        const wf = ((Math.floor(wp * 3) % 6) + 6) % 6;
+        this.assets.drawSprite(o, "heroWalk", "walk", 0, hx + 8, gy + 1, { anchor: "bottom-center", frame: wf });
+        return;
+      }
+      // idle / poses / reactions (and the walk fallback) use the traveler sheet
       this.assets.drawSprite(o, "hero", anim, this.heroAnimT + this.heroFrame, hx + 8, gy + 1, { anchor: "bottom-center", frame: anim === "walk" ? this.heroFrame : 0 });
       return;
     }

@@ -93,6 +93,19 @@ export const ASSET_MANIFEST = {
     piSafe: true,
     fallback: "procedural",
   },
+  // -------- dedicated fluid 6-frame walk cycle (used only while walking; the
+  // traveler sheet above still handles idle/pose/reaction anims). frameH 49 so
+  // the character matches the traveler's 48px height (no size pop).
+  heroWalk: {
+    src: "hero_walking_sheet.png",
+    frameW: 48,
+    frameH: 49,
+    anims: { walk: { frames: [0, 1, 2, 3, 4, 5], fps: 12 } },
+    anchor: "bottom-center",
+    scale: 1,
+    piSafe: true,
+    fallback: "procedural",
+  },
   // -------- the last living note: 5 baked power states + a musical-note
   // glyph. A biome-hued halo is drawn procedurally BEHIND it at render time
   // so it still recolors per world (see the orb asset branch in adventure).

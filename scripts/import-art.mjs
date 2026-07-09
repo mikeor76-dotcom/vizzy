@@ -40,6 +40,7 @@ const BIOMES = ["meadow-road", "neon-forest", "moonlit-town", "arcade-ruins", "c
 const SHEET_SPECS = {
   // sized for the 2x internal resolution (pixelHeight 320): 48x60 hero, 48px orb, etc.
   hero_traveler_sheet: { mode: "sheet", w: 384, h: 60, frames: 8, anchor: "bottom", colors: 32 },
+  hero_walking_sheet: { mode: "sheet", w: 288, h: 49, frames: 6, anchor: "bottom", colors: 32 }, // fluid 6-frame walk; h=49 so the char is ~48px (matches the traveler idle)
   orb_note_states: { mode: "sheet", w: 240, h: 48, frames: 5, anchor: "center", colors: 32, tight: 0.34 },
   fragments_music_sheet: { mode: "sheet", w: 256, h: 32, frames: 8, anchor: "center", colors: 24 },
   // props & landmarks — magenta-keyed sprite strips, authored at the 320 reference.

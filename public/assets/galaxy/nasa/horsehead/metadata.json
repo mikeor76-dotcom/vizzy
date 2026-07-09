@@ -1,0 +1,17 @@
+{
+  "title": "Horsehead Nebula (infrared)",
+  "sourceType": "nasa",
+  "credit": "NASA, ESA, Hubble Heritage Team",
+  "sourceUrl": "https://esahubble.org/images/heic1307a/",
+  "mood": "dust_lane",
+  "fogLevel": 0.45,
+  "brightness": 0.45,
+  "defaultDriftSeconds": 30,
+  "jumpSuitability": 0.7,
+  "panDirection": "right",
+  "zoomMin": 1.0,
+  "zoomMax": 1.12,
+  "bassGlow": 1.0,
+  "trebleSparkle": 1.0,
+  "beatFlare": 1.0
+}

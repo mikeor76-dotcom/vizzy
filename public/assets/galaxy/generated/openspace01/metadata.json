@@ -1,0 +1,18 @@
+{
+  "title": "Dark Open Space 01",
+  "sourceType": "generated",
+  "credit": "",
+  "sourceUrl": "",
+  "mood": "open_space",
+  "fogLevel": 0.05,
+  "brightness": 0.45,
+  "defaultDriftSeconds": 34,
+  "jumpSuitability": 0.9,
+  "panDirection": "diagonal",
+  "zoomMin": 1.0,
+  "zoomMax": 1.1,
+  "bassGlow": 0.8,
+  "trebleSparkle": 1.3,
+  "beatFlare": 1.0,
+  "starDensity": 0.6
+}

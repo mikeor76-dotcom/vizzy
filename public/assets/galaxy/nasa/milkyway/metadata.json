@@ -1,0 +1,18 @@
+{
+  "title": "Milky Way Panorama",
+  "sourceType": "nasa",
+  "credit": "ESO / S. Brunier, CC BY 4.0",
+  "sourceUrl": "https://www.eso.org/public/images/eso0932a/",
+  "mood": "dust_lane",
+  "fogLevel": 0.35,
+  "brightness": 0.45,
+  "defaultDriftSeconds": 32,
+  "jumpSuitability": 0.7,
+  "panDirection": "right",
+  "zoomMin": 1.0,
+  "zoomMax": 1.06,
+  "bassGlow": 1.0,
+  "trebleSparkle": 1.1,
+  "beatFlare": 1.0,
+  "starDensity": 0.4
+}

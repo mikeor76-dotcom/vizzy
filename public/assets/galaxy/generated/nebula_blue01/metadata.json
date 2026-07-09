@@ -1,0 +1,17 @@
+{
+  "title": "Blue Nebula 01",
+  "sourceType": "generated",
+  "credit": "",
+  "sourceUrl": "",
+  "mood": "nebula",
+  "fogLevel": 0.6,
+  "brightness": 0.6,
+  "defaultDriftSeconds": 26,
+  "jumpSuitability": 0.8,
+  "panDirection": "right",
+  "zoomMin": 1.0,
+  "zoomMax": 1.15,
+  "bassGlow": 1.3,
+  "trebleSparkle": 1.2,
+  "beatFlare": 1.1
+}

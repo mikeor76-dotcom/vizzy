@@ -1,0 +1,6 @@
+{
+  "nasa": ["milkyway", "carina", "pillars", "cluster", "deepfield", "horsehead"],
+  "generated": ["planet01", "nebula_warm01", "nebula_blue01", "openspace01"],
+  "blackhole": ["bh01"],
+  "foreground": []
+}

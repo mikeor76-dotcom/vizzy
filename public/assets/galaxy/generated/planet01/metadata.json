@@ -1,0 +1,18 @@
+{
+  "title": "Gas Giant Flyby 01",
+  "sourceType": "generated",
+  "credit": "",
+  "sourceUrl": "",
+  "mood": "planet_flyby",
+  "fogLevel": 0.1,
+  "brightness": 0.55,
+  "defaultDriftSeconds": 30,
+  "jumpSuitability": 0.85,
+  "panDirection": "left",
+  "zoomMin": 1.0,
+  "zoomMax": 1.1,
+  "bassGlow": 1.1,
+  "trebleSparkle": 1.0,
+  "beatFlare": 1.0,
+  "hasPlanet": true
+}

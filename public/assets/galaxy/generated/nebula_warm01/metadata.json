@@ -1,0 +1,17 @@
+{
+  "title": "Warm Nebula 01",
+  "sourceType": "generated",
+  "credit": "",
+  "sourceUrl": "",
+  "mood": "nebula",
+  "fogLevel": 0.65,
+  "brightness": 0.7,
+  "defaultDriftSeconds": 26,
+  "jumpSuitability": 0.8,
+  "panDirection": "diagonal",
+  "zoomMin": 1.0,
+  "zoomMax": 1.15,
+  "bassGlow": 1.4,
+  "trebleSparkle": 1.0,
+  "beatFlare": 1.2
+}

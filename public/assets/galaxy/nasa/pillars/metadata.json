@@ -1,0 +1,17 @@
+{
+  "title": "Pillars of Creation",
+  "sourceType": "nasa",
+  "credit": "NASA, ESA, Hubble Heritage Team",
+  "sourceUrl": "https://esahubble.org/images/heic1501a/",
+  "mood": "nebula",
+  "fogLevel": 0.75,
+  "brightness": 0.5,
+  "defaultDriftSeconds": 26,
+  "jumpSuitability": 0.8,
+  "panDirection": "push",
+  "zoomMin": 1.0,
+  "zoomMax": 1.18,
+  "bassGlow": 1.3,
+  "trebleSparkle": 0.9,
+  "beatFlare": 1.1
+}

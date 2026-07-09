@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vizzy — Audio Visualizer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+
+    <div id="hint">
+      <h1>Vizzy</h1>
+      <p>Start the microphone to begin visualizing.</p>
+      <p class="keys">&larr;&rarr; mode &nbsp;&middot;&nbsp; &uarr;&darr; category &nbsp;&middot;&nbsp; [ ] sensitivity &nbsp;&middot;&nbsp; F favorite &nbsp;&middot;&nbsp; H controls &nbsp;&middot;&nbsp; Space mic</p>
+    </div>
+
+    <!-- hi-fi style feedback overlay, shown briefly on any control change -->
+    <div id="overlay" aria-live="polite"></div>
+
+    <!-- debug/dev control panel; contents are rendered from the registry.
+         Hidden with the H key for the clean full-screen device experience. -->
+    <div id="controls">
+      <button id="controls-close" title="Close controls (H)" aria-label="Close controls">&times;</button>
+      <div class="panel-row">
+        <button class="btn" id="mic-btn">Start Mic</button>
+        <div class="divider"></div>
+        <div class="cat-group" id="cat-group"></div>
+        <div class="divider"></div>
+        <div class="action-group" id="action-group"></div>
+        <div class="divider"></div>
+        <div class="sens-group" title="Music sensitivity">
+          <span class="sens-label">Sens</span>
+          <input type="range" id="sens-slider" min="0.5" max="2.5" step="0.05" value="1.25" />
+          <span id="sens-value">1.25</span>
+        </div>
+        <span id="now-playing"></span>
+      </div>
+      <div class="panel-row">
+        <div class="mode-group" id="mode-group"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

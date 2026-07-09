@@ -1,0 +1,17 @@
+{
+  "title": "Black Hole Vista 01",
+  "sourceType": "generated",
+  "credit": "",
+  "sourceUrl": "",
+  "mood": "black_hole",
+  "fogLevel": 0.25,
+  "brightness": 0.55,
+  "defaultDriftSeconds": 30,
+  "jumpSuitability": 0.6,
+  "panDirection": "push",
+  "zoomMin": 1.0,
+  "zoomMax": 1.1,
+  "bassGlow": 1.3,
+  "trebleSparkle": 1.0,
+  "beatFlare": 1.3
+}

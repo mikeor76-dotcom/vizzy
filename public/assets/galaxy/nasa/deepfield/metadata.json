@@ -1,0 +1,18 @@
+{
+  "title": "Hubble Ultra Deep Field",
+  "sourceType": "nasa",
+  "credit": "NASA, ESA, S. Beckwith (STScI), HUDF Team",
+  "sourceUrl": "https://esahubble.org/images/heic0406a/",
+  "mood": "open_space",
+  "fogLevel": 0.05,
+  "brightness": 0.4,
+  "defaultDriftSeconds": 34,
+  "jumpSuitability": 0.9,
+  "panDirection": "diagonal",
+  "zoomMin": 1.0,
+  "zoomMax": 1.06,
+  "bassGlow": 0.7,
+  "trebleSparkle": 1.2,
+  "beatFlare": 0.9,
+  "starDensity": 0.5
+}

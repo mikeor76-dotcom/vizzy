@@ -146,6 +146,15 @@ export const ASSET_MANIFEST = {
   gate: { src: "gate.png", frameW: 66, frameH: 62, anims: { closed: { frames: [0], fps: 1 }, open: { frames: [1], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   bridge: { src: "bridge.png", frameW: 100, frameH: 42, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-left", scale: 1, piSafe: true, fallback: "procedural" },
   shrine: { src: "shrine.png", frameW: 44, frameH: 58, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  // -------- per-biome foliage/trees (3 variants each, picked per placed tree)
+  // + a universal rock set. `v` anim frames = the variant slots. neon skips
+  // frame 1 (its pink mushroom cap was eaten by the magenta key — recolor to fix).
+  meadowFoliage: { src: "meadow_pines_strip.png", frameW: 64, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  neonFoliage: { src: "neon_forest_mushrooms_strip.png", frameW: 64, frameH: 84, anims: { v: { frames: [0, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  moonlitFoliage: { src: "moonlit_town_foliage_strip.png", frameW: 64, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  arcadeFoliage: { src: "arcade_ruins_props_strip.png", frameW: 64, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  castleFoliage: { src: "castle_approach_trees_strip.png", frameW: 64, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  rocks: { src: "rocks_strip.png", frameW: 52, frameH: 40, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
 };
 
 // Parallax plates per biome: seamless horizontal-tiling strips. `src` (PNG)

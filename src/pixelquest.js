@@ -143,6 +143,16 @@ const BIOMES = [
 // 16x24, string bitmaps, 32-bit-era shading. h/H hood + lit edge, f/d face
 // + shade, c/C/D cloak + lit + shadow edge, G gold belt, b/B boots + lit,
 // s/S staff + lit tip, l lantern frame, L lantern glass
+// biome → imported foliage/tree asset (each a 3-variant sheet). When ready,
+// drawProps uses these instead of the procedural drawTree per placed tree.
+const BIOME_FOLIAGE = {
+  "meadow-road": "meadowFoliage",
+  "neon-forest": "neonFoliage",
+  "moonlit-town": "moonlitFoliage",
+  "arcade-ruins": "arcadeFoliage",
+  "castle-approach": "castleFoliage",
+};
+
 // STORYBOOK PROPORTIONS: a bigger hood/head (7 of 17 torso rows) with a
 // VISIBLE FACE and two dark eyes — a tiny warm human traveler, lovable and
 // readable from across the room. Same 16-wide dims as always, so every
@@ -334,9 +344,9 @@ export class PixelQuest {
     this.trees = [];
     this.torches = [];
     this.rocks = [];
-    for (let x = 20; x < this.worldLen - 20; x += 34 + rnd() * 30) this.trees.push({ x, s: 0.8 + rnd() * 0.5 });
+    for (let x = 20; x < this.worldLen - 20; x += 34 + rnd() * 30) this.trees.push({ x, s: 0.8 + rnd() * 0.5, variant: (rnd() * 3) | 0 });
     for (let x = 70; x < this.worldLen - 40; x += 150 + rnd() * 90) this.torches.push({ x, ph: rnd() * TAU });
-    for (let x = 10; x < this.worldLen; x += 55 + rnd() * 70) this.rocks.push({ x, w: 2 + (rnd() * 3) | 0 });
+    for (let x = 10; x < this.worldLen; x += 55 + rnd() * 70) this.rocks.push({ x, w: 2 + ((rnd() * 3) | 0), variant: (rnd() * 3) | 0 });
     // foreground silhouettes: dark grass tufts sweeping past FASTER than the
     // path (1.25x parallax) at the bottom edge — the classic depth trick that
     // makes the whole scene read as a deep, layered, cinematic world
@@ -984,19 +994,25 @@ export class PixelQuest {
   drawProps(o, pal) {
     const off = this.scrollX * 0.7;
     const L = this.worldLen;
+    // imported per-biome foliage/rocks replace the procedural drawTree/rock when
+    // present; each placed tree/rock carries a `variant` picking one of 3 sprites
+    const foliage = BIOME_FOLIAGE[pal.biome];
+    const foliageReady = this.useAssets() && foliage && this.assets.ready(foliage);
+    const rocksReady = this.useAssets() && this.assets.ready("rocks");
     for (const tr of this.trees) {
       const sx = Math.round((((tr.x - off) % L) + L) % L);
-      if (sx < -12 || sx > this.pw + 12) continue;
+      if (sx < -40 || sx > this.pw + 40) continue;
       const gy = this.groundY(sx) + 1;
       const sway = Math.round(Math.sin(this.t * (1 + this.mids.value * 2) + tr.x) * this.mids.value * 1.2);
-      this.drawTree(o, pal, sx + sway, gy, tr.s * this.S);
+      if (foliageReady) this.assets.drawSprite(o, foliage, "v", 0, sx + sway, gy, { anchor: "bottom-center", frame: tr.variant, scale: tr.s });
+      else this.drawTree(o, pal, sx + sway, gy, tr.s * this.S);
     }
     for (const rk of this.rocks) {
       const sx = Math.round((((rk.x - off) % L) + L) % L);
-      if (sx < -6 || sx > this.pw + 6) continue;
+      if (sx < -20 || sx > this.pw + 20) continue;
       const gy = this.groundY(sx) + 1;
-      o.fillStyle = this.col(pal.groundDark);
-      o.fillRect(sx, gy - 2, rk.w, 2);
+      if (rocksReady) this.assets.drawSprite(o, "rocks", "v", 0, sx, gy, { anchor: "bottom-center", frame: rk.variant, scale: 0.62 });
+      else { o.fillStyle = this.col(pal.groundDark); o.fillRect(sx, gy - 2, rk.w, 2); }
     }
     for (const to of this.torches) {
       const sx = Math.round((((to.x - off) % L) + L) % L);
@@ -2295,7 +2311,7 @@ export class PixelQuest {
 
     // ---- COL B: procedural (not yet textured) ----
     const PROC = [
-      { h: "BIOME SCENERY" }, "trees / foliage", "rocks", "path grass & flowers", "foreground silhouettes",
+      { h: "BIOME SCENERY" }, "path grass & flowers", "foreground silhouettes",
       { h: "LANDMARKS" }, "shrine (meadow)", "mushroom (neon)", "clock tower (moonlit)", "arcade gate (arcade)", "castle (castle)",
       { h: "ATTRACTIONS" }, "windmill", "campfire + brazier", "arcade cabinet", "snail",
       { h: "SKY & FX" }, "stars · moon · clouds", "fireflies", "dust & sparkles", "torch flames",

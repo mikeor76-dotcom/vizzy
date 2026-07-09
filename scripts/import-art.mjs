@@ -54,6 +54,14 @@ const SHEET_SPECS = {
   gate: { mode: "sheet", w: 132, h: 62, frames: 2, anchor: "bottom", colors: 40 },
   bridge: { mode: "sheet", w: 100, h: 42, frames: 1, anchor: "bottom", colors: 40 },
   shrine: { mode: "sheet", w: 44, h: 58, frames: 1, anchor: "bottom", colors: 40 },
+  // per-biome foliage/trees (3 variants each) + a universal rock set. Trees are
+  // taller than the 48px hero. w = frameW * frames.
+  meadow_pines_strip: { mode: "sheet", w: 192, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  neon_forest_mushrooms_strip: { mode: "sheet", w: 192, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  moonlit_town_foliage_strip: { mode: "sheet", w: 192, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  castle_approach_trees_strip: { mode: "sheet", w: 192, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  arcade_ruins_props_strip: { mode: "sheet", w: 192, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  rocks_strip: { mode: "sheet", w: 156, h: 40, frames: 3, anchor: "bottom", colors: 32 },
 };
 const BAND_SPECS = {
   sky: { w: 640, h: 180, key: false },

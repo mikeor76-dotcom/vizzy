@@ -37,6 +37,9 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // ------------------------------------------------------------ tuning dials
 export const EVENT_TUNING = {
   eventGlobalFrequency: 1, // master multiplier: 2 = twice as often
+  heroShowpieces: false, // hero-costume cameos (moonwalk/spin/boombox…) use the OLD
+  //                        procedural hero, so they briefly swap the image hero for
+  //                        crude graphics. Off by default; set true to bring them back.
   anyEventCooldownSeconds: 12, // nothing fires within 12s of anything else
   majorEventCooldownSeconds: 45,
   maxActive: 2, // at most two events on screen (one if major)
@@ -209,6 +212,9 @@ export class PixelQuestEventManager {
 
     const candidates = [];
     for (const def of this.defs) {
+      // hero-costume showpieces (moonwalk/spin/boombox…) render the OLD
+      // procedural hero; keep them off so the imported image hero stays on screen
+      if (def.category === "hero" && !T.heroShowpieces) continue;
       if (this.active.some((s) => s.def.category === def.category)) continue; // one per category
       if ((this.cooldownUntil[def.id] || -99) > this.clock) continue;
       if (def.isMajor && this.clock - this.lastMajor < T.majorEventCooldownSeconds) continue;

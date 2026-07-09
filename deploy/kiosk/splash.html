@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vizzy</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      .wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; }
+      img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    </style>
+  </head>
+  <body>
+    <!-- Local boot splash opened by the kiosk launcher the instant the session
+         starts, so Chromium's kiosk window covers the desktop immediately. It
+         polls the app server and forwards to the visualizer as soon as it is up
+         (no server needed to show this page). Image sits beside it in
+         /usr/share/vizzy/. -->
+    <div class="wrap"><img src="vizzy-splash.png" alt="Vizzy" /></div>
+    <script>
+      var port = new URLSearchParams(location.search).get("port") || "3000";
+      var app = "http://localhost:" + port + "/?mode=galaxy&input=mic";
+      var health = "http://localhost:" + port + "/health";
+      var start = Date.now();
+      function go() { location.replace(app); }
+      function tick() {
+        // no-cors: a successful connection resolves (opaque); a refused one
+        // rejects — either way we only need "is the server answering yet?"
+        fetch(health, { mode: "no-cors", cache: "no-store" })
+          .then(go)
+          .catch(function () { (Date.now() - start > 20000) ? go() : setTimeout(tick, 400); });
+      }
+      tick();
+    </script>
+  </body>
+</html>

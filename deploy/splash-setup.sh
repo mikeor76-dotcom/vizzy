@@ -19,6 +19,11 @@ install -d /usr/share/vizzy
 install -m 644 "$SRC" /usr/share/vizzy/vizzy-splash.png
 DEST=/usr/share/vizzy/vizzy-splash.png
 echo "==> Splash image: $DEST"
+# local splash page the kiosk opens instantly while the server warms up
+if [[ -f "$REPO_DIR/deploy/kiosk/splash.html" ]]; then
+  install -m 644 "$REPO_DIR/deploy/kiosk/splash.html" /usr/share/vizzy/splash.html
+  echo "==> Splash page:  /usr/share/vizzy/splash.html"
+fi
 
 # 1) Plymouth boot splash (Raspberry Pi OS ships the 'pix' theme) -----------
 if [[ -d /usr/share/plymouth/themes/pix ]]; then

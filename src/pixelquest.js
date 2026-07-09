@@ -709,10 +709,21 @@ export class PixelQuest {
     // ASSET PATH: an imported sky plate (meadow_sky.png) covers the whole
     // sky when present; if absent, the procedural stepped-band sky below is
     // the fallback (external-only, so this stays invisible until art lands)
-    if (this.useAssets() && this.assets.hasReadyLayer(pal.biome, "sky")) {
+    // During a biome transition, dissolve the NEXT biome's backdrop in over the
+    // current one across the whole 4.5s crossfade (biomeT 0→1) so the scene
+    // fades smoothly instead of snapping at the midpoint.
+    const curBiome = BIOMES[this.biomeIdx].name;
+    if (this.useAssets() && this.assets.hasReadyLayer(curBiome, "sky")) {
       o.fillStyle = "rgb(6,6,14)";
       o.fillRect(0, 0, pw, ph);
-      this.assets.drawParallaxLayer(o, pal.biome, "sky", this.scrollX, pw, this.groundBase());
+      this.assets.drawParallaxLayer(o, curBiome, "sky", this.scrollX, pw, this.groundBase());
+      const nextBiome = BIOMES[this.biomeNext].name;
+      if (this.biomeT < 1 && nextBiome !== curBiome && this.assets.hasReadyLayer(nextBiome, "sky")) {
+        o.save();
+        o.globalAlpha = this.biomeT;
+        this.assets.drawParallaxLayer(o, nextBiome, "sky", this.scrollX, pw, this.groundBase());
+        o.restore();
+      }
       return;
     }
     // seven stepped bands with dithered seams: a rich night gradient that

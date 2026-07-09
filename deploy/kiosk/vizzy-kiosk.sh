@@ -7,6 +7,15 @@ set -u
 PORT="${VIZZY_APP_PORT:-3000}"
 URL="http://localhost:${PORT}/?mode=galaxy&input=mic"
 
+# Paint the Vizzy splash as the background immediately, so there's no bare
+# desktop while we wait for the server + Chromium to paint. swaybg is a wlroots
+# layer-shell client (labwc/wayfire); Chromium covers it once it goes fullscreen,
+# and it costs ~nothing sitting behind. Installed by deploy/splash-setup.sh.
+SPLASH="/usr/share/vizzy/vizzy-splash.png"
+if command -v swaybg >/dev/null 2>&1 && [ -f "$SPLASH" ]; then
+  swaybg -i "$SPLASH" -m fit -c 000000 >/dev/null 2>&1 &
+fi
+
 # wait up to ~90s for the systemd service to answer /health (avoids a race where
 # Chromium loads before the server is up and shows an error page)
 for _ in $(seq 1 90); do

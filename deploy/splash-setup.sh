@@ -27,6 +27,14 @@ if [[ -d /usr/share/plymouth/themes/pix ]]; then
   cp -a "$DEST" "$T"
   command -v plymouth-set-default-theme >/dev/null 2>&1 && plymouth-set-default-theme pix >/dev/null 2>&1 || true
   echo "==> Plymouth: installed splash into the 'pix' theme"
+  # On Bookworm the boot splash is loaded from the INITRAMFS, not /usr/share —
+  # so swapping the file alone changes nothing until the initramfs is rebuilt.
+  # This is why the Raspberry Pi logo kept showing. Rebuild it (safe no-op if
+  # the system doesn't use one).
+  if command -v update-initramfs >/dev/null 2>&1; then
+    echo "    rebuilding initramfs so the splash ships in the boot image (~30s)…"
+    if update-initramfs -u >/dev/null 2>&1; then echo "    initramfs updated ✓"; else echo "    (initramfs rebuild failed — boot splash may not change)"; fi
+  fi
 else
   echo "!! Plymouth 'pix' theme not found — skipping boot splash."
   echo "   Install it with:  sudo apt install plymouth plymouth-themes  (then re-run)"
@@ -47,40 +55,20 @@ if [[ -f "$CFG" ]]; then
   echo "==> $CFG: disable_splash=1"
 fi
 
-# 3) Desktop wallpaper — best effort; covers the moment between login and the
-#    kiosk browser painting. Written per-compositor and NEVER pops a GUI dialog
-#    (the old pcmanfm call showed a modal "Desktop manager is not active" error
-#    under Wayland and blocked this script).
-USER_HOME="$(getent passwd "$KIOSK_USER" | cut -d: -f6)"; [[ -n "$USER_HOME" ]] || USER_HOME="/home/$KIOSK_USER"
-WP_VIA=""
-# Wayland / wayfire (config file, silent)
-WF="$USER_HOME/.config/wayfire.ini"
-if command -v wayfire >/dev/null 2>&1 || [[ -f "$WF" ]]; then
-  sudo -u "$KIOSK_USER" mkdir -p "$(dirname "$WF")" 2>/dev/null || true
-  grep -q "^\[background\]" "$WF" 2>/dev/null \
-    || printf '\n[background]\nimage=%s\nmode=fill\n' "$DEST" | sudo -u "$KIOSK_USER" tee -a "$WF" >/dev/null 2>&1 || true
-  WP_VIA="wayfire.ini"
-fi
-# labwc (Pi OS Bookworm default on Pi 4/5) draws the wallpaper with swaybg via autostart
-LABWC="$USER_HOME/.config/labwc"
-if command -v labwc >/dev/null 2>&1 || [[ -d "$LABWC" ]]; then
-  sudo -u "$KIOSK_USER" mkdir -p "$LABWC" 2>/dev/null || true
-  if command -v swaybg >/dev/null 2>&1 && ! grep -q "vizzy-splash" "$LABWC/autostart" 2>/dev/null; then
-    printf 'swaybg -i %s -m fill &\n' "$DEST" | sudo -u "$KIOSK_USER" tee -a "$LABWC/autostart" >/dev/null 2>&1 || true
-    WP_VIA="${WP_VIA:+$WP_VIA + }labwc/swaybg"
-  fi
-fi
-# X11 / LXDE-pi — ONLY if pcmanfm is actually running the desktop (else it pops
-# a modal dialog and hangs this script). Guarded, so it stays silent otherwise.
-if pgrep -u "$KIOSK_USER" -f 'pcmanfm.*--desktop' >/dev/null 2>&1; then
-  sudo -u "$KIOSK_USER" DISPLAY=:0 pcmanfm --set-wallpaper "$DEST" --wallpaper-mode=crop >/dev/null 2>&1 || true
-  WP_VIA="${WP_VIA:+$WP_VIA + }pcmanfm"
-fi
-if [[ -n "$WP_VIA" ]]; then
-  echo "==> Wallpaper: configured for '$KIOSK_USER' via $WP_VIA (takes effect next login)"
+# 3) Wallpaper renderer: swaybg (the wlroots layer-shell wallpaper tool — works
+#    on labwc AND wayfire). The KIOSK LAUNCHER paints the splash with it at
+#    startup, so there's no bare desktop while the app loads; here we just make
+#    sure it's installed. No GUI dialogs, unlike the old pcmanfm path.
+if command -v swaybg >/dev/null 2>&1; then
+  echo "==> swaybg already installed ✓"
 else
-  echo "==> Wallpaper: skipped — set it by hand if you like: Appearance Settings -> $DEST"
+  echo "==> Installing swaybg (wallpaper renderer)…"
+  apt-get install -y swaybg >/dev/null 2>&1 \
+    && echo "    swaybg installed ✓" \
+    || echo "    (couldn't install swaybg — needs internet; the kiosk will just skip the pre-load wallpaper)"
 fi
 
 echo
-echo "==> Done. Reboot to see the boot splash:  sudo reboot"
+echo "==> Done."
+echo "    Reboot to see the boot splash:            sudo reboot"
+echo "    (the desktop-load wallpaper is painted by the kiosk launcher on login)"

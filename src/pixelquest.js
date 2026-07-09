@@ -1586,12 +1586,7 @@ export class PixelQuest {
         : "walk";
       // walk steps with his actual stride (heroFrame), so the 2-frame cycle
       // syncs to ground speed instead of flickering on a fixed fps clock
-      // + a vertical step-bounce: the body lifts at the passing point of each
-      //   stride (heroAnimT 0→1) and plants on contact. This carries the walk
-      //   because the art's legs barely move under the long coat — the bob is
-      //   what makes it read as walking at small sizes.
-      const walkBounce = anim === "walk" ? Math.round(Math.sin(this.heroAnimT * Math.PI) * this.S * 1.3) : 0;
-      this.assets.drawSprite(o, "hero", anim, this.heroAnimT + this.heroFrame, hx + 8, gy + 1 - walkBounce, { anchor: "bottom-center", frame: anim === "walk" ? this.heroFrame : 0 });
+      this.assets.drawSprite(o, "hero", anim, this.heroAnimT + this.heroFrame, hx + 8, gy + 1, { anchor: "bottom-center", frame: anim === "walk" ? this.heroFrame : 0 });
       return;
     }
     const rows = HERO_TORSO.concat(
@@ -2018,9 +2013,12 @@ export class PixelQuest {
     if (speed > 2.5) {
       // stride rate follows the ground speed so his feet never moonwalk
       // (the actual moonwalk steps at half-time — smooth, deliberate)
+      // stride cadence rises with speed but is CAPPED so the two walk frames
+      // stay readable as distinct steps (uncapped it hit ~17 steps/s at high
+      // energy — a blur; the cap keeps it to a legible brisk walk/jog).
       this.heroAnimT +=
         dt *
-        (3 + speed * 0.2) *
+        Math.min(5.5, 3 + speed * 0.2) *
         (this.egg && this.egg.type === "moonwalk" ? 0.55 : this.egg && this.egg.type === "redshoes" ? 1.6 : 1);
       if (this.heroAnimT > 1) {
         this.heroAnimT = 0;

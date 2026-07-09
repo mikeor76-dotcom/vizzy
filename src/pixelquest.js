@@ -153,6 +153,16 @@ const BIOME_FOLIAGE = {
   "castle-approach": "castleFoliage",
 };
 
+// biome → imported gateway landmark asset (drawn where the procedural landmark
+// used to be). arcade-ruins has no entry (its gate art was damaged by the key),
+// so it keeps the procedural landmark.
+const BIOME_GATE = {
+  "meadow-road": "meadowGate",
+  "neon-forest": "neonGate",
+  "moonlit-town": "moonlitGate",
+  "castle-approach": "castleGate",
+};
+
 // STORYBOOK PROPORTIONS: a bigger hood/head (7 of 17 torso rows) with a
 // VISIBLE FACE and two dark eyes — a tiny warm human traveler, lovable and
 // readable from across the room. Same 16-wide dims as always, so every
@@ -931,10 +941,21 @@ export class PixelQuest {
       hc.fillRect(0, 0, pw, 20);
     }
     o.drawImage(this._haze, 0, base - 20);
-    this.drawLandmark(o, pal);
+    // (landmark is drawn in the main render sequence so it shows for backdrop
+    // biomes too, where drawMountains early-returns above)
   }
 
   drawLandmark(o, pal) {
+    // imported gateway landmark: a prominent gate at the hero's level (parallax
+    // 0.7) scrolling past once per world loop — the biome's destination.
+    const gate = BIOME_GATE[pal.biome];
+    if (this.useAssets() && gate && this.assets.ready(gate)) {
+      const goff = this.scrollX * 0.7;
+      const gsx = Math.round((((this.landmarkX - goff) % this.worldLen) + this.worldLen) % this.worldLen);
+      if (gsx < -90 || gsx > this.pw + 90) return;
+      this.assets.drawSprite(o, gate, "idle", 0, gsx, this.groundY(gsx) + 1, { anchor: "bottom-center", scale: 1.3 });
+      return;
+    }
     const off = this.scrollX * 0.3;
     const sx = Math.round(((this.landmarkX - off) % this.worldLen + this.worldLen) % this.worldLen);
     if (sx < -40 || sx > this.pw + 40) return;
@@ -2125,6 +2146,7 @@ export class PixelQuest {
     this.adventure.draw(o, pal, "destination"); // far-background silhouette
     this.events.draw(o, pal, "sky");
     this.drawMountains(o, pal);
+    this.drawLandmark(o, pal); // biome gateway/landmark (background parallax, behind props+hero)
     this.events.draw(o, pal, "background");
     this.adventure.draw(o, pal, "midground"); // e.g. the note bridge tiles
     this.adventure.draw(o, pal, "encounter-bg"); // encounters behind props/hero (giant, gate, arcade face)

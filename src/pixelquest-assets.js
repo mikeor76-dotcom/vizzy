@@ -155,6 +155,13 @@ export const ASSET_MANIFEST = {
   arcadeFoliage: { src: "arcade_ruins_props_strip.png", frameW: 64, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   castleFoliage: { src: "castle_approach_trees_strip.png", frameW: 64, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   rocks: { src: "rocks_strip.png", frameW: 52, frameH: 40, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  // -------- per-biome gateway landmarks (the destination the hero passes). The
+  // arcade gate is intentionally omitted — its pink/magenta parts were eaten by
+  // the key (needs a recolored re-export), so arcade keeps the procedural landmark.
+  meadowGate: { src: "gateMeadow.png", frameW: 112, frameH: 104, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  neonGate: { src: "gateNeon.png", frameW: 112, frameH: 104, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  moonlitGate: { src: "gateMoonlit.png", frameW: 112, frameH: 104, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  castleGate: { src: "gateCastle.png", frameW: 132, frameH: 108, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
 };
 
 // Parallax plates per biome: seamless horizontal-tiling strips. `src` (PNG)

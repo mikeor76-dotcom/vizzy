@@ -62,6 +62,12 @@ const SHEET_SPECS = {
   castle_approach_trees_strip: { mode: "sheet", w: 192, h: 84, frames: 3, anchor: "bottom", colors: 40 },
   arcade_ruins_props_strip: { mode: "sheet", w: 192, h: 84, frames: 3, anchor: "bottom", colors: 40 },
   rocks_strip: { mode: "sheet", w: 156, h: 40, frames: 3, anchor: "bottom", colors: 32 },
+  // per-biome gateway landmarks (sliced from pixelquest_pack_gates grid).
+  gateMeadow: { mode: "sheet", w: 112, h: 104, frames: 1, anchor: "bottom", colors: 48 },
+  gateNeon: { mode: "sheet", w: 112, h: 104, frames: 1, anchor: "bottom", colors: 48 },
+  gateMoonlit: { mode: "sheet", w: 112, h: 104, frames: 1, anchor: "bottom", colors: 48 },
+  gateArcade: { mode: "sheet", w: 116, h: 104, frames: 1, anchor: "bottom", colors: 48 },
+  gateCastle: { mode: "sheet", w: 132, h: 108, frames: 1, anchor: "bottom", colors: 48 },
 };
 const BAND_SPECS = {
   sky: { w: 640, h: 180, key: false },

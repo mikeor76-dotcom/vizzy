@@ -18,17 +18,22 @@ echo "    user:  $VIZZY_USER"
 
 if [[ "$(id -u)" -ne 0 ]]; then echo "!! run with sudo (needs /opt + systemd)"; exit 1; fi
 
-BUN="$(command -v bun || true)"
-if [[ -z "$BUN" ]]; then
-  # bun is often a per-user install; find it under the target user's home
-  BUN="$(sudo -u "$VIZZY_USER" bash -lc 'command -v bun' || true)"
-fi
-[[ -z "$BUN" ]] && { echo "!! bun not found. Install it: curl -fsSL https://bun.sh/install | bash"; exit 1; }
+# Find bun by ABSOLUTE path. Never trust root's PATH here: it may hold a stale
+# /usr/local/bin/bun symlink, and symlinking that to itself creates a loop.
+USER_HOME="$(getent passwd "$VIZZY_USER" | cut -d: -f6)"; [[ -z "$USER_HOME" ]] && USER_HOME="/home/$VIZZY_USER"
+BUN=""
+for cand in "$USER_HOME/.bun/bin/bun" "$(sudo -u "$VIZZY_USER" bash -lc 'command -v bun' 2>/dev/null)" "$(command -v bun 2>/dev/null)"; do
+  [[ -n "$cand" ]] || continue
+  real="$(readlink -f "$cand" 2>/dev/null)"; [[ -x "$real" ]] || real="$cand"
+  if [[ -x "$real" && "$real" != "/usr/local/bin/bun" ]]; then BUN="$real"; break; fi
+done
+[[ -z "$BUN" ]] && { echo "!! bun not found. Install it as $VIZZY_USER (no sudo): curl -fsSL https://bun.sh/install | bash"; exit 1; }
 echo "    bun:   $BUN"
-ln -sf "$BUN" /usr/local/bin/bun    # so 'bun' is on the systemd PATH
+ln -sf "$BUN" /usr/local/bin/bun    # stable path for systemd (BUN is the real binary, never the symlink)
 
 echo "==> Building the app"
-sudo -u "$VIZZY_USER" bash -lc "cd '$REPO_DIR' && bun install && bun run build"
+sudo -u "$VIZZY_USER" env "PATH=$(dirname "$BUN"):/usr/local/bin:/usr/bin:/bin" \
+  bash -c "cd '$REPO_DIR' && bun install && bun run build"
 
 echo "==> Laying out $VIZZY_ROOT"
 mkdir -p "$VIZZY_ROOT/state" "$VIZZY_ROOT/logs"
@@ -47,7 +52,7 @@ mv "$VIZZY_ROOT/current.new" "$VIZZY_ROOT/current"
 # state/version.json + a fresh status
 cp -a "$REPO_DIR/version.json" "$VIZZY_ROOT/state/version.json"
 printf '{\n  "status": "current",\n  "currentVersion": %s\n}\n' \
-  "$(bun -e 'console.log(JSON.stringify(require("'"$REPO_DIR"'/version.json").version))' 2>/dev/null || echo '"1.0.0"')" \
+  "$("$BUN" -e 'console.log(JSON.stringify(require("'"$REPO_DIR"'/version.json").version))' 2>/dev/null || echo '"1.0.0"')" \
   > "$VIZZY_ROOT/state/update-status.json"
 
 # env file (edit VIZZY_UPDATE_MANIFEST_URL to enable auto-update)

@@ -182,3 +182,132 @@ using §3, drop them in the assets folder, and I'll import + wire them up.
 Per biome: `{biome}_sky.png`, `{biome}_far.png`, `{biome}_mid.png`, `{biome}_foreground.png`,
 `{biome}_props.png` — e.g. `neon-forest_sky.png`, `castle-approach_mid.png`. Global sprites keep
 their current names (`hero_traveler_sheet.png`, `orb_note_states.png`, `fragments_music_sheet.png`).
+
+---
+
+## §5 — Attractions + easter‑egg / cameo packs (the rest of the art)
+
+Everything above gives each world its **look**. This section covers the **animated cameos,
+attractions, and easter eggs** — the little "did you see that?!" moments (a dragon crossing the
+moon, a jukebox pulsing to the beat, a boulder chasing the hero). In the game these fire on the
+music; on the debug screen, **press `D` then `→`** to see all 60 of them and which ones still
+need art (all red = procedural today).
+
+**How to deliver these:** one **PACK SHEET per message** — a single image that is a **grid of
+separate little subjects**, each in its own cell on a flat key‑color background, a small text
+label under each cell (I crop the labels off during slicing). This is exactly how the gates
+pack (`pixelquest_pack_gates.png`) was delivered — same idea, more cells. Generate big and
+clean; the importer downscales, keys the background, and crisps the pixels.
+
+> **KEY‑COLOR RULE — read this, it's the #1 gotcha.** The importer deletes the background by
+> flooding in from the edges in the key color. If a subject *contains* the key color, that part
+> of the subject gets eaten (this is what broke the arcade gate — its hot‑pink invader vanished).
+> So:
+> - **Magenta `#FF00FF` background** for subjects with **no pink/magenta** in them (most greens,
+>   blues, stone, warm‑lit things). Import normally: `bun run art:import`.
+> - **Green `#00FF00` background** for any subject that is itself **pink / magenta / hot‑neon**
+>   (neon‑forest glow, arcade/synthwave, disco). Import with `--key 00ff00`. **Never put magenta
+>   in the art on a magenta background, and never put green in the art on a green background.**
+
+Each pack below lists its subjects, the key color to use, an approx per‑subject size (generate
+larger — this is just the downscale target), and the filename to save it as. Palettes reference
+the biome tables in §3 by name; pull the exact hexes from there.
+
+### Pack A — Attractions & interactive props  →  `pixelquest_pack_props.png`  ·  **magenta key** (except the two ⚠ neon ones — split those into Pack B)
+Small‑to‑medium objects that sit in the scene and react to the beat. Side‑on, standing on a
+shared baseline, ~40–90 px tall each.
+- **windmill** (meadow) — wooden tower windmill with 4 sail blades, warm‑lit window at the base.
+- **campfire + brazier** (any) — a small stone fire ring with logs, and separately an iron
+  brazier on a post; warm orange flame core, ember glow.
+- **snail** (meadow/neon) — a friendly cartoon snail with a glowing spiral shell, ~24 px.
+- **jukebox** (meadow/neon) — chrome‑and‑wood 50s jukebox, warm amber arch, glowing selection panel.
+- **phone booth** (any) — a tall red/blue call‑box, glass panels, small light on top.
+- **sword in stone** (neon) — a heroic sword planted in a mossy boulder, faint glow on the blade.
+- **magic microphone** (neon) — a vintage stage mic on a stand, soft halo. ⚠ if you make the halo
+  hot‑pink, move it to Pack B.
+- **secret door** (any) — a low arched wooden/stone door set into a bank, iron studs, keyhole glow.
+- **statue** (any) — a half‑buried heroic adventurer statue, weathered stone, one arm raised.
+
+### Pack B — Neon / synthwave props  →  `pixelquest_pack_neon.png`  ·  **GREEN `#00FF00` key ⚠** (subjects are pink/magenta)
+- **arcade cabinet** (arcade) — upright 80s cabinet, glowing cyan/magenta CRT screen, marquee.
+- **blue time booth** (neon) — a tall glowing blue police‑box‑style booth, magenta window light.
+- **ghost trap** (neon) — a small sci‑fi trap device with hot‑pink energy leaking out the top.
+- **neon diner sign** (arcade/moonlit) — a roadside sign shape: a glowing magenta arrow + cyan tubes (no readable words), buzzing.
+- **magic microphone (pink halo)** — only if you gave it a hot‑pink glow.
+
+### Pack C — Sky silhouettes  →  `pixelquest_pack_sky.png`  ·  **magenta key**  ·  near‑solid dark silhouettes with a thin cool moon‑rim; ~30–60 px
+These drift across the sky / past the moon, so keep them as clean dark shapes.
+- **dragon** (moonlit) — a serpentine dragon in flight, wings spread, long tail.
+- **pirate ship cloud** (any) — a sailing‑ship‑shaped cloud, faint moonlit underside.
+- **witch on broom** (moonlit) — a classic pointy‑hat witch riding a broom, small.
+- **winged shadow** (moonlit) — a large ambiguous winged silhouette (owl/bat), a bit ominous‑cozy.
+- **bicycle + rider** (moonlit) — a kid on a bicycle, hunched forward, tiny glow up front.
+- **spy on a rope** (any) — a secret‑agent figure descending head‑first on a thin rope.
+- **neon dragonfly** (neon) — a big stylized dragonfly ⚠ if glowing pink, move to a green‑key sheet.
+- **meteor cassette** (arcade) — a cassette tape trailing a fiery streak ⚠ if hot‑pink flame → green key.
+
+### Pack D — Moon overlays  →  `pixelquest_pack_moon.png`  ·  **magenta key**  ·  round, ~48 px, meant to composite **onto the moon**
+Just the decoration that goes over the existing moon disc — draw only the overlay, not a new moon.
+- **disco moon** — mirror‑ball facets / sparkle grid across the disc.
+- **record moon** — vinyl‑record grooves + center label on the disc.
+- **winking moon face** — simple friendly face, one eye winking, small smile.
+
+### Pack E — Ground cameos  →  `pixelquest_pack_ground.png`  ·  **magenta key**  ·  small, ~20–44 px, standing on the baseline
+- **shark fin** (any) — a single dorsal fin cutting a small water ripple.
+- **submarine periscope** (any) — a periscope tube with a glass eye poking up from a puddle.
+- **sports car** (arcade) — a low 80s sports car in profile ⚠ if it has hot‑pink underglow → green key.
+- **boulder** (any) — a big round rolling rock, cracked, a little motion‑squash.
+- **black cat** (meadow/neon) — a black cat mid‑stride, tail up, two glowing eyes.
+- **red balloon** (meadow/neon) — a single red heart/round balloon on a string.
+- **cassette tumbleweed** (arcade) — a wad of tangled cassette tape rolling like a tumbleweed.
+
+### Pack F — Background character silhouettes  →  `pixelquest_pack_cast.png`  ·  **magenta key**  ·  dark low‑detail figures, ~40–80 px
+Distant one‑off performers/creatures that appear on the horizon or behind the tree line.
+- **giant friendly creature** (meadow/neon) — a huge gentle beast peeking over the treeline.
+- **dinosaur** (any) — a long‑necked dino grazing on the far horizon.
+- **robot duo** (any) — two blocky retro robots standing together.
+- **glam‑rock guitarist** (arcade) — a rocker mid‑solo, guitar raised ⚠ neon spotlight → green key.
+- **keyboard hero** (arcade) — a figure at a keytar/synth ⚠ neon → green key.
+- **tiny drummer** (arcade) — a small figure drumming on a cliff edge.
+- **crane‑kick pose** (any) — a lone martial‑artist silhouette on one leg, arms out.
+- **masked shadow** (any) — a cloaked masked figure half‑hidden behind a tree trunk.
+- **detective in the rain** (any) — a trench‑coat‑and‑hat figure under a streetlamp.
+- **wizard train** (castle) — a small steam train crossing a viaduct, glowing windows.
+- **ballroom window** (castle) — a lit castle window with two tiny dancing silhouettes inside.
+
+### Pack G — Hero accessories  →  `pixelquest_pack_hero_kit.png`  ·  **magenta key**  ·  **tiny** overlay items, ~8–24 px, each on the baseline
+These are little props that clip onto the existing hero during a move (the hero sprite stays;
+we just draw the accessory). Draw each item alone, no character.
+- **fedora hat**, **sunglasses**, **flowing cape**, **glowing red shoes** (⚠ if the glow is pink →
+  green key), **boombox** (held overhead), **power glove** (⚠ neon spark → green), **whip** (coiled +
+  extended), **hoverboard** (a small glowing board).
+
+---
+
+## §6 — Fix: re‑export the **arcade gate** (Pack of gates, cell 4)
+
+The arcade gate came through broken because its hot‑pink invader/top‑tube sat on the magenta key
+and got deleted. Regenerate **just that one gate** on a **GREEN `#00FF00`** background and I'll
+import it with `--key 00ff00`. Same size/shape as the other gates (a tall arcade gateway, glowing
+cyan/magenta arch, a little pixel‑invader motif on top — all the neon can stay pink now).
+Save as `gateArcade.png` (or `pixelquest_gate_arcade.png`).
+
+---
+
+## §7 — Deliberately staying procedural (do **not** generate art for these)
+
+These are motion / particle / full‑screen FX that the engine already animates better in code than
+a static sprite could — skip them: **hero costume *motions*** (moonwalk, pirouette, cape flourish,
+red‑jacket dance, sunglasses/leather pose — only the *accessory props* in Pack G are art);
+**weather fields** (purple rain, pixel rain, arcade‑token rain, VHS tracking, umbrella can reuse a
+Pack‑G item); **light FX** (yellow glowing road, laser‑grid sunrise, castle lightning, phone‑booth
+lightning, alien‑hand glow, star‑power burst, sparkles/dust/fireflies/torch flames). On the debug
+page these will stay red — that's expected and correct.
+
+---
+
+### Wiring note (my side, after you deliver art)
+For each new sprite I add an import spec (`scripts/import-art.mjs`), a manifest entry
+(`src/pixelquest-assets.js`), and set the matching event's `asset:` field so debug **page 2**
+flips that event from red `proc` → green `image`. You just generate + drop the PNGs in
+`public/assets/pixelquest/raw/` and tell me which pack landed.

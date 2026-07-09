@@ -2240,69 +2240,79 @@ export class PixelQuest {
     const col = (s) => (s === "external" ? G : s === "baked" ? A : R);
     const word = (s) => (s === "external" ? "image" : s === "baked" ? "baked" : "OLD");
     ctx.save();
-    ctx.fillStyle = "rgba(6,9,16,0.94)";
+    ctx.fillStyle = "rgba(6,9,16,0.95)";
     ctx.fillRect(0, 0, w, h);
-    ctx.textBaseline = "top";
-    ctx.textAlign = "left";
+    ctx.textBaseline = "top"; ctx.textAlign = "left";
     ctx.font = "bold 16px monospace";
-    ctx.fillStyle = "rgba(255,255,255,0.96)";
-    ctx.fillText("PIXEL QUEST — DEBUG", 24, 20);
+    ctx.fillStyle = "rgba(255,255,255,0.96)"; ctx.fillText("PIXEL QUEST — DEBUG", 20, 16);
     ctx.font = "12px monospace";
-    ctx.fillStyle = "rgba(150,160,185,0.9)";
-    ctx.textAlign = "right"; ctx.fillText("press  D  to close", w - 20, 24); ctx.textAlign = "left";
-    ctx.font = "13px monospace";
-    const lh = 17;
+    ctx.fillStyle = G; ctx.fillText("● textured", 230, 20);
+    ctx.fillStyle = A; ctx.fillText("● baked", 330, 20);
+    ctx.fillStyle = R; ctx.fillText("● procedural (needs art)", 415, 20);
+    ctx.fillStyle = "rgba(150,160,185,0.9)"; ctx.textAlign = "right"; ctx.fillText("press D to close", w - 18, 20); ctx.textAlign = "left";
+    ctx.font = "12.5px monospace";
+    const lh = 16, top = 48;
 
-    // ---- LEFT: graphics inventory ----
-    const x = 24; let y = 56;
-    ctx.fillStyle = "rgba(150,190,255,0.95)";
-    ctx.fillText("GRAPHICS   ", x, y);
-    ctx.fillStyle = G; ctx.fillText("● image", x + 92, y);
-    ctx.fillStyle = A; ctx.fillText("● baked", x + 168, y);
-    ctx.fillStyle = R; ctx.fillText("● OLD/procedural", x + 244, y);
-    y += lh + 6;
-    const row = (dot, name, src, activeTag) => {
-      ctx.fillStyle = col(src); ctx.fillText(dot, x, y);
-      ctx.fillStyle = activeTag ? "rgba(255,255,170,0.95)" : "rgba(215,215,222,0.92)";
-      ctx.fillText(name + (activeTag ? "  ◄ active" : ""), x + 16, y);
-      ctx.textAlign = "right"; ctx.fillStyle = col(src); ctx.fillText(word(src), x + 232, y); ctx.textAlign = "left";
-      y += lh;
+    const rowAt = (x, y, sc, name, statusWord, nameColor) => {
+      ctx.fillStyle = sc; ctx.fillText("●", x, y);
+      ctx.fillStyle = nameColor || "rgba(214,214,222,0.92)"; ctx.fillText(name, x + 15, y);
+      ctx.textAlign = "right"; ctx.fillStyle = sc; ctx.fillText(statusWord, x + 218, y); ctx.textAlign = "left";
     };
-    ctx.fillStyle = "rgba(200,210,225,0.9)"; ctx.fillText("SPRITES & PROPS", x, y); y += lh;
-    for (const s of sum.sprites) row("●", s.id, s.source);
-    y += 8;
-    ctx.fillStyle = "rgba(200,210,225,0.9)"; ctx.fillText("SCENERY (background per biome)", x, y); y += lh;
+    const secHdr = (x, y, t) => { ctx.fillStyle = "rgba(200,210,225,0.9)"; ctx.fillText(t, x, y); };
+    const colHdr = (x, y, t) => { ctx.font = "bold 13px monospace"; ctx.fillStyle = "rgba(150,190,255,0.95)"; ctx.fillText(t, x, y); ctx.font = "12.5px monospace"; };
+
+    // ---- COL A: textured assets ----
+    const xA = 20; let yA = top;
+    colHdr(xA, yA, "TEXTURED ASSETS"); yA += lh + 4;
+    secHdr(xA, yA, "SPRITES & PROPS"); yA += lh;
+    for (const s of sum.sprites) { rowAt(xA, yA, col(s.source), s.id, word(s.source)); yA += lh; }
+    yA += 6; secHdr(xA, yA, "SCENERY (per biome)"); yA += lh;
     for (const b of this.allBiomeIds()) {
       const img = this.assets.hasBackdrop(b) || this.assets.hasReadyLayer(b, "sky") || this.assets.hasReadyLayer(b, "far");
-      row("●", b, img ? "external" : "procedural", b === this.palRef?.biome);
+      const active = b === this.palRef?.biome;
+      rowAt(xA, yA, img ? G : R, b + (active ? " ◄" : ""), img ? "image" : "OLD", active ? "rgba(255,255,170,0.95)" : null); yA += lh;
     }
 
-    // ---- RIGHT: performance / state / keys ----
-    let x2 = Math.round(w * 0.52); let y2 = 56;
-    const hdr = (t) => { ctx.fillStyle = "rgba(150,190,255,0.95)"; ctx.fillText(t, x2, y2); y2 += lh + 4; };
-    const kv = (k, v, c) => { ctx.fillStyle = "rgba(150,160,182,0.9)"; ctx.fillText(k, x2, y2); ctx.fillStyle = c || "rgba(232,232,238,0.95)"; ctx.fillText(v, x2 + 130, y2); y2 += lh; };
+    // ---- COL B: procedural (not yet textured) ----
+    const PROC = [
+      { h: "BIOME SCENERY" }, "trees / foliage", "rocks", "path grass & flowers", "foreground silhouettes",
+      { h: "LANDMARKS" }, "shrine (meadow)", "mushroom (neon)", "clock tower (moonlit)", "arcade gate (arcade)", "castle (castle)",
+      { h: "ATTRACTIONS" }, "windmill", "campfire + brazier", "arcade cabinet", "snail",
+      { h: "SKY & FX" }, "stars · moon · clouds", "fireflies", "dust & sparkles", "torch flames",
+    ];
+    const xB = Math.round(w * 0.34); let yB = top;
+    colHdr(xB, yB, "PROCEDURAL  (no art yet)"); yB += lh + 4;
+    for (const p of PROC) {
+      if (p.h) { secHdr(xB, yB, p.h); yB += lh; continue; }
+      rowAt(xB, yB, R, p, "OLD"); yB += lh;
+    }
+    yB += 6; secHdr(xB, yB, "CAMEOS / EASTER EGGS"); yB += lh;
+    const nEv = this.events?.defs?.length || 63;
+    rowAt(xB, yB, R, `${nEv} events`, "OLD"); yB += lh;
+    ctx.fillStyle = "rgba(150,160,182,0.8)"; ctx.fillText("moon flybys, dragon, giant,", xB + 15, yB); yB += lh - 3;
+    ctx.fillText("jukebox, boulder chase, …", xB + 15, yB);
 
+    // ---- COL C: performance / state / keys ----
+    const xC = Math.round(w * 0.67); let yC = top;
+    const hdr = (t) => { colHdr(xC, yC, t); yC += lh + 4; };
+    const kv = (k, v, c) => { ctx.fillStyle = "rgba(150,160,182,0.9)"; ctx.fillText(k, xC, yC); ctx.fillStyle = c || "rgba(232,232,238,0.95)"; ctx.fillText(v, xC + 118, yC); yC += lh; };
     hdr("PERFORMANCE");
     const fps = Math.round(this.perf.fps);
     kv("fps", `${fps}`, fps >= 55 ? G : fps >= 30 ? A : R);
-    kv("frame time", `${this.perf.frameMs.toFixed(1)} ms`);
-    kv("resolution", `${this.pw}×${this.ph}  (art ${(this.assets.artScale || 1).toFixed(2)}×)`);
-    kv("detail", `${this.cfg.detail}  ·  ${this.cfg.renderMode}`);
-
-    y2 += 8;
-    hdr("WORLD STATE");
+    kv("frame ms", `${this.perf.frameMs.toFixed(1)}`);
+    kv("resolution", `${this.pw}×${this.ph} (${(this.assets.artScale || 1).toFixed(2)}×)`);
+    kv("detail", `${this.cfg.detail}`);
+    yC += 6; hdr("WORLD STATE");
     kv("biome", `${this.palRef?.biome || "?"}`);
-    kv("mood", `${mood?.state || "?"}  (energy ${(mood?.energy || 0).toFixed(2)})`);
-    const ch = orb?.charge ?? 0;
-    kv("orb", `${ch < 0.15 ? "dim" : ch < 0.55 ? "awake" : ch < 0.9 ? "charged" : "radiant"}  · charge ${ch.toFixed(2)}`);
-    kv("hero", `frame ${this.heroFrame}  · speed ${Math.round(this.lastSpeed || 0)} px/s`);
-    kv("counts", `part ${this.particles.length} · frag ${a?.fragments?.items.length || 0} · prop ${this.propField.props.length}`);
-    kv("assets", `${sum.external} image · ${sum.baked} baked · ${sum.procedural} old`);
-
-    y2 += 8;
-    hdr("KEYS  (Pixel Quest)");
+    kv("mood", `${mood?.state || "?"} ${(mood?.energy || 0).toFixed(2)}`);
+    const chg = orb?.charge ?? 0;
+    kv("orb", `${chg < 0.15 ? "dim" : chg < 0.55 ? "awake" : chg < 0.9 ? "charged" : "radiant"} ${chg.toFixed(2)}`);
+    kv("hero", `f${this.heroFrame} ${Math.round(this.lastSpeed || 0)}px/s`);
+    kv("counts", `p${this.particles.length} f${a?.fragments?.items.length || 0} pr${this.propField.props.length}`);
+    kv("assets", `${sum.external} img · ${sum.procedural} old`);
+    yC += 6; hdr("KEYS");
     ctx.fillStyle = "rgba(195,200,215,0.9)";
-    for (const l of ["D          close this screen", "B / ⇧B     next / prev biome", "1 – 5      jump to a biome", "J          play arrival moment", "H          controls panel"]) { ctx.fillText(l, x2, y2); y2 += lh; }
+    for (const l of ["D  close", "B / ⇧B  biome", "1–5  jump biome", "J  arrival", "H  controls"]) { ctx.fillText(l, xC, yC); yC += lh; }
 
     ctx.restore();
   }

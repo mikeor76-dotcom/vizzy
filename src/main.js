@@ -395,13 +395,15 @@ initKeyboardControls(controller, { toggleMic, pixelquest });
 //   ?input=mic        grab the microphone on load (needs pre-granted
 //                     permission, e.g. chromium --use-fake-ui-for-media-stream)
 //   ?sens=1.6         music sensitivity (0.5–2.5; overrides the saved value)
-// Kiosk persistence that survives the browser losing localStorage (Chromium on
-// the Pi gets killed on reboot and drops site data): the server injects the last
-// mode into the page. Treat it like a saved choice when the browser has none.
+// Kiosk persistence: the SERVER is the source of truth (it's updated on every
+// change and injected into the page). Let it WIN over the browser's localStorage
+// — a stale/undead value there (Chromium on the Pi can read a value it never
+// manages to overwrite) must not pin the visualization. In a normal browser the
+// injection is absent, so localStorage still drives it.
 const serverMode = typeof window !== "undefined" ? window.__vizzyLastMode : null;
-if (serverMode && byId(serverMode) && !controller.hadSavedMode) {
-  controller.setMode(serverMode);
-  controller.hadSavedMode = true; // so the ?mode= kiosk default below won't override it
+if (serverMode && byId(serverMode)) {
+  if (serverMode !== controller.currentModeId) controller.setMode(serverMode);
+  controller.hadSavedMode = true; // and keep the ?mode= kiosk default from overriding it
 }
 
 const params = new URLSearchParams(location.search);

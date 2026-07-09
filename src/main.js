@@ -373,8 +373,15 @@ controller.onChange((what) => {
   if (what === "controls") applyControlsVisible();
   if (what === "mode" || what === "preset") applyPreset();
   if (what === "mode") applyModeControls();
+  if (what === "mode") saveLastMode(controller.currentModeId);
   if (what === "mode" || what === "favorites" || what === "lock" || what === "preset") buildPanel();
 });
+
+// mirror the chosen mode to the server so it survives the browser dropping
+// localStorage (see serve.mjs). Best-effort: a no-op in dev / plain file hosting.
+function saveLastMode(mode) {
+  try { fetch("/api/last-mode", { method: "POST", body: mode, keepalive: true }).catch(() => {}); } catch {}
+}
 
 sensSlider.addEventListener("input", () =>
   controller.setSensitivity(parseFloat(sensSlider.value), { announce: false })
@@ -388,6 +395,15 @@ initKeyboardControls(controller, { toggleMic, pixelquest });
 //   ?input=mic        grab the microphone on load (needs pre-granted
 //                     permission, e.g. chromium --use-fake-ui-for-media-stream)
 //   ?sens=1.6         music sensitivity (0.5–2.5; overrides the saved value)
+// Kiosk persistence that survives the browser losing localStorage (Chromium on
+// the Pi gets killed on reboot and drops site data): the server injects the last
+// mode into the page. Treat it like a saved choice when the browser has none.
+const serverMode = typeof window !== "undefined" ? window.__vizzyLastMode : null;
+if (serverMode && byId(serverMode) && !controller.hadSavedMode) {
+  controller.setMode(serverMode);
+  controller.hadSavedMode = true; // so the ?mode= kiosk default below won't override it
+}
+
 const params = new URLSearchParams(location.search);
 const modeParam = params.get("mode");
 // only honor ?mode= when no mode has been chosen yet — so the remembered last

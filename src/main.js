@@ -284,6 +284,7 @@ window.pqAdventure = pixelquest.adventure;
 
 const sensSlider = document.getElementById("sens-slider");
 const sensValue = document.getElementById("sens-value");
+const sensGroup = document.querySelector(".sens-group");
 let overlayTimer;
 
 function applySensitivity() {
@@ -291,6 +292,13 @@ function applySensitivity() {
   for (const id in INSTANCES) INSTANCES[id].cfg.sensitivity = s;
   sensSlider.value = s;
   sensValue.textContent = s.toFixed(2);
+}
+
+// hide the sensitivity dial for modes that ignore it (registry
+// `controls.sensitivity: false`) — e.g. Synthwave runs on a fixed internal gain
+function applyModeControls() {
+  const showSens = controller.currentEntry.controls?.sensitivity !== false;
+  if (sensGroup) sensGroup.style.display = showSens ? "" : "none";
 }
 
 function applyPreset() {
@@ -364,6 +372,7 @@ controller.onChange((what) => {
   if (what === "overlay") applyOverlay();
   if (what === "controls") applyControlsVisible();
   if (what === "mode" || what === "preset") applyPreset();
+  if (what === "mode") applyModeControls();
   if (what === "mode" || what === "favorites" || what === "lock" || what === "preset") buildPanel();
 });
 
@@ -391,6 +400,7 @@ if (!Number.isNaN(sensParam)) controller.setSensitivity(sensParam, { announce: f
 applySensitivity();
 applyPreset();
 applyControlsVisible();
+applyModeControls();
 buildPanel();
 
 // hide the controls + cursor after a few seconds of inactivity

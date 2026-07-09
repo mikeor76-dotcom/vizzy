@@ -9,6 +9,11 @@
 const TAU = Math.PI * 2;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
+// Synthwave deliberately IGNORES the global sensitivity dial — the scene is
+// tuned around one fixed, fairly low gain (the dial let the wave/grid spike far
+// too hard). This is the single knob for its audio response; change it here.
+const FIXED_SENSITIVITY = 0.8;
+
 class Smoother {
   constructor(attack = 0.6, decay = 0.14) {
     this.value = 0;
@@ -43,7 +48,7 @@ class BeatDetector {
 
 export class Synthwave {
   constructor(cfg = {}) {
-    this.cfg = { sensitivity: 1.25, quality: "auto", ...cfg };
+    this.cfg = { quality: "auto", ...cfg }; // note: no `sensitivity` — see FIXED_SENSITIVITY
     // adaptive quality (same pattern as blackhole/galaxy): when frames run
     // long — e.g. on the Raspberry Pi — autoQuality slides toward 0.3 and the
     // renderer sheds its costliest overdraw. 1 = full glow, high detail.
@@ -95,7 +100,7 @@ export class Synthwave {
     // adaptive gain, same pattern as the other reactive modes
     const rawLoud = band(1, 372);
     this.peak = Math.max(this.peak * (1 - dt * 0.04), rawLoud, 0.06);
-    this.gain = Math.min(4, 0.55 / this.peak) * this.cfg.sensitivity;
+    this.gain = Math.min(4, 0.55 / this.peak) * FIXED_SENSITIVITY;
     const rawBass = Math.min(1, band(1, 11) * this.gain);
     this.bass.update(rawBass);
     this.mid.update(Math.min(1, band(11, 92) * this.gain));

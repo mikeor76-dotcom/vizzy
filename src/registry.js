@@ -80,7 +80,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: true,
-    controls: { sensitivity: true },
+    controls: { sensitivity: false }, // fixed internal gain (FIXED_SENSITIVITY); dial does nothing here
   },
   // --------------------------------------------------------------- hi-fi
   {

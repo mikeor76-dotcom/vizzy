@@ -43,7 +43,14 @@ class BeatDetector {
 
 export class Synthwave {
   constructor(cfg = {}) {
-    this.cfg = { sensitivity: 1.25, ...cfg };
+    this.cfg = { sensitivity: 1.25, quality: "auto", ...cfg };
+    // adaptive quality (same pattern as blackhole/galaxy): when frames run
+    // long — e.g. on the Raspberry Pi — autoQuality slides toward 0.3 and the
+    // renderer sheds its costliest overdraw. 1 = full glow, high detail.
+    this.frameAvg = 16.7;
+    this.autoQuality = 1;
+    this.q = 1;
+    this._reflFrame = 0;
     this.freq = new Uint8Array(1024);
     this.time = new Uint8Array(2048);
     this.bass = new Smoother(0.65, 0.12);
@@ -66,6 +73,10 @@ export class Synthwave {
     this.ridgePts = null; // grouped, smoothed terrain sections
     this.w = 0;
     this.stars = [];
+  }
+
+  quality() {
+    return this.cfg.quality === "auto" ? this.autoQuality : this.cfg.quality;
   }
 
   analyze(analyser, dt) {
@@ -149,9 +160,18 @@ export class Synthwave {
 
   render(ctx, analyser, w, h, now) {
     if (w !== this.w || h !== this.h) this.rebuild(w, h);
-    const dt = Math.min(Math.max(this.lastNow ? now - this.lastNow : 16.7, 0) / 1000, 0.05);
+    const rawMs = this.lastNow ? now - this.lastNow : 16.7;
+    const dt = Math.min(Math.max(rawMs, 0) / 1000, 0.05);
     this.lastNow = now;
     this.t = now / 1000;
+    // adaptive quality: shed cost when frames run long (ignore huge gaps from
+    // tab-switches / first frame). Settles in the 19–26ms dead band.
+    if (rawMs > 0 && rawMs < 500 && this.cfg.quality === "auto") {
+      this.frameAvg += (rawMs - this.frameAvg) * 0.04;
+      if (this.frameAvg > 26 && this.autoQuality > 0.3) this.autoQuality -= 0.02;
+      else if (this.frameAvg < 19 && this.autoQuality < 1) this.autoQuality = Math.min(1, this.autoQuality + 0.004);
+    }
+    this.q = this.quality();
     this.analyze(analyser, dt);
 
     // strict, unmoving baseline: the absolute zero-point for the waveform,
@@ -185,7 +205,12 @@ export class Synthwave {
   drawStars(ctx, w, horizon, cx, dt) {
     const tr = this.treble.value;
     const maxR = this.starMaxR || Math.hypot(w / 2, horizon);
-    for (const s of this.stars) {
+    // update every star (cheap) for a continuous field, but draw only a
+    // quality-scaled subset — thins the fill work when the Pi is struggling
+    const drawCount = Math.floor(this.stars.length * (0.55 + 0.45 * this.q));
+    const bloom = this.q > 0.45;
+    for (let si = 0; si < this.stars.length; si++) {
+      const s = this.stars[si];
       // radial motion: slow near the vanishing point (behind the sun),
       // accelerating outward — a subtle starfield warping toward the
       // viewer rather than a static twinkling backdrop
@@ -197,6 +222,7 @@ export class Synthwave {
         s.speedMul = 0.7 + Math.random() * 1.1;
         continue; // reappears next frame; skip drawing this reset instant
       }
+      if (si >= drawCount) continue;
 
       const x = cx + Math.cos(s.angle) * s.radius;
       const y = horizon + Math.sin(s.angle) * s.radius;
@@ -208,16 +234,15 @@ export class Synthwave {
       const a = clamp01((0.3 + tw * 0.32 + depth * 0.6) * (0.8 + tr * 1.1));
       if (a < 0.04) continue;
       const size = 1.6 + depth * 2.6;
-      // the closer/brighter stars get their own small glow, matching the
-      // scene's additive-bloom look — kept to just the close ones for cost
-      if (depth > 0.4) {
-        ctx.save();
-        ctx.shadowBlur = 9;
-        ctx.shadowColor = "rgba(255, 150, 100, 0.9)";
+      // the closer/brighter stars get a soft bloom — a larger faint rect
+      // under the core, far cheaper than a per-star shadowBlur pass
+      if (bloom && depth > 0.4) {
+        const hs = size * 2.6;
+        ctx.fillStyle = `rgba(255, 150, 100, ${clamp01(a * 0.5)})`;
+        ctx.fillRect(x - (hs - size) / 2, y - (hs - size) / 2, hs, hs);
       }
       ctx.fillStyle = `rgba(255, 180, 130, ${a})`;
       ctx.fillRect(x, y, size, size);
-      if (depth > 0.4) ctx.restore();
     }
   }
 
@@ -242,22 +267,30 @@ export class Synthwave {
     const rw = Math.ceil(r * 5.2);
     const rh = Math.ceil(r * 2.1);
     if (!this.reflCanvas) this.reflCanvas = document.createElement("canvas");
-    if (this.reflCanvas.width !== rw || this.reflCanvas.height !== rh) {
+    const sizeChanged = this.reflCanvas.width !== rw || this.reflCanvas.height !== rh;
+    if (sizeChanged) {
       this.reflCanvas.width = rw;
       this.reflCanvas.height = rh;
     }
-    const rc = this.reflCanvas.getContext("2d");
-    rc.clearRect(0, 0, rw, rh);
-    rc.save();
-    rc.translate(rw / 2 - cx, -(horizon + 2)); // tile y0 = the horizon line
-    this.paintSun(rc, cx, sy, r, horizon + 2);
-    rc.restore();
-    // submerged light reads hot pink
-    rc.save();
-    rc.globalCompositeOperation = "source-atop";
-    rc.fillStyle = "rgba(255, 35, 110, 0.35)";
-    rc.fillRect(0, 0, rw, rh);
-    rc.restore();
+    // the tile is near-static (only the sun stripes drift slowly), so repaint
+    // it a few times a second rather than every frame — the ripple is applied
+    // cheaply at blit time below. Full rate only when quality is high.
+    const repaintEvery = this.q > 0.8 ? 1 : this.q > 0.5 ? 3 : 6;
+    if (sizeChanged || this._reflFrame % repaintEvery === 0) {
+      const rc = this.reflCanvas.getContext("2d");
+      rc.clearRect(0, 0, rw, rh);
+      rc.save();
+      rc.translate(rw / 2 - cx, -(horizon + 2)); // tile y0 = the horizon line
+      this.paintSun(rc, cx, sy, r, horizon + 2);
+      rc.restore();
+      // submerged light reads hot pink
+      rc.save();
+      rc.globalCompositeOperation = "source-atop";
+      rc.fillStyle = "rgba(255, 35, 110, 0.35)";
+      rc.fillRect(0, 0, rw, rh);
+      rc.restore();
+    }
+    this._reflFrame++;
 
     const waterTop = horizon + 2;
     const amp = 1 + this.loud.value * 2.5 + this.bass.value * 3 + this.flash * 3;
@@ -265,9 +298,12 @@ export class Synthwave {
     ctx.globalAlpha = 0.55 + this.loud.value * 0.15 + this.flash * 0.12;
     let y = 0;
     let k = 0;
+    // fewer, taller slices when quality is low — halves the per-slice blits
+    const bandBase = this.q > 0.6 ? 2 : 3.5;
+    const bandDepth = this.q > 0.6 ? 7 : 9;
     while (y < rh) {
       const depth = y / rh; // 0 at horizon -> 1 near viewer
-      const bandH = 2 + depth * 7; // perspective: wider slices up close
+      const bandH = bandBase + depth * bandDepth; // perspective: wider slices up close
       const off =
         Math.sin(k * 0.9 + this.t * (2 + this.loud.value * 3)) * amp * (0.3 + depth * 1.4) +
         Math.sin(k * 2.3 - this.t * 1.3) * amp * 0.3;
@@ -412,12 +448,30 @@ export class Synthwave {
     waveGrad.addColorStop(0.5, "#ff6a35");
     waveGrad.addColorStop(1, "#e6432a");
 
-    ctx.save();
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = "#ff6a35";
     ctx.fillStyle = waveGrad;
     ctx.fill();
-    ctx.restore(); // drop the shadow before later layers (grid, etc.) draw
+    // neon crest bloom via cheap overdraw (replaces a full-silhouette
+    // shadowBlur that was murder on the Pi): a wide soft stroke over just the
+    // top contour, then a bright thin core line.
+    if (this.q > 0.4) {
+      const traceCrest = () => {
+        ctx.beginPath();
+        ctx.moveTo(frontPts[0][0], frontPts[0][1]);
+        for (let i = 1; i < N - 1; i++) {
+          const xc = (frontPts[i][0] + frontPts[i + 1][0]) / 2;
+          const yc = (frontPts[i][1] + frontPts[i + 1][1]) / 2;
+          ctx.quadraticCurveTo(frontPts[i][0], frontPts[i][1], xc, yc);
+        }
+      };
+      traceCrest();
+      ctx.strokeStyle = "rgba(255, 140, 70, 0.28)";
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      traceCrest();
+      ctx.strokeStyle = "rgba(255, 205, 140, 0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
   }
 
   drawGridFloor(ctx, w, h, cx, horizon, dt) {
@@ -431,35 +485,32 @@ export class Synthwave {
     const rate = freeRate * (1 - this.tempoConf) + tempoRate * this.tempoConf;
     this.gridPhase = (this.gridPhase + dt * (rate + this.surge * 0.5)) % 1;
     const shimmer = 0.55 + this.treble.value * 0.25 + this.flash * 0.2;
-    // a soft glow on the grid lines themselves — same additive-bloom idea,
-    // kept modest since it runs across every row/spoke each frame
-    ctx.save();
-    ctx.shadowBlur = 6;
-    ctx.shadowColor = "rgba(255, 25, 200, 0.8)";
+    // Neon glow on the grid via cheap overdraw — a wide faint halo pass under a
+    // bright thin core — instead of shadowBlur, which blurred every full-width
+    // row/spoke each frame and was the single worst cost on the Pi. The halo
+    // pass is dropped when quality is low; the core alone still reads as a grid.
+    const glow = this.q > 0.45;
+    const line = (x0, y0, x1, y1, a, lw) => {
+      if (glow) {
+        ctx.strokeStyle = `rgba(255, 70, 215, ${clamp01(a * 0.3)})`;
+        ctx.lineWidth = lw + 4;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      }
+      ctx.strokeStyle = `rgba(255, 25, 200, ${clamp01(a * (glow ? 1 : 1.2))})`;
+      ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    };
     for (let k = 0; k < rows; k++) {
       const zf = (k / rows + this.gridPhase) % 1;
       const y = horizon + Math.pow(zf, 2.7) * floorH;
-      const a = (0.1 + zf * 0.65) * shimmer;
-      ctx.strokeStyle = `rgba(255, 25, 200, ${a})`;
-      ctx.lineWidth = 1 + zf * 2.2;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+      line(0, y, w, y, (0.1 + zf * 0.65) * shimmer, 1 + zf * 2.2);
     }
     // converging verticals
     const spokes = 10;
-    ctx.lineWidth = 1.2;
     for (let i = -spokes; i <= spokes; i++) {
       const f = i / spokes;
-      const a = (0.16 + Math.abs(f) * 0.3) * shimmer;
-      ctx.strokeStyle = `rgba(255, 25, 200, ${a})`;
-      ctx.beginPath();
-      ctx.moveTo(cx + f * w * 0.045, horizon + 3);
-      ctx.lineTo(cx + f * w * 1.05, h + 2);
-      ctx.stroke();
+      line(cx + f * w * 0.045, horizon + 3, cx + f * w * 1.05, h + 2, (0.16 + Math.abs(f) * 0.3) * shimmer, 1.2);
     }
-    ctx.restore(); // drop the grid glow before the haze fill below
 
     // soft hot-pink haze where floor meets horizon, breathing with the music
     const haze = ctx.createLinearGradient(0, horizon, 0, horizon + floorH * 0.35);

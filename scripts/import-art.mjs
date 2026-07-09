@@ -42,6 +42,17 @@ const SHEET_SPECS = {
   hero_traveler_sheet: { mode: "sheet", w: 384, h: 60, frames: 8, anchor: "bottom", colors: 32 },
   orb_note_states: { mode: "sheet", w: 240, h: 48, frames: 5, anchor: "center", colors: 32, tight: 0.34 },
   fragments_music_sheet: { mode: "sheet", w: 256, h: 32, frames: 8, anchor: "center", colors: 24 },
+  // props & landmarks — magenta-keyed sprite strips, authored at the 320 reference.
+  // w = frameW * frames (kept in sync with ASSET_MANIFEST frameW/frameH).
+  lantern: { mode: "sheet", w: 56, h: 46, frames: 2, anchor: "bottom", colors: 32 },
+  house: { mode: "sheet", w: 84, h: 80, frames: 1, anchor: "bottom", colors: 48 },
+  flower: { mode: "sheet", w: 48, h: 22, frames: 3, anchor: "bottom", colors: 24 },
+  grass: { mode: "sheet", w: 48, h: 16, frames: 2, anchor: "bottom", colors: 24 },
+  sign: { mode: "sheet", w: 28, h: 40, frames: 1, anchor: "bottom", colors: 32 },
+  door: { mode: "sheet", w: 64, h: 48, frames: 2, anchor: "bottom", colors: 32 },
+  gate: { mode: "sheet", w: 132, h: 62, frames: 2, anchor: "bottom", colors: 40 },
+  bridge: { mode: "sheet", w: 100, h: 42, frames: 1, anchor: "bottom", colors: 40 },
+  shrine: { mode: "sheet", w: 44, h: 58, frames: 1, anchor: "bottom", colors: 40 },
 };
 const BAND_SPECS = {
   sky: { w: 640, h: 180, key: false },

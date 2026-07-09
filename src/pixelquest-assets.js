@@ -124,15 +124,15 @@ export const ASSET_MANIFEST = {
   // per-biome {biome}_props.png strip (640x96), but each biome's layout differs,
   // so wiring real per-biome prop slices is a later polish; the layered bands
   // already carry the scenery (cottages in mid, fences in foreground).
-  lantern: { bake: "lantern", frameW: 14, frameH: 22, anims: { lit: { frames: [0, 1], fps: 2 } }, anchor: "bottom-left", scale: 1, piSafe: true, fallback: "procedural" },
-  house: { bake: "cottage", frameW: 30, frameH: 26, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-left", scale: 1, piSafe: true, fallback: "procedural" },
-  flower: { bake: "flower", frameW: 7, frameH: 9, anims: { sway: { frames: [0, 1, 2], fps: 3 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
-  grass: { bake: "grass", frameW: 9, frameH: 7, anims: { sway: { frames: [0, 1], fps: 3 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
-  sign: { bake: "sign", frameW: 11, frameH: 15, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
-  door: { src: null, frameW: 12, frameH: 18, anims: { closed: { frames: [0], fps: 1 }, open: { frames: [1], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
-  gate: { src: null, frameW: 30, frameH: 34, anims: { closed: { frames: [0], fps: 1 }, open: { frames: [1], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
-  bridge: { src: null, frameW: 40, frameH: 14, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-left", scale: 1, piSafe: true, fallback: "procedural" },
-  shrine: { src: null, frameW: 20, frameH: 22, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  lantern: { src: "lantern.png", bake: "lantern", frameW: 28, frameH: 46, anims: { lit: { frames: [0, 1], fps: 2 } }, anchor: "bottom-left", scale: 1, piSafe: true, fallback: "procedural" },
+  house: { src: "house.png", bake: "cottage", frameW: 84, frameH: 80, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-left", scale: 1, piSafe: true, fallback: "procedural" },
+  flower: { src: "flower.png", bake: "flower", frameW: 16, frameH: 22, anims: { sway: { frames: [0, 1, 2], fps: 3 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  grass: { src: "grass.png", bake: "grass", frameW: 24, frameH: 16, anims: { sway: { frames: [0, 1], fps: 3 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  sign: { src: "sign.png", bake: "sign", frameW: 28, frameH: 40, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  door: { src: "door.png", frameW: 32, frameH: 48, anims: { closed: { frames: [0], fps: 1 }, open: { frames: [1], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  gate: { src: "gate.png", frameW: 66, frameH: 62, anims: { closed: { frames: [0], fps: 1 }, open: { frames: [1], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  bridge: { src: "bridge.png", frameW: 100, frameH: 42, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-left", scale: 1, piSafe: true, fallback: "procedural" },
+  shrine: { src: "shrine.png", frameW: 44, frameH: 58, anims: { idle: { frames: [0], fps: 1 } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
 };
 
 // Parallax plates per biome: seamless horizontal-tiling strips. `src` (PNG)

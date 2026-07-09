@@ -48,19 +48,39 @@ if [[ -f "$CFG" ]]; then
 fi
 
 # 3) Desktop wallpaper — best effort; covers the moment between login and the
-#    kiosk browser painting. Non-fatal on any compositor it can't reach.
+#    kiosk browser painting. Written per-compositor and NEVER pops a GUI dialog
+#    (the old pcmanfm call showed a modal "Desktop manager is not active" error
+#    under Wayland and blocked this script).
 USER_HOME="$(getent passwd "$KIOSK_USER" | cut -d: -f6)"; [[ -n "$USER_HOME" ]] || USER_HOME="/home/$KIOSK_USER"
-# Wayland / wayfire (Pi 5 Bookworm default)
+WP_VIA=""
+# Wayland / wayfire (config file, silent)
 WF="$USER_HOME/.config/wayfire.ini"
 if command -v wayfire >/dev/null 2>&1 || [[ -f "$WF" ]]; then
   sudo -u "$KIOSK_USER" mkdir -p "$(dirname "$WF")" 2>/dev/null || true
-  if ! grep -q "^\[background\]" "$WF" 2>/dev/null; then
-    printf '\n[background]\nimage=%s\nmode=fill\n' "$DEST" | sudo -u "$KIOSK_USER" tee -a "$WF" >/dev/null 2>&1 || true
+  grep -q "^\[background\]" "$WF" 2>/dev/null \
+    || printf '\n[background]\nimage=%s\nmode=fill\n' "$DEST" | sudo -u "$KIOSK_USER" tee -a "$WF" >/dev/null 2>&1 || true
+  WP_VIA="wayfire.ini"
+fi
+# labwc (Pi OS Bookworm default on Pi 4/5) draws the wallpaper with swaybg via autostart
+LABWC="$USER_HOME/.config/labwc"
+if command -v labwc >/dev/null 2>&1 || [[ -d "$LABWC" ]]; then
+  sudo -u "$KIOSK_USER" mkdir -p "$LABWC" 2>/dev/null || true
+  if command -v swaybg >/dev/null 2>&1 && ! grep -q "vizzy-splash" "$LABWC/autostart" 2>/dev/null; then
+    printf 'swaybg -i %s -m fill &\n' "$DEST" | sudo -u "$KIOSK_USER" tee -a "$LABWC/autostart" >/dev/null 2>&1 || true
+    WP_VIA="${WP_VIA:+$WP_VIA + }labwc/swaybg"
   fi
 fi
-# X11 / LXDE (pcmanfm)
-sudo -u "$KIOSK_USER" DISPLAY=:0 pcmanfm --set-wallpaper "$DEST" --wallpaper-mode=crop >/dev/null 2>&1 || true
-echo "==> Wallpaper: set for '$KIOSK_USER' (best effort)"
+# X11 / LXDE-pi — ONLY if pcmanfm is actually running the desktop (else it pops
+# a modal dialog and hangs this script). Guarded, so it stays silent otherwise.
+if pgrep -u "$KIOSK_USER" -f 'pcmanfm.*--desktop' >/dev/null 2>&1; then
+  sudo -u "$KIOSK_USER" DISPLAY=:0 pcmanfm --set-wallpaper "$DEST" --wallpaper-mode=crop >/dev/null 2>&1 || true
+  WP_VIA="${WP_VIA:+$WP_VIA + }pcmanfm"
+fi
+if [[ -n "$WP_VIA" ]]; then
+  echo "==> Wallpaper: configured for '$KIOSK_USER' via $WP_VIA (takes effect next login)"
+else
+  echo "==> Wallpaper: skipped — set it by hand if you like: Appearance Settings -> $DEST"
+fi
 
 echo
 echo "==> Done. Reboot to see the boot splash:  sudo reboot"

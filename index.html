@@ -5,8 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vizzy — Audio Visualizer</title>
     <link rel="stylesheet" href="/src/style.css" />
+    <!-- boot/loading splash: shown the instant the page parses (before the JS
+         bundle + first canvas frame), then faded out by main.js. Inline here so
+         it applies with zero dependency on the external stylesheet — no white
+         flash while Chromium loads the app on the Pi. -->
+    <style>
+      html { background: #000; } /* pre-CSS anti-flash; app's own --bg still styles <body> */
+      #splash {
+        position: fixed; inset: 0; z-index: 9999; background: #000;
+        display: flex; align-items: center; justify-content: center;
+        opacity: 1; transition: opacity 650ms ease;
+      }
+      #splash.hide { opacity: 0; pointer-events: none; }
+      #splash img { width: 100%; height: 100%; object-fit: contain; }
+    </style>
   </head>
   <body>
+    <div id="splash"><img src="/vizzy-splash.png" alt="Vizzy" /></div>
     <canvas id="canvas"></canvas>
 
     <div id="hint">

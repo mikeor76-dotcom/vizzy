@@ -440,3 +440,19 @@ function frame(now) {
   draw(now);
 }
 requestAnimationFrame(frame);
+
+// Dismiss the loading splash once the first frame has actually painted (with a
+// short minimum so it never just flashes). Covers the gap while Chromium loads
+// the app on the Pi; harmless in a normal browser.
+(() => {
+  const splash = document.getElementById("splash");
+  if (!splash) return;
+  const t0 = performance.now();
+  const dismiss = () => {
+    setTimeout(() => {
+      splash.classList.add("hide");
+      setTimeout(() => splash.remove(), 750);
+    }, Math.max(0, 550 - (performance.now() - t0)));
+  };
+  requestAnimationFrame(() => requestAnimationFrame(dismiss)); // after first painted frame
+})();

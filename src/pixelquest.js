@@ -1586,9 +1586,11 @@ export class PixelQuest {
         : "walk";
       // walk steps with his actual stride (heroFrame), so the 2-frame cycle
       // syncs to ground speed instead of flickering on a fixed fps clock
-      // + a subtle vertical step-bounce: the body lifts at the passing point of
-      //   each stride (heroAnimT 0→1), which sells the walk even at small sizes
-      const walkBounce = anim === "walk" ? Math.round(Math.sin(this.heroAnimT * Math.PI) * this.S * 0.7) : 0;
+      // + a vertical step-bounce: the body lifts at the passing point of each
+      //   stride (heroAnimT 0→1) and plants on contact. This carries the walk
+      //   because the art's legs barely move under the long coat — the bob is
+      //   what makes it read as walking at small sizes.
+      const walkBounce = anim === "walk" ? Math.round(Math.sin(this.heroAnimT * Math.PI) * this.S * 1.3) : 0;
       this.assets.drawSprite(o, "hero", anim, this.heroAnimT + this.heroFrame, hx + 8, gy + 1 - walkBounce, { anchor: "bottom-center", frame: anim === "walk" ? this.heroFrame : 0 });
       return;
     }

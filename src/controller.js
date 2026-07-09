@@ -17,6 +17,9 @@ const STORE = {
 export class VisualizerController {
   constructor() {
     this.favorites = this.#loadJSON(STORE.favorites, []);
+    // true if a mode was previously chosen + saved — lets a kiosk ?mode= URL act
+    // as a first-boot default only, so the remembered last mode wins after that.
+    this.hadSavedMode = localStorage.getItem(STORE.mode) != null && byId(localStorage.getItem(STORE.mode)) != null;
     this.currentModeId = localStorage.getItem(STORE.mode) || "bars";
     if (!byId(this.currentModeId)) this.currentModeId = "bars";
     this.currentCategory = localStorage.getItem(STORE.category) || byId(this.currentModeId).category;

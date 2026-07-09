@@ -374,13 +374,16 @@ sensSlider.addEventListener("input", () =>
 initKeyboardControls(controller, { toggleMic, pixelquest });
 
 // Kiosk support (e.g. Raspberry Pi driving an LED wall):
-//   ?mode=galaxy      start in a given mode
+//   ?mode=galaxy      first-boot default mode; once you switch modes the app
+//                     remembers your last choice and that wins over this param
 //   ?input=mic        grab the microphone on load (needs pre-granted
 //                     permission, e.g. chromium --use-fake-ui-for-media-stream)
 //   ?sens=1.6         music sensitivity (0.5–2.5; overrides the saved value)
 const params = new URLSearchParams(location.search);
 const modeParam = params.get("mode");
-if (modeParam && byId(modeParam)) controller.setMode(modeParam);
+// only honor ?mode= when no mode has been chosen yet — so the remembered last
+// visualization is restored on restart instead of being reset by the kiosk URL
+if (modeParam && byId(modeParam) && !controller.hadSavedMode) controller.setMode(modeParam);
 if (params.get("input") === "mic") startMic();
 const sensParam = parseFloat(params.get("sens"));
 if (!Number.isNaN(sensParam)) controller.setSensitivity(sensParam, { announce: false });

@@ -10,9 +10,11 @@ const TAU = Math.PI * 2;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 // Synthwave deliberately IGNORES the global sensitivity dial — the scene is
-// tuned around one fixed, fairly low gain (the dial let the wave/grid spike far
-// too hard). This is the single knob for its audio response; change it here.
-const FIXED_SENSITIVITY = 0.35;
+// tuned around one fixed gain (the dial let the wave/grid spike far too hard).
+// This is the single knob for its audio response; change it here. The wave now
+// masks out a flat keep-out gap over the sun and caps its own height, so the sun
+// can never be obscured — which lets this run livelier than the old 0.35.
+const FIXED_SENSITIVITY = 0.7;
 
 class Smoother {
   constructor(attack = 0.6, decay = 0.14) {

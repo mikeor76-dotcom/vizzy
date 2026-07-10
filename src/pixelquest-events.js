@@ -283,12 +283,34 @@ export class PixelQuestEventManager {
   }
 
   draw(o, pal, layer) {
-    for (const st of this.active) if (st.def.layer === layer) st.def.draw?.(o, st, this.pq, pal);
+    for (const st of this.active) {
+      if (st.def.layer !== layer) continue;
+      if (this._drawEventSprite(o, st, pal)) continue; // imported art when ready
+      st.def.draw?.(o, st, this.pq, pal); // procedural fallback
+    }
     if (this.chapter) {
       // chapters draw behind the hero on "ground" and over him on "front"
       if (layer === "ground") this.chapter.def.draw?.(o, this.chapter, this.pq, pal);
       if (layer === "front") this.chapter.def.drawFront?.(o, this.chapter, this.pq, pal);
     }
+  }
+
+  // Shared art path: if an event declares an `asset` (imported sprite) and a
+  // `spriteAt(st,pq,pal)` returning its {x,y[,scale,anchor,alpha]}, draw that
+  // sprite (faded by st.fade) instead of the procedural body. `drawExtra` may add
+  // live bits (trails, glow) on top. Returns true when it rendered.
+  _drawEventSprite(o, st, pal) {
+    const def = st.def, pq = this.pq;
+    if (!def.asset || !def.spriteAt || !pq.assets?.ready?.(def.asset)) return false;
+    const p = def.spriteAt(st, pq, pal);
+    if (!p) return false;
+    pq.assets.drawSprite(o, def.asset, def.assetAnim || "idle", 0, Math.round(p.x), Math.round(p.y), {
+      anchor: p.anchor || def.assetAnchor,
+      scale: p.scale ?? def.assetScale ?? 1,
+      alpha: p.alpha ?? st.fade,
+    });
+    def.drawExtra?.(o, st, pq, pal);
+    return true;
   }
 
   // ------------------------------------------------ chapter tier lifecycle
@@ -3177,6 +3199,75 @@ export const CHAPTER_EVENTS = [
     },
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Cameo sprite wiring. Maps events to their imported art + where to draw it.
+// The shared path (PixelQuestEventManager._drawEventSprite) reads def.asset +
+// def.spriteAt (attached below), draws the sprite (faded by st.fade) at that
+// position, and falls back to the procedural body when the asset isn't ready.
+// Positions mirror each event's procedural placement. FX-only cameos (rain,
+// lightning, glowing road, laser grid, portal, …) and the gated hero-costume
+// showpieces (layer:null, drawn via pq.egg) stay procedural — intentionally
+// absent here. `at(st,pq,pal)` returns {x,y[,scale,anchor]}; null = skip (fall
+// back to procedural, e.g. the sports car's lingering trail after it exits).
+const _gy = (pq, x) => pq.groundY(Math.max(0, Math.min(pq.pw - 1, Math.round(x)))) + 1;
+const _moonOverlayAt = (st, pq, pal) => {
+  const { mx, my } = moonPos(pq, pal);
+  const d = Math.round(5 * pq.S) * 2 + 4; // ~ the moon's diameter (+ a hair)
+  return { x: mx, y: my, scale: d / (71 * (pq.assets?.artScale || 1)) }; // 71 = overlay frameW
+};
+const CAMEO_SPRITES = {
+  // sky — floating silhouettes, center-anchored
+  bicycle_moon: { asset: "bicycleRider", scale: 0.7, anchor: "center", at: (st, pq, pal) => { const { mx, my } = moonPos(pq, pal); return { x: mx - 38 + st.p * 88, y: my + 2 - Math.sin(st.p * Math.PI) * 9 }; } },
+  witch_moon: { asset: "witchBroom", scale: 0.65, anchor: "center", at: (st, pq) => ({ x: pq.pw + 17 - st.p * (pq.pw + 30), y: 12 + (st.seed % 18) + Math.sin(st.t * 2.2) * 2 }) },
+  winged_moon_shadow: { asset: "wingedShadow", scale: 0.6, anchor: "center", at: (st, pq, pal) => { const { mx, my } = moonPos(pq, pal); return { x: mx - 29 + st.p * 60, y: my - 2 - Math.sin(st.p * Math.PI) * 4 }; } },
+  dragon_shadow: { asset: "skyDragon", scale: 0.62, anchor: "center", at: (st, pq) => ({ x: pq.pw + 28 - st.p * (pq.pw + 50), y: 10 + (st.seed % 10) + Math.sin(st.t * 1.1) * 3 }) },
+  pirate_ship_cloud: { asset: "pirateShip", scale: 0.55, anchor: "center", at: (st, pq) => ({ x: pq.pw + 22 - st.p * (pq.pw + 46), y: 15 + (st.seed % 8) + Math.sin(st.t * 0.8) + pq.bass.value * 1.5 }) },
+  spy_rope_drop: { asset: "spyRope", scale: 1.0, anchor: "top-center", at: (st, pq) => ({ x: Math.round(pq.pw * (0.3 + ((st.seed % 100) / 100) * 0.3)) + 2, y: 2 }) },
+  meteor_cassette: { asset: "meteorCassette", scale: 0.5, anchor: "center", at: (st, pq) => { const m = clamp01(st.p / 0.45); return { x: pq.pw * 0.9 - m * pq.pw * 0.45, y: -2 + m * 34 }; } },
+  disco_moon: { asset: "discoMoon", anchor: "center", at: _moonOverlayAt },
+  record_moon: { asset: "recordMoon", anchor: "center", at: _moonOverlayAt },
+  moon_face_wink: { asset: "winkMoon", anchor: "center", at: _moonOverlayAt },
+  // ground — bottom-anchored on the road
+  boulder_chase: { asset: "boulder", scale: 0.7, anchor: "bottom-center", at: (st, pq) => ({ x: st.data.x, y: _gy(pq, st.data.x) }) },
+  red_balloon_grate: { asset: "redBalloon", scale: 0.55, anchor: "bottom-center", at: (st, pq) => { const sx = st.data.wx - pq.scrollX; return { x: sx + Math.sin(st.t * 1.1) * 2, y: _gy(pq, sx) - st.p * 34 }; } },
+  black_cat_crossing: { asset: "blackCat", scale: 0.5, anchor: "bottom-center", at: (st, pq) => { const x = pq.pw * 0.75 - st.p * pq.pw * 0.55; return { x: x + 3, y: _gy(pq, x) }; } },
+  cassette_tumbleweed: { asset: "cassetteTumbleweed", scale: 0.5, anchor: "bottom-center", at: (st, pq) => { const x = pq.pw + 10 - st.p * (pq.pw + 30); return { x: x + 3, y: _gy(pq, x) - Math.abs(Math.sin(st.t * 6)) * (2 + pq.kickPulse * 3) * 0.5 }; } },
+  time_trail_car: { asset: "sportsCar", scale: 0.5, anchor: "bottom-center", at: (st, pq) => { if (st.t >= 1.4) return null; const c = clamp01(st.t / 1.4); const x = -20 + c * (pq.pw + 44); return { x, y: _gy(pq, x) }; } },
+  shark_fin_pond: { asset: "sharkFin", scale: 0.5, anchor: "bottom-center", at: (st, pq) => { const sx = st.data.wx - pq.scrollX + 13; return { x: sx, y: _gy(pq, sx) }; } },
+  submarine_periscope: { asset: "submarinePeriscope", scale: 0.5, anchor: "bottom-center", at: (st, pq) => { const sx = st.data.wx - pq.scrollX + 11; return { x: sx, y: _gy(pq, sx) }; } },
+  secret_door: { asset: "secretDoor", scale: 0.6, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx) + 4; return { x: sx, y: _gy(pq, sx) }; } },
+  // prop — bottom-anchored roadside objects
+  jukebox: { asset: "jukebox", scale: 0.7, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx) + 5; return { x: sx, y: _gy(pq, sx) }; } },
+  arcade_cabinet: { asset: "arcadeCabinet", scale: 0.65, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx) + 4; return { x: sx, y: _gy(pq, sx) }; } },
+  sword_in_stone: { asset: "swordInStone", scale: 0.6, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx); return { x: sx, y: _gy(pq, sx) }; } },
+  ghost_trap: { asset: "ghostTrap", scale: 0.6, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx); return { x: sx, y: _gy(pq, sx) }; } },
+  phone_booth_lightning: { asset: "phoneBooth", scale: 0.6, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx) + 4; return { x: sx, y: _gy(pq, sx) }; } },
+  magic_microphone: { asset: "magicMicrophone", scale: 0.6, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx) + 1; return { x: sx, y: _gy(pq, sx) }; } },
+  blue_time_booth: { asset: "blueTimeBooth", scale: 0.6, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx) + 4; return { x: sx, y: _gy(pq, sx) }; } },
+  // background — distant, bottom-anchored on the horizon line
+  robot_duo: { asset: "robotDuo", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.15 + st.p * pq.pw * 0.5 + 4, y: pq.groundBase() - Math.round(10 * pq.S) }) },
+  crane_kick: { asset: "craneKick", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.68 + 2, y: pq.groundBase() }) },
+  rainy_detective: { asset: "detectiveRain", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.82 + 7, y: pq.groundBase() - Math.round(6 * pq.S) }) },
+  forest_giant: { asset: "giantCreature", scale: 0.6, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.7, y: pq.groundBase() }) },
+  glam_guitarist: { asset: "glamGuitarist", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.32, y: pq.groundBase() }) },
+  dinosaur_horizon: { asset: "dinosaur", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw + 30 - st.p * (pq.pw + 90) + 10, y: pq.groundBase() - Math.round(4 * pq.S) }) },
+  masked_shadow: { asset: "maskedShadow", scale: 0.6, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx); return { x: sx, y: _gy(pq, sx) }; } },
+  adventure_statue: { asset: "statue", scale: 0.55, anchor: "bottom-center", at: (st, pq) => { const sx = roadsideX(pq, st.data.wx); return { x: sx, y: _gy(pq, sx) }; } },
+  wizard_train: { asset: "steamTrain", scale: 0.7, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.47, y: pq.groundBase() }) },
+  tiny_drummer: { asset: "tinyDrummer", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.86, y: pq.groundBase() }) },
+  neon_diner: { asset: "neonDinerSign", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: st.data.wx - pq.scrollX * 0.3 + 10, y: pq.groundBase() }) },
+  castle_ballroom: { asset: "ballroomWindow", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: st.data.wx - pq.scrollX * 0.3 + 8, y: pq.groundBase() }) },
+  keyboard_hero: { asset: "keyboardPlayer", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.62, y: pq.groundBase() }) },
+};
+for (const [id, s] of Object.entries(CAMEO_SPRITES)) {
+  const d = PIXEL_EVENTS.find((e) => e.id === id);
+  if (!d) continue;
+  d.asset = s.asset;
+  d.spriteAt = s.at;
+  d.assetScale = s.scale;
+  d.assetAnchor = s.anchor;
+}
 
 // ------------------------------------------------------------ future library
 // The original 50-idea catalog is fully implemented (see PIXEL_EVENTS above).

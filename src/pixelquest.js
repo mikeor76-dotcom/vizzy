@@ -260,7 +260,7 @@ export class PixelQuest {
       // Cinematic opening sequence (see pixelquest-opening.js)
       openingSequenceEnabled: true,
       openingSequencePlayMode: "startup", // always | firstRunOnly | startup | disabled
-      openingSequenceSkippable: true,
+      openingSequenceSkippable: false, // the intro cannot be bypassed by key/click/tap
       ...cfg,
     };
     // Asset-Driven Rendering System v1
@@ -2028,7 +2028,10 @@ export class PixelQuest {
     // hands off: gameplay renders underneath and the last plate dissolves out
     // (the overlay call near the end of render). Fails/skips → straight to game.
     const op = this.opening;
-    if (op && !op._checked && op.state === "idle") op.onEnterMode(); // one-time lazy start
+    // the intro only kicks off once the mic is actually listening on this
+    // visualization — i.e. render is called with a live analyser, not the
+    // null-analyser idle path. Not on mode-enter, not at startup.
+    if (op && op.state === "idle" && analyser && op.shouldPlay()) op.start();
     let openingHandoff = false;
     if (op && op.active()) {
       op.update(dt, analyser);

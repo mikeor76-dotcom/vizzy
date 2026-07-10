@@ -15,14 +15,16 @@ const FX_DIR = "/assets/pixelquest/opening_fx/";
 
 // Authoritative sequence (mirrored by opening_story/opening_story_sequence.json).
 export const PIXEL_QUEST_OPENING_SEQUENCE = [
+  // title cards are intentionally sparse — only the opening and closing lines
+  // carry text; the middle beats let the art speak (titleCard: "" = no card).
   { id: "silent_world", image: "01_silent_world.png", titleCard: "THE WORLD FELL SILENT", durationMs: 3000, overlay: "none" },
-  { id: "first_note", image: "02_first_note.png", titleCard: "HE STILL HEARD IT", durationMs: 3000, overlay: "first_note" },
-  { id: "music_awakens", image: "03_music_awakens.png", titleCard: "MUSIC AWAKENS", durationMs: 3500, overlay: "music_particles" },
+  { id: "first_note", image: "02_first_note.png", titleCard: "", durationMs: 3000, overlay: "first_note" },
+  { id: "music_awakens", image: "03_music_awakens.png", titleCard: "", durationMs: 3500, overlay: "music_particles" },
   // orbFocus (fraction of w/h) = where the ORB is painted IN the plate, so the FX
   // (fragments converging, sparkles, rings) enhance it instead of drawing a
   // second, competing orb on top of it.
-  { id: "orb_forms", image: "04_orb_forms.png", titleCard: "THE LAST LIVING NOTE", durationMs: 4000, overlay: "orb_forming", orbFocus: { x: 0.47, y: 0.56 } },
-  { id: "orb_chooses_him", image: "05_orb_chooses_him.png", titleCard: "THE ORB CHOSE HIM", durationMs: 3500, overlay: "orb_glow", orbFocus: { x: 0.52, y: 0.42 } },
+  { id: "orb_forms", image: "04_orb_forms.png", titleCard: "", durationMs: 4000, overlay: "orb_forming", orbFocus: { x: 0.47, y: 0.56 } },
+  { id: "orb_chooses_him", image: "05_orb_chooses_him.png", titleCard: "", durationMs: 3500, overlay: "orb_glow", orbFocus: { x: 0.52, y: 0.42 } },
   { id: "bring_music_back", image: "06_bring_music_back.png", titleCard: "BRING MUSIC BACK", durationMs: 4000, overlay: "golden_path", orbFocus: { x: 0.62, y: 0.56 } },
 ];
 
@@ -176,6 +178,7 @@ export class PixelQuestOpening {
 
   // ---- input (skip) -------------------------------------------------------
   _addInputListeners() {
+    if (!this._skippable()) return; // the intro cannot be bypassed unless explicitly enabled
     if (this._onKey || typeof window === "undefined") return;
     // capture-phase so a keypress skips the intro instead of switching modes
     this._onKey = (e) => {
@@ -352,7 +355,7 @@ export class PixelQuestOpening {
   }
 
   _drawTitle(ctx, w, h) {
-    const beat = PIXEL_QUEST_OPENING_SEQUENCE[this.beat]; if (!beat) return;
+    const beat = PIXEL_QUEST_OPENING_SEQUENCE[this.beat]; if (!beat || !beat.titleCard) return;
     const dur = beat.durationMs / 1000, t = this.beatT, inT = 0.4, outStart = dur - 0.6;
     let a = 0;
     if (t < inT) a = 0;

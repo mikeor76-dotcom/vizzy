@@ -29,10 +29,12 @@ Outputs a static site to `dist/`.
 
 ## Pixel Quest cinematic opening
 
-Entering Pixel Quest plays a ~24s skippable silent-film intro (6 story plates
-with Ken-Burns drift + crossfades, code-rendered title cards, and layered golden
-FX) that dissolves into gameplay. It's Pi-safe and degrades gracefully — if the
-plates are missing it logs a warning and drops straight into gameplay. See
+When the **mic starts listening** on Pixel Quest, a ~24s silent-film intro plays
+before gameplay (6 story plates with Ken-Burns drift + crossfades, two sparse
+code-rendered title cards, and layered golden FX) then dissolves into gameplay.
+It is **not skippable** by default (`openingSequenceSkippable: false`) and does
+not start until there's live audio input. It's Pi-safe and degrades gracefully —
+if the plates are missing it logs a warning and drops straight into gameplay. See
 [src/pixelquest-opening.js](src/pixelquest-opening.js).
 
 **Assets** live under `public/assets/pixelquest/`:
@@ -59,7 +61,8 @@ never baked into images.
 - `openingSequencePlayMode`: `"startup"` (once per app launch, default) · `"always"`
   (every time you enter Pixel Quest) · `"firstRunOnly"` (once ever, remembered in
   localStorage) · `"disabled"`
-- `openingSequenceSkippable` (default `true`)
+- `openingSequenceSkippable` (default `false` — the intro cannot be bypassed by
+  key/click/tap; set `true` to allow it)
 
 **Replay / skip / disable** — from the browser console (also handy on the Pi via
 remote devtools):
@@ -71,8 +74,8 @@ pixelQuestOpening.status()          // { state, beat, ... }
 pixelQuestOpening.setEnabled(false) // turn it off for this session
 ```
 
-Any key, click, or tap skips it while it plays. Switching visualizer modes
-cancels it cleanly.
+It cannot be skipped by input by default (`pixelQuestOpening.skip()` still works
+for dev). Switching visualizer modes cancels it cleanly.
 
 ## Kiosk / Raspberry Pi (e.g. 1920×480 LED wall)
 

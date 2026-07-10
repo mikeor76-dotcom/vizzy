@@ -388,9 +388,9 @@ controller.onChange((what) => {
   if (what === "mode") applyModeControls();
   if (what === "mode") saveLastMode(controller.currentModeId);
   if (what === "mode") {
-    // the opening plays when entering Pixel Quest and cancels cleanly on exit
+    // leaving Pixel Quest cancels the intro cleanly; it only STARTS when the mic
+    // begins listening on Pixel Quest (handled in PixelQuest.render)
     if (prevModeId === "pixelquest" && controller.currentModeId !== "pixelquest") pixelquest.opening.onExitMode();
-    if (controller.currentModeId === "pixelquest") pixelquest.opening.onEnterMode();
     prevModeId = controller.currentModeId;
   }
   if (what === "mode" || what === "favorites" || what === "lock" || what === "preset") buildPanel();
@@ -440,9 +440,7 @@ applyControlsVisible();
 applyModeControls();
 buildPanel();
 
-// if we boot straight into Pixel Quest, kick off the opening now
-prevModeId = controller.currentModeId;
-if (controller.currentModeId === "pixelquest") pixelquest.opening.onEnterMode();
+prevModeId = controller.currentModeId; // the intro starts on mic-listen, not here
 
 // hide the controls + cursor after a few seconds of inactivity
 let idleTimer;

@@ -30,8 +30,8 @@ Outputs a static site to `dist/`.
 ## Pixel Quest cinematic opening
 
 When the **mic starts listening** on Pixel Quest, a ~24s silent-film intro plays
-before gameplay (6 story plates with Ken-Burns drift + crossfades, two sparse
-code-rendered title cards, and layered golden FX) then dissolves into gameplay.
+before gameplay (6 story plates with Ken-Burns drift + crossfades and layered
+golden FX; fully wordless by default) then dissolves into gameplay.
 It is **not skippable** by default (`openingSequenceSkippable: false`) and does
 not start until there's live audio input. It's Pi-safe and degrades gracefully —
 if the plates are missing it logs a warning and drops straight into gameplay. See

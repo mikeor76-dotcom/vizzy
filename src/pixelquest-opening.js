@@ -15,9 +15,9 @@ const FX_DIR = "/assets/pixelquest/opening_fx/";
 
 // Authoritative sequence (mirrored by opening_story/opening_story_sequence.json).
 export const PIXEL_QUEST_OPENING_SEQUENCE = [
-  // title cards are intentionally sparse — only the opening and closing lines
-  // carry text; the middle beats let the art speak (titleCard: "" = no card).
-  { id: "silent_world", image: "01_silent_world.png", titleCard: "THE WORLD FELL SILENT", durationMs: 3000, overlay: "none" },
+  // fully wordless — the art carries the story (titleCard: "" = no card). Put a
+  // string back on any beat to show that line again.
+  { id: "silent_world", image: "01_silent_world.png", titleCard: "", durationMs: 3000, overlay: "none" },
   { id: "first_note", image: "02_first_note.png", titleCard: "", durationMs: 3000, overlay: "first_note" },
   { id: "music_awakens", image: "03_music_awakens.png", titleCard: "", durationMs: 3500, overlay: "music_particles" },
   // orbFocus = where the ORB is painted IN THE PLATE IMAGE (fraction of the image,
@@ -26,7 +26,7 @@ export const PIXEL_QUEST_OPENING_SEQUENCE = [
   // aspect — instead of drawing a second, competing orb.
   { id: "orb_forms", image: "04_orb_forms.png", titleCard: "", durationMs: 4000, overlay: "orb_forming", orbFocus: { x: 0.493, y: 0.554 } },
   { id: "orb_chooses_him", image: "05_orb_chooses_him.png", titleCard: "", durationMs: 3500, overlay: "orb_glow", orbFocus: { x: 0.523, y: 0.426 } },
-  { id: "bring_music_back", image: "06_bring_music_back.png", titleCard: "BRING MUSIC BACK", durationMs: 4000, overlay: "golden_path", orbFocus: { x: 0.541, y: 0.660 } },
+  { id: "bring_music_back", image: "06_bring_music_back.png", titleCard: "", durationMs: 4000, overlay: "golden_path", orbFocus: { x: 0.541, y: 0.660 } },
 ];
 
 // FX strips — filenames are loose; each is used by what it visually is.

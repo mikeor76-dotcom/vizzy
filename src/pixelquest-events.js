@@ -3259,6 +3259,23 @@ const CAMEO_SPRITES = {
   neon_diner: { asset: "neonDinerSign", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: st.data.wx - pq.scrollX * 0.3 + 10, y: pq.groundBase() }) },
   castle_ballroom: { asset: "ballroomWindow", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: st.data.wx - pq.scrollX * 0.3 + 8, y: pq.groundBase() }) },
   keyboard_hero: { asset: "keyboardPlayer", scale: 0.5, anchor: "bottom-center", at: (st, pq) => ({ x: pq.pw * 0.62, y: pq.groundBase() }) },
+  // front — a neon dragonfly flitting across (rides its own onStart y0)
+  neon_dragonfly: { asset: "neonDragonfly", scale: 0.6, anchor: "center", at: (st, pq) => ({ x: pq.pw * 0.12 + st.p * pq.pw * 0.72 + Math.sin(st.t * 5.5) * 5, y: (st.data.y0 ?? pq.ph * 0.5) + Math.sin(st.t * 3.1) * 9 + Math.sin(st.t * 12) * 2 }) },
+  // background — a 3-figure boombox parade marching the horizon (lead via the
+  // shared path; the two followers drawn in drawExtra so they share the fade)
+  boombox_parade: {
+    asset: "boomboxMarcher", scale: 0.55, anchor: "bottom-center",
+    at: (st, pq) => { const x0 = pq.pw + 20 - st.p * (pq.pw + 60), bob = Math.floor(st.t * 3) % 2 ? -0.5 : 0; return { x: x0, y: pq.groundBase() + bob }; },
+    drawExtra: (o, st, pq) => {
+      const x0 = pq.pw + 20 - st.p * (pq.pw + 60);
+      for (let i = 1; i < 3; i++) {
+        const x = x0 + i * 14;
+        if (x < -10 || x > pq.pw + 10) continue;
+        const bob = Math.floor(st.t * 3 + i) % 2 ? -0.5 : 0;
+        pq.assets.drawSprite(o, "boomboxMarcher", "idle", 0, Math.round(x), Math.round(pq.groundBase() + bob), { anchor: "bottom-center", scale: 0.55, alpha: st.fade });
+      }
+    },
+  },
 };
 for (const [id, s] of Object.entries(CAMEO_SPRITES)) {
   const d = PIXEL_EVENTS.find((e) => e.id === id);
@@ -3267,6 +3284,7 @@ for (const [id, s] of Object.entries(CAMEO_SPRITES)) {
   d.spriteAt = s.at;
   d.assetScale = s.scale;
   d.assetAnchor = s.anchor;
+  if (s.drawExtra) d.drawExtra = s.drawExtra;
 }
 
 // ------------------------------------------------------------ future library

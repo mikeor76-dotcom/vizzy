@@ -31,11 +31,22 @@ const PACKS = [
     names: ["skyDragon", "pirateShip", "witchBroom", "wingedShadow", "bicycleRider", "spyRope", "meteorCassette"] },
   { file: "pixelquest_pack_ground.png", key: "magenta", refH: 60, colors: 40, rows: [3, 3, 1],
     names: ["sharkFin", "submarinePeriscope", "sportsCar", "boulder", "blackCat", "redBalloon", "cassetteTumbleweed"] },
-  { file: "pixelquest_pack_cast.png", key: "magenta", refH: 78, colors: 40, rows: [3, 3, 3, 2],
+  { file: "pixelquest_pack_cast.png", key: "magenta", refH: 78, colors: 40, rows: [6, 5],
     names: ["giantCreature", "dinosaur", "robotDuo", "glamGuitarist", "keyboardPlayer", "tinyDrummer", "craneKick", "maskedShadow", "detectiveRain", "steamTrain", "ballroomWindow"] },
   { file: "pixelquest_pack_hero_kit.png", key: "magenta", refH: 40, colors: 32, rows: [4, 4],
     names: ["fedora", "sunglasses", "cape", "redShoes", "boombox", "powerGlove", "whip", "hoverboard"] },
+  // single-sprite drops (not grids): one subject per file. rows:[1] keeps them
+  // in the same pipeline so a re-slice regenerates them too.
+  { file: "pixelquest_extra_dragonfly.png", key: "green", refH: 40, colors: 24, rows: [1],
+    names: ["neonDragonfly"] },
+  { file: "pixelquest_extra_marcher.png", key: "magenta", refH: 44, colors: 32, rows: [1],
+    names: ["boomboxMarcher"] },
 ];
+
+// optional CLI filter: `bun slice-packs.mjs sky cast` runs only packs whose
+// filename contains one of the given substrings (default: all packs).
+const FILTER = process.argv.slice(2);
+const SELECTED = FILTER.length ? PACKS.filter((p) => FILTER.some((f) => p.file.includes(f))) : PACKS;
 
 const isBg = (r, g, b, key) =>
   key === "magenta"
@@ -72,7 +83,7 @@ function splitBand(colCount, x0, x1, n) {
 
 const specLines = [], manifestLines = [];
 
-for (const pack of PACKS) {
+for (const pack of SELECTED) {
   const src = path.join(DROP, pack.file);
   const { data, info } = await sharp(src).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const W = info.width, H = info.height;

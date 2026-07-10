@@ -260,7 +260,7 @@ export class PixelQuest {
       // Cinematic opening sequence (see pixelquest-opening.js)
       openingSequenceEnabled: true,
       openingSequencePlayMode: "startup", // always | firstRunOnly | startup | disabled
-      openingSequenceSkippable: false, // the intro cannot be bypassed by key/click/tap
+      openingSequenceSkippable: true, // any key/click/tap skips the intro into gameplay
       ...cfg,
     };
     // Asset-Driven Rendering System v1

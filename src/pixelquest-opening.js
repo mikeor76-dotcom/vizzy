@@ -18,9 +18,12 @@ export const PIXEL_QUEST_OPENING_SEQUENCE = [
   { id: "silent_world", image: "01_silent_world.png", titleCard: "THE WORLD FELL SILENT", durationMs: 3000, overlay: "none" },
   { id: "first_note", image: "02_first_note.png", titleCard: "HE STILL HEARD IT", durationMs: 3000, overlay: "first_note" },
   { id: "music_awakens", image: "03_music_awakens.png", titleCard: "MUSIC AWAKENS", durationMs: 3500, overlay: "music_particles" },
-  { id: "orb_forms", image: "04_orb_forms.png", titleCard: "THE LAST LIVING NOTE", durationMs: 4000, overlay: "orb_forming" },
-  { id: "orb_chooses_him", image: "05_orb_chooses_him.png", titleCard: "THE ORB CHOSE HIM", durationMs: 3500, overlay: "orb_glow" },
-  { id: "bring_music_back", image: "06_bring_music_back.png", titleCard: "BRING MUSIC BACK", durationMs: 4000, overlay: "golden_path" },
+  // orbFocus (fraction of w/h) = where the ORB is painted IN the plate, so the FX
+  // (fragments converging, sparkles, rings) enhance it instead of drawing a
+  // second, competing orb on top of it.
+  { id: "orb_forms", image: "04_orb_forms.png", titleCard: "THE LAST LIVING NOTE", durationMs: 4000, overlay: "orb_forming", orbFocus: { x: 0.47, y: 0.56 } },
+  { id: "orb_chooses_him", image: "05_orb_chooses_him.png", titleCard: "THE ORB CHOSE HIM", durationMs: 3500, overlay: "orb_glow", orbFocus: { x: 0.52, y: 0.42 } },
+  { id: "bring_music_back", image: "06_bring_music_back.png", titleCard: "BRING MUSIC BACK", durationMs: 4000, overlay: "golden_path", orbFocus: { x: 0.62, y: 0.56 } },
 ];
 
 // FX strips — filenames are loose; each is used by what it visually is.
@@ -243,9 +246,14 @@ export class PixelQuestOpening {
   }
 
   // ---- particles ----------------------------------------------------------
+  _focus(w, h) {
+    const f = PIXEL_QUEST_OPENING_SEQUENCE[this.beat]?.orbFocus || { x: 0.5, y: 0.46 };
+    return { cx: w * f.x, cy: h * f.y };
+  }
+
   _spawnOverlay(kind, dt) {
     const w = this._w, h = this._h; if (!w) return;
-    const cx = w * 0.5, cy = h * 0.46;
+    const { cx, cy } = this._focus(w, h);
     const heroX = w * 0.28, heroY = h * 0.66; // matches the plates' hero placement
     const room = this.particles.length < MAX_PARTICLES;
     if (kind === "first_note") {
@@ -381,31 +389,17 @@ export class PixelQuestOpening {
 
   _drawFX(ctx, w, h, gAlpha) {
     const beat = PIXEL_QUEST_OPENING_SEQUENCE[this.beat]; const kind = beat?.overlay;
-    const cx = w * 0.5, cy = h * 0.46, dim = Math.min(w, h);
+    const { cx, cy } = this._focus(w, h);
+    const dim = Math.min(w, h);
     ctx.save();
     ctx.imageSmoothingEnabled = false;
+    // NOTE: the plates already PAINT the orb (04/05) and the golden path (06),
+    // so we deliberately do NOT draw an orb object or a path band here — that was
+    // the "two orbs" clash. We only add supportive, non-competing FX centered on
+    // the plate's orb: converging fragments (spawned in _spawnOverlay) + sparkles
+    // + faint expanding rings that read as the illustrated orb pulsing energy.
     if (kind === "orb_forming") {
-      const of = this.fx.orbForm;
-      const k = clamp01(this.beatT / (beat.durationMs / 1000));
-      if (of?.complete && of.naturalWidth) {
-        ctx.globalAlpha = gAlpha * clamp01(0.3 + k);
-        this._drawFrame(ctx, of, FX.orbForm.frames, Math.min(FX.orbForm.frames - 1, Math.floor(k * FX.orbForm.frames)), cx, cy, dim * 0.4);
-      }
-      this._drawPulseRings(ctx, cx, cy, dim, gAlpha);
-    } else if (kind === "orb_glow") {
-      const of = this.fx.orbForm;
-      if (of?.complete && of.naturalWidth) {
-        const pulse = 1 + Math.sin(this.elapsed * 3) * 0.05 + this._audio * 0.12;
-        ctx.globalAlpha = gAlpha;
-        this._drawFrame(ctx, of, FX.orbForm.frames, FX.orbForm.frames - 1, cx + Math.cos(this.elapsed * 1.2) * w * 0.008, cy + Math.sin(this.elapsed * 1.6) * h * 0.01, dim * 0.32 * pulse);
-      }
-    } else if (kind === "golden_path") {
-      const pathImg = this.fx.path;
-      if (pathImg?.complete && pathImg.naturalWidth) {
-        const bw = w * 1.1, bh = bw * (pathImg.naturalHeight / pathImg.naturalWidth);
-        ctx.globalAlpha = gAlpha * clamp01(0.55 + Math.sin(this.elapsed * 3) * 0.15 + this._audio * 0.2);
-        ctx.drawImage(pathImg, (w - bw) / 2, h * 0.82 - bh / 2, bw, bh);
-      }
+      this._drawPulseRings(ctx, cx, cy, dim, gAlpha * 0.7);
     }
     // particles
     for (const p of this.particles) {

@@ -230,6 +230,15 @@ export class OrbCompanion {
     ];
     this._trailT = 0;
     this._trailI = 0;
+    // full-resolution overlay: a soft glowing note drawn on the real canvas (not
+    // the low-res buffer) so it moves smoothly. `_rs` is the per-frame render
+    // snapshot; `_img` is an optional high-res soft-glow PNG (procedural glow if
+    // absent). x/y are the live buffer-space position (for aiming, etc.).
+    this._rs = null;
+    this._img = null;
+    this._imgTried = false;
+    this.x = 0;
+    this.y = 0;
   }
   addCharge(amount) {
     this.charge = clamp01(this.charge + amount);
@@ -244,185 +253,135 @@ export class OrbCompanion {
     return { x: pq.heroScreenX + 26, y: pq.heroScreenY - 9 };
   }
   draw(o, pq, mood, arrival, destX, destY) {
-    if (!this.visible || pq.heroScreenX == null) return;
+    // UPDATE + STASH only. The orb BODY is drawn later in drawOverlay() on the
+    // full-resolution canvas, so it moves with sub-pixel smoothness instead of
+    // snapping on the low-res buffer. Here we just advance state + record it.
+    if (!this.visible || pq.heroScreenX == null) { this._rs = null; return; }
     const dt = Math.min(0.05, this._lastT ? pq.t - this._lastT : 0.016);
     this._lastT = pq.t;
     this.charge = Math.max(0, this.charge - FRAGMENT_TUNING.chargeDecayPerSecond * dt);
     this.absorbFlash = Math.max(0, this.absorbFlash - dt * 5);
-    // a gentle hovering orbit beside the hero — it circles a little faster and
-    // wider as the music lifts, so it reads as a companion drifting alongside
-    // him, not a fixed particle pinned to his shoulder
-    // Story Engine relationship hooks: a short directed behavior the story
-    // director may set (orbCircleExcitedly / orbDimAndRest / orbLeadForward /
-    // orbHideBehindHero / orbGlowProtectively / orbPointToward…). A few
-    // animate here; the rest are structured flags ready for later.
+    // Story Engine relationship hooks (orbCircleExcitedly / orbLeadForward / …)
     const cmd = pq.adventure?.story?.orbCmd?.mode;
     const cmdSpeed = cmd === "circle" ? 2.4 : cmd === "rest" ? 0.5 : 1;
     const cmdLead = cmd === "lead" || cmd === "point" || cmd === "nudge" ? 6 : cmd === "hide" ? -14 : 0;
     const cmdBright = cmd === "protect" ? 0.25 : cmd === "rest" ? -0.1 : 0;
-    // sc scales pixel offsets that were tuned at the original 160px height so
-    // the orb sits the same distance ahead of the hero at any render resolution
+    // sc scales offsets tuned at the original 160px height to any resolution
     const sc = pq.S / 1.67;
-    const orbitSpeed = (1.3 + mood.energy * 1.6) * cmdSpeed;
-    const orbitR = (2.4 + mood.energy * 1.2) * (cmd === "circle" ? 1.5 : 1) * sc;
+    // ONE gentle drift — a smooth orbit + one slow vertical breathe. (The old
+    // second high-frequency bob is gone; the overlay is sub-pixel now, so the
+    // motion no longer has to fight the grid and a single slow orbit reads calm.)
+    const orbitSpeed = (0.85 + mood.energy * 1.0) * cmdSpeed;
+    const orbitR = (2.8 + mood.energy * 1.5) * (cmd === "circle" ? 1.5 : 1) * sc;
     const orbitX = Math.cos(pq.t * orbitSpeed + this.ph) * orbitR;
-    const orbitY = Math.sin(pq.t * orbitSpeed + this.ph) * orbitR * 0.7 + Math.sin(pq.t * 2.2 + this.ph) * 1.4 * sc;
-    // during approach/arrival it drifts forward, reaching toward the
-    // destination; an encounter pulls it a touch further toward the moment
+    const orbitY = Math.sin(pq.t * orbitSpeed + this.ph) * orbitR * 0.6 + Math.sin(pq.t * 0.8 + this.ph) * 1.1 * sc;
     const enc = this.encounterActive || 0;
     const reach = ((arrival && arrival.phase !== "traveling" ? Math.min(4, arrival.journey * 5) : 0) + enc * 3 + cmdLead) * sc;
-    // it floats clearly AHEAD of the hero — the last living note leads,
-    // because it can hear music fragments before he can see them
-    const x = Math.round(pq.heroScreenX + 26 * sc + orbitX + reach);
-    const y = Math.round(pq.heroScreenY - 9 * sc + orbitY - reach * 0.6);
-    // wide, deliberate range from calm to peak — this is what makes the
-    // orb feel like it's actually responding to the song, not just idling.
-    // orbCharge folds straight into the same follower: a charged-up orb
-    // just reads as a louder, steadier glow, not a different look.
+    // FLOAT position (no rounding) — the smoothness comes from the overlay pass
+    const x = pq.heroScreenX + 26 * sc + orbitX + reach;
+    const y = pq.heroScreenY - 9 * sc + orbitY - reach * 0.6;
+    this.x = x;
+    this.y = y;
+    // brightness follower (~200ms): sharp per-kick impulses become a soft pulse
     const boost =
       mood.state === "peak" ? 1 : mood.state === "energetic" ? 0.55 : mood.state === "breakdown" ? 0.08 : 0.22;
     const arrivalBoost = arrival?.phase === "arriving" ? 0.35 : 0;
     const target = clamp01(
       0.14 + mood.energy * boost + pq.kickPulse * 0.14 + (pq.mids.value || 0) * 0.1 + arrivalBoost + this.charge * 0.22 + enc * 0.18 + cmdBright
     );
-    // its own gentle follower (~200ms) turns sharp per-kick impulses into a
-    // soft pulse — a companion breathing with the music, not strobing on it
     this.bright += (target - this.bright) * Math.min(1, dt * 5);
     const baseHue = BIOME_ORB_HUE[pq.currentBiome?.()?.name] ?? 42;
     const hue = baseHue + mood.energy * 30;
-    const flare = this.absorbFlash;
-    // light trail: a few fading afterimages behind it — the "living note"
-    // visibly moves through the air. Length grows with charge.
+    // trail history (float positions; rendered smoothly in the overlay)
     this._trailT += dt;
-    if (this._trailT > 0.07) {
+    if (this._trailT > 0.05) {
       this._trailT = 0;
       this._trailI = (this._trailI + 1) % this._trail.length;
       this._trail[this._trailI].x = x;
       this._trail[this._trailI].y = y;
     }
-    const trailN = Math.min(this._trail.length, 1 + Math.round(this.charge * 3));
+    this._rs = { x, y, hue, sc, bright: this.bright, charge: this.charge, flare: this.absorbFlash,
+                 arriving: arrival?.phase === "arriving", destX, destY };
+  }
+
+  // Full-resolution overlay: the orb, its soft glow and trail, drawn on the real
+  // canvas (sx/sy = display÷buffer scale) so everything is smooth + anti-aliased.
+  drawOverlay(ctx, pq, sx, sy) {
+    const r = this._rs;
+    if (!r) return;
+    if (!this._imgTried && typeof Image !== "undefined") {
+      this._imgTried = true; // optional high-res soft-glow note; procedural core until it exists
+      this._img = new Image();
+      this._img.src = "/assets/pixelquest/orb_glow.png";
+    }
+    const scale = (sx + sy) / 2;
+    const dx = r.x * sx, dy = r.y * sy, hue = r.hue;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+
+    // soft fading trail behind the orb
+    const trailN = Math.min(this._trail.length, 2 + Math.round(r.charge * 3));
     for (let i = 1; i <= trailN; i++) {
       const s = this._trail[(this._trailI - i + this._trail.length * 2) % this._trail.length];
       if (!s.x) continue;
-      o.fillStyle = `hsla(${hue},90%,75%,${(0.3 - i * 0.06) * (0.5 + this.bright * 0.5)})`;
-      o.fillRect(s.x, s.y, 1, 1);
+      const a = (0.26 - i * 0.05) * (0.5 + r.bright * 0.5);
+      if (a <= 0.015) continue;
+      const tx = s.x * sx, ty = s.y * sy, tr = (1.6 + r.charge * 1.1) * scale;
+      const tg = ctx.createRadialGradient(tx, ty, 0, tx, ty, tr);
+      tg.addColorStop(0, `hsla(${hue},90%,80%,${a})`);
+      tg.addColorStop(1, `hsla(${hue},90%,70%,0)`);
+      ctx.fillStyle = tg;
+      ctx.beginPath(); ctx.arc(tx, ty, tr, 0, TAU); ctx.fill();
     }
-    // ASSET PATH: with an orb sheet ready (the baked demo counts), the body
-    // renders from art by power state — trail/absorb-ring/beam stay live
-    if (pq.useAssets?.() && pq.assets?.ready("orb")) {
-      const state =
-        flare > 0.25 ? "attracting"
-        : this.charge < 0.15 ? "dim"
-        : this.charge < 0.55 ? "awake"
-        : this.charge < 0.9 ? "charged"
-        : "radiant";
-      // a soft biome-hued bloom behind the note: it swells and brightens with
-      // the music via `bright`, so the orb reads as alive and breathing even
-      // when its power state is steady. Desaturated + light so it glows around
-      // whatever color the note art is (teal/purple/pink) without clashing.
-      const bloom = clamp01(0.05 + this.bright * 0.16 + this.charge * 0.05 + flare * 0.25);
-      const bloomR = Math.round((6 + this.bright * 4 + this.charge * 2 + flare * 3) * sc);
-      o.fillStyle = `hsla(${hue},70%,72%,${bloom * 0.5})`;
-      pq.pixelDisc(o, x, y, bloomR);
-      o.fillStyle = `hsla(${hue},60%,82%,${bloom})`;
-      pq.pixelDisc(o, x, y, Math.round(bloomR * 0.6));
-      pq.assets.drawSprite(o, "orb", state, pq.t, x, y, { anchor: "center" });
-      if (pq.cfg.renderMode === "asset_showcase")
-        pq.glowQueue.push(x, y, 5 + this.charge * 3 + flare * 2, "255,190,90", 0.05 + this.bright * 0.06);
-      // absorbing: the collapsing resonance ring still reads the transfer
-      if (flare > 0.05) {
-        const ringR2 = 1 + flare * 6;
-        o.fillStyle = `rgba(${FRAGMENT_ENERGY},${flare * 0.6})`;
-        for (let i = 0; i < 8; i++) {
-          const ang = (i * TAU) / 8;
-          o.fillRect(Math.round(x + Math.cos(ang) * ringR2), Math.round(y + Math.sin(ang) * ringR2), 1, 1);
-        }
-      }
-      // arrival beam (same as the procedural path below)
-      if (arrival?.phase === "arriving" && Number.isFinite(destX)) {
-        const passChance2 = clamp01(0.5 + this.charge * 0.4);
-        for (let i = 1; i < 5; i++) {
-          if (Math.random() > passChance2) continue;
-          const f = i / 5;
-          o.fillStyle = `hsla(${hue},95%,85%,${0.15 + this.bright * 0.2 + this.charge * 0.15})`;
-          o.fillRect(Math.round(x + (destX - x) * f), Math.round(y + (destY - y) * f), 1, 1);
-        }
-      }
-      return;
+
+    // soft biome-hued bloom, breathing with `bright`
+    const bloom = clamp01(0.06 + r.bright * 0.16 + r.charge * 0.06 + r.flare * 0.28);
+    const bloomR = (7 + r.bright * 5 + r.charge * 3 + r.flare * 4) * r.sc * scale;
+    const bg = ctx.createRadialGradient(dx, dy, 0, dx, dy, bloomR);
+    bg.addColorStop(0, `hsla(${hue},85%,82%,${bloom})`);
+    bg.addColorStop(0.45, `hsla(${hue},80%,66%,${bloom * 0.5})`);
+    bg.addColorStop(1, `hsla(${hue},80%,60%,0)`);
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.arc(dx, dy, bloomR, 0, TAU); ctx.fill();
+
+    // the note itself: high-res soft art if present, else a smooth glowing core
+    const img = this._img;
+    if (img && img.complete && img.naturalWidth) {
+      const size = (14 + r.charge * 3) * r.sc * scale;
+      ctx.globalAlpha = clamp01(0.82 + r.bright * 0.18);
+      ctx.drawImage(img, dx - size / 2, dy - size / 2, size, size);
+      ctx.globalAlpha = 1;
+    } else {
+      const coreR = (2.4 + r.charge * 1.3) * r.sc * scale;
+      const cg = ctx.createRadialGradient(dx - coreR * 0.3, dy - coreR * 0.3, 0, dx, dy, coreR);
+      cg.addColorStop(0, `hsla(${hue},100%,97%,${clamp01(0.85 + r.flare * 0.15)})`);
+      cg.addColorStop(0.5, `hsla(${hue},95%,72%,${clamp01(0.55 + r.bright * 0.35)})`);
+      cg.addColorStop(1, `hsla(${hue},95%,62%,0.12)`);
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.arc(dx, dy, coreR, 0, TAU); ctx.fill();
+      ctx.fillStyle = `hsla(${hue},100%,98%,${clamp01(0.65 + r.flare * 0.3)})`; // specular highlight
+      ctx.beginPath(); ctx.arc(dx - coreR * 0.25, dy - coreR * 0.25, coreR * 0.3, 0, TAU); ctx.fill();
     }
-    // THE ORB — the last living note, sized like a true companion (the
-    // reference's radiant note medallion): a saturated outer glow, a solid
-    // colored BODY disc, a hot 2x2 core, a dotted RESONANCE RING, and RAY
-    // SPOKES that lengthen as it gathers power. Its power state is readable
-    // at a glance and it can never be mistaken for a particle.
-    //   empty <0.15: dim, ringless · low: ring · medium+: rays 4/6/8
-    const glowR = 4 + Math.round(this.charge * 2) + Math.round(flare * 2);
-    o.fillStyle = `hsla(${hue},95%,60%,${clamp01(0.09 + this.bright * 0.1 + this.charge * 0.06 + flare * 0.2)})`;
-    pq.pixelDisc(o, x, y, glowR);
-    o.fillStyle = `hsla(${hue},95%,66%,${clamp01(0.35 + this.bright * 0.35 + flare * 0.3)})`;
-    pq.pixelDisc(o, x, y, 2); // the body — a real little sphere
-    o.fillStyle = `hsla(${hue},100%,88%,${clamp01(0.7 + this.bright * 0.3 + flare * 0.3)})`;
-    o.fillRect(x - 1, y - 1, 2, 2); // hot 2x2 core
-    o.fillStyle = `hsla(${hue},100%,97%,${clamp01(0.8 + flare * 0.2)})`;
-    o.fillRect(x, y - 1, 1, 1); // specular glint
-    // dotted resonance ring: present from low charge on, breathing slowly
-    if (this.charge > 0.12) {
-      const ringR = glowR - 1 + Math.sin(pq.t * 2.2) * 0.5;
-      o.fillStyle = `hsla(${hue},90%,78%,${clamp01(0.2 + this.bright * 0.25 + this.charge * 0.15)})`;
-      for (let i = 0; i < 10; i++) {
-        const ang = pq.t * 0.4 + (i * TAU) / 10;
-        o.fillRect(Math.round(x + Math.cos(ang) * ringR), Math.round(y + Math.sin(ang) * ringR * 0.9), 1, 1);
-      }
-    }
-    // ray spokes: 2px-long rays from medium charge, more + longer as it fills
-    const rays = this.charge < 0.4 ? 0 : this.charge < 0.65 ? 4 : this.charge < 0.9 ? 6 : 8;
-    if (rays) {
-      const rr = glowR + 1 + Math.sin(pq.t * 3) * 0.5 + flare;
-      o.fillStyle = `hsla(${hue},95%,82%,${clamp01(0.4 + this.bright * 0.35 + flare * 0.3)})`;
-      for (let i = 0; i < rays; i++) {
-        const ang = pq.t * 0.7 + (i * TAU) / rays;
-        const cx1 = Math.cos(ang);
-        const sy1 = Math.sin(ang);
-        o.fillRect(Math.round(x + cx1 * rr), Math.round(y + sy1 * rr), 1, 1);
-        if (this.charge > 0.65) o.fillRect(Math.round(x + cx1 * (rr + 1.6)), Math.round(y + sy1 * (rr + 1.6)), 1, 1);
-      }
-    }
-    // medium charge (>0.3): an occasional tiny spark flicking off it
-    if (this.charge > 0.3 && Math.random() < 0.02 + this.charge * 0.03) {
-      o.fillStyle = `rgba(${FRAGMENT_ENERGY},0.85)`;
-      o.fillRect(x + Math.round((Math.random() - 0.5) * 6), y + Math.round((Math.random() - 0.5) * 6), 1, 1);
-    }
-    // absorbing: a resonance ring COLLAPSES INTO the orb — the music energy
-    // is visibly transferred in, and the halo swells for a beat
-    if (flare > 0.05) {
-      const ringR = 1 + flare * 6; // contracts 7 -> 1 as the flash decays
-      o.fillStyle = `rgba(${FRAGMENT_ENERGY},${flare * 0.6})`;
-      for (let i = 0; i < 8; i++) {
-        const ang = (i * TAU) / 8;
-        o.fillRect(Math.round(x + Math.cos(ang) * ringR), Math.round(y + Math.sin(ang) * ringR), 1, 1);
-      }
-    }
-    // full charge (>0.9): a slow WARM colored pulse ring — "ready", radiant
-    if (this.charge > 0.9) {
+
+    // full-charge "ready" ring — a slow, smooth pulse
+    if (r.charge > 0.9) {
       const pulse = 0.5 + 0.5 * Math.sin(pq.t * 4);
-      o.fillStyle = `hsla(${hue},95%,66%,${0.06 + pulse * 0.08})`;
-      pq.pixelDisc(o, x, y, glowR + 2);
+      ctx.strokeStyle = `hsla(${hue},95%,74%,${0.1 + pulse * 0.12})`;
+      ctx.lineWidth = 1.5 * scale;
+      ctx.beginPath(); ctx.arc(dx, dy, bloomR * 0.82, 0, TAU); ctx.stroke();
     }
-    // arrival: a thin, faint beam of light toward the destination — the
-    // orb "helping unlock" the path, without ever drawing a hard line.
-    // A charged orb sends a denser, brighter beam.
-    if (arrival?.phase === "arriving" && Number.isFinite(destX)) {
-      const steps = 5;
-      const passChance = clamp01(0.5 + this.charge * 0.4);
-      for (let i = 1; i < steps; i++) {
-        const f = i / steps;
-        if (Math.random() > passChance) continue; // sparse, twinkly — not a solid beam
-        const bx = Math.round(x + (destX - x) * f);
-        const by = Math.round(y + (destY - y) * f);
-        o.fillStyle = `hsla(${hue},95%,85%,${0.15 + this.bright * 0.2 + this.charge * 0.15})`;
-        o.fillRect(bx, by, 1, 1);
+
+    // arrival: a faint, sparse beam of smooth dots toward the destination
+    if (r.arriving && Number.isFinite(r.destX)) {
+      const passChance = clamp01(0.5 + r.charge * 0.4);
+      for (let i = 1; i < 5; i++) {
+        if (Math.random() > passChance) continue;
+        const f = i / 5, px = (r.x + (r.destX - r.x) * f) * sx, py = (r.y + (r.destY - r.y) * f) * sy;
+        ctx.fillStyle = `hsla(${hue},95%,85%,${0.15 + r.bright * 0.2 + r.charge * 0.15})`;
+        ctx.beginPath(); ctx.arc(px, py, 1.3 * scale, 0, TAU); ctx.fill();
       }
     }
+    ctx.restore();
   }
 }
 
@@ -1220,6 +1179,9 @@ export class PixelQuestAdventureManager {
 
   drawOrb(o, pal) {
     this.orb.draw(o, this.pq, this.mood, this.arrival, this.destination.lastX, this.destination.lastY);
+  }
+  drawOrbOverlay(ctx, sx, sy) {
+    this.orb.drawOverlay(ctx, this.pq, sx, sy);
   }
 
   drawFragments(o, pal) {

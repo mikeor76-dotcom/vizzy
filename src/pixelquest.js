@@ -2184,7 +2184,7 @@ export class PixelQuest {
     this.drawHero(o, pal);
     this.adventure.draw(o, pal, "encounter-fg"); // encounters in front of hero (guardian, owl, rival)
     this.adventure.drawFragments(o, pal); // Sound Fragments, drifting toward the orb
-    this.adventure.drawOrb(o, pal); // the glowing orb companion
+    this.adventure.drawOrb(o, pal); // orb: updates motion/charge/trail here; BODY draws on the overlay below
     this.drawParticles(o, pal, dt);
     this.events.draw(o, pal, "front");
     // batched additive light pass — richer in showcase, skipped in pi_safe
@@ -2201,6 +2201,11 @@ export class PixelQuest {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.off, 0, 0, pw, ph, 0, 0, w, h);
     ctx.restore();
+
+    // The orb companion draws on the REAL (unscaled) canvas — so it moves with
+    // sub-pixel smoothness and a soft anti-aliased glow instead of snapping on
+    // the low-res grid. Position is scaled from buffer space to display space.
+    this.adventure.drawOrbOverlay(ctx, w / pw, h / ph);
 
     // Story Engine: cinematic text cards + optional debug readout, drawn on
     // the real (unscaled) canvas so the film-title text stays crisp

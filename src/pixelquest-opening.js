@@ -20,12 +20,13 @@ export const PIXEL_QUEST_OPENING_SEQUENCE = [
   { id: "silent_world", image: "01_silent_world.png", titleCard: "THE WORLD FELL SILENT", durationMs: 3000, overlay: "none" },
   { id: "first_note", image: "02_first_note.png", titleCard: "", durationMs: 3000, overlay: "first_note" },
   { id: "music_awakens", image: "03_music_awakens.png", titleCard: "", durationMs: 3500, overlay: "music_particles" },
-  // orbFocus (fraction of w/h) = where the ORB is painted IN the plate, so the FX
-  // (fragments converging, sparkles, rings) enhance it instead of drawing a
-  // second, competing orb on top of it.
-  { id: "orb_forms", image: "04_orb_forms.png", titleCard: "", durationMs: 4000, overlay: "orb_forming", orbFocus: { x: 0.47, y: 0.56 } },
-  { id: "orb_chooses_him", image: "05_orb_chooses_him.png", titleCard: "", durationMs: 3500, overlay: "orb_glow", orbFocus: { x: 0.52, y: 0.42 } },
-  { id: "bring_music_back", image: "06_bring_music_back.png", titleCard: "BRING MUSIC BACK", durationMs: 4000, overlay: "golden_path", orbFocus: { x: 0.62, y: 0.56 } },
+  // orbFocus = where the ORB is painted IN THE PLATE IMAGE (fraction of the image,
+  // measured from the art), mapped to the screen through the plate's cover+Ken-
+  // Burns transform (see _focus) so the FX sits exactly on it at any display
+  // aspect — instead of drawing a second, competing orb.
+  { id: "orb_forms", image: "04_orb_forms.png", titleCard: "", durationMs: 4000, overlay: "orb_forming", orbFocus: { x: 0.493, y: 0.554 } },
+  { id: "orb_chooses_him", image: "05_orb_chooses_him.png", titleCard: "", durationMs: 3500, overlay: "orb_glow", orbFocus: { x: 0.523, y: 0.426 } },
+  { id: "bring_music_back", image: "06_bring_music_back.png", titleCard: "BRING MUSIC BACK", durationMs: 4000, overlay: "golden_path", orbFocus: { x: 0.541, y: 0.660 } },
 ];
 
 // FX strips — filenames are loose; each is used by what it visually is.
@@ -249,9 +250,29 @@ export class PixelQuestOpening {
   }
 
   // ---- particles ----------------------------------------------------------
+  // the on-screen rect the plate image for beat `idx` is drawn into at time
+  // `beatT` (cover-fit + Ken-Burns zoom/drift) — matches _drawPlate exactly so we
+  // can map image-space points (the orb) to their true screen position.
+  _plateTransform(w, h, idx, beatT) {
+    const image = this.plates[idx];
+    const beat = PIXEL_QUEST_OPENING_SEQUENCE[idx];
+    const beatDur = beat ? beat.durationMs / 1000 : 3;
+    const k = clamp01(beatT / beatDur);
+    const scale = 1 + 0.03 * k;
+    const dx = (idx % 2 === 0 ? 1 : -1) * 12 * k;
+    const iw = (image && image.naturalWidth) || 1280;
+    const ih = (image && image.naturalHeight) || 720;
+    const s = Math.max(w / iw, h / ih) * scale;
+    const dw = iw * s, dh = ih * s;
+    return { x0: (w - dw) / 2 + dx, y0: (h - dh) / 2, dw, dh };
+  }
+
+  // screen position of the current beat's illustrated orb (from its image-space
+  // orbFocus), so FX line up on it regardless of aspect ratio / Ken-Burns.
   _focus(w, h) {
-    const f = PIXEL_QUEST_OPENING_SEQUENCE[this.beat]?.orbFocus || { x: 0.5, y: 0.46 };
-    return { cx: w * f.x, cy: h * f.y };
+    const f = PIXEL_QUEST_OPENING_SEQUENCE[this.beat]?.orbFocus || { x: 0.5, y: 0.5 };
+    const t = this._plateTransform(w, h, this.beat, this.beatT);
+    return { cx: t.x0 + f.x * t.dw, cy: t.y0 + f.y * t.dh, s: t.dw };
   }
 
   _spawnOverlay(kind, dt) {
@@ -332,18 +353,11 @@ export class PixelQuestOpening {
 
   _drawPlate(ctx, w, h, idx, beatT, noFade, gAlpha) {
     ctx.imageSmoothingEnabled = true;
-    const beat = PIXEL_QUEST_OPENING_SEQUENCE[idx];
-    const beatDur = beat ? beat.durationMs / 1000 : 3;
     const one = (image, kbIdx, alpha) => {
       if (!image || !image.complete || !image.naturalWidth) return;
-      const k = clamp01(beatT / beatDur);
-      const scale = 1 + 0.03 * k;                      // 1.00 -> 1.03 Ken Burns zoom
-      const dx = (kbIdx % 2 === 0 ? 1 : -1) * 12 * k;  // slow alternating horizontal drift
-      const iw = image.naturalWidth, ih = image.naturalHeight;
-      const s = Math.max(w / iw, h / ih) * scale;
-      const dw = iw * s, dh = ih * s;
+      const t = this._plateTransform(w, h, kbIdx, beatT); // same math the FX aligns to
       ctx.globalAlpha = alpha * gAlpha;
-      ctx.drawImage(image, (w - dw) / 2 + dx, (h - dh) / 2, dw, dh);
+      ctx.drawImage(image, t.x0, t.y0, t.dw, t.dh);
     };
     if (!noFade && idx > 0 && beatT < CROSSFADE) {
       one(this.plates[idx - 1], idx - 1, 1);

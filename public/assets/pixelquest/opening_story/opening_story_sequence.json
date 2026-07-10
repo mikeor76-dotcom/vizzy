@@ -1,0 +1,44 @@
+[
+  {
+    "id": "silent_world",
+    "image": "01_silent_world.png",
+    "titleCard": "THE WORLD FELL SILENT",
+    "durationMs": 3000,
+    "overlay": "none"
+  },
+  {
+    "id": "first_note",
+    "image": "02_first_note.png",
+    "titleCard": "HE STILL HEARD IT",
+    "durationMs": 3000,
+    "overlay": "first_note"
+  },
+  {
+    "id": "music_awakens",
+    "image": "03_music_awakens.png",
+    "titleCard": "MUSIC AWAKENS",
+    "durationMs": 3500,
+    "overlay": "music_particles"
+  },
+  {
+    "id": "orb_forms",
+    "image": "04_orb_forms.png",
+    "titleCard": "THE LAST LIVING NOTE",
+    "durationMs": 4000,
+    "overlay": "orb_forming"
+  },
+  {
+    "id": "orb_chooses_him",
+    "image": "05_orb_chooses_him.png",
+    "titleCard": "THE ORB CHOSE HIM",
+    "durationMs": 3500,
+    "overlay": "orb_glow"
+  },
+  {
+    "id": "bring_music_back",
+    "image": "06_bring_music_back.png",
+    "titleCard": "BRING MUSIC BACK",
+    "durationMs": 4000,
+    "overlay": "golden_path"
+  }
+]

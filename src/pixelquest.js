@@ -9,6 +9,7 @@
 import { PixelQuestEventManager } from "./pixelquest-events.js";
 import { PixelQuestAdventureManager, ADVENTURE_TUNING } from "./pixelquest-adventure.js";
 import { AssetStore, PropField, GlowQueue, PerfMeter, PARALLAX_MANIFEST } from "./pixelquest-assets.js";
+import { PixelQuestOpening } from "./pixelquest-opening.js";
 
 const TAU = Math.PI * 2;
 
@@ -256,6 +257,10 @@ export class PixelQuest {
       perfDebug: false,
       assetDebug: false,
       debugScreen: false, // full-screen debug app (toggled by the D key in Pixel Quest)
+      // Cinematic opening sequence (see pixelquest-opening.js)
+      openingSequenceEnabled: true,
+      openingSequencePlayMode: "startup", // always | firstRunOnly | startup | disabled
+      openingSequenceSkippable: true,
       ...cfg,
     };
     // Asset-Driven Rendering System v1
@@ -316,6 +321,7 @@ export class PixelQuest {
     // Adventure Layer v1: silent mood/orb/destination + a couple of short,
     // mood-gated story beats. Fully additive — see pixelquest-adventure.js.
     this.adventure = new PixelQuestAdventureManager(this);
+    this.opening = new PixelQuestOpening(this); // cinematic intro (runs before gameplay)
     this.reaction = null; // brief non-verbal cue: lookup/lean/celebrate
     this.adventureCtl = null; // adventure beats can gently slow the world
     this.heroOffX = 0;
@@ -2016,6 +2022,22 @@ export class PixelQuest {
     this.lastNow = now;
     this.t = now / 1000;
     this.perf.tick(now);
+
+    // Cinematic opening sequence. While it's playing it draws over the whole
+    // viewport and gameplay stays frozen (early return). On its final beat it
+    // hands off: gameplay renders underneath and the last plate dissolves out
+    // (the overlay call near the end of render). Fails/skips → straight to game.
+    const op = this.opening;
+    if (op && !op._checked && op.state === "idle") op.onEnterMode(); // one-time lazy start
+    let openingHandoff = false;
+    if (op && op.active()) {
+      op.update(dt, analyser);
+      if (op.active()) {
+        if (op.wantsGameplayBehind()) openingHandoff = true;
+        else { op.render(ctx, w, h, now); return; }
+      }
+    }
+
     this.analyze(analyser, dt);
 
     // low-res canvas matches the display aspect. Height (detail/fidelity) comes
@@ -2206,6 +2228,10 @@ export class PixelQuest {
     // sub-pixel smoothness and a soft anti-aliased glow instead of snapping on
     // the low-res grid. Position is scaled from buffer space to display space.
     this.adventure.drawOrbOverlay(ctx, w / pw, h / ph);
+
+    // opening-sequence handoff: dissolve the final intro plate out over the now-
+    // live gameplay (drawn above) for a seamless transition into the adventure
+    if (openingHandoff) op.renderHandoff(ctx, w, h);
 
     // Story Engine: cinematic text cards + optional debug readout, drawn on
     // the real (unscaled) canvas so the film-title text stays crisp

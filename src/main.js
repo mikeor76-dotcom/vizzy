@@ -282,6 +282,18 @@ window.vizzy = { controller, hardware: createHardwareInput(controller, { toggleM
 // 1-5 = force a specific biome, J = force the current biome's arrival now.
 window.pqAdventure = pixelquest.adventure;
 
+// Dev controls for the Pixel Quest cinematic opening:
+//   pixelQuestOpening.replay()   play it again now (ignores play-mode / seen)
+//   pixelQuestOpening.skip()     skip the current run
+//   pixelQuestOpening.status()   state snapshot
+//   pixelQuestOpening.setEnabled(false)  turn it off for this session
+window.pixelQuestOpening = {
+  replay: () => pixelquest.opening.replay(),
+  skip: () => pixelquest.opening.skip(),
+  status: () => pixelquest.opening.status(),
+  setEnabled: (on) => pixelquest.opening.setEnabled(on),
+};
+
 const sensSlider = document.getElementById("sens-slider");
 const sensValue = document.getElementById("sens-value");
 const sensGroup = document.querySelector(".sens-group");
@@ -367,6 +379,7 @@ function buildPanel() {
   }
 }
 
+let prevModeId = controller.currentModeId;
 controller.onChange((what) => {
   if (what === "sensitivity") applySensitivity();
   if (what === "overlay") applyOverlay();
@@ -374,6 +387,12 @@ controller.onChange((what) => {
   if (what === "mode" || what === "preset") applyPreset();
   if (what === "mode") applyModeControls();
   if (what === "mode") saveLastMode(controller.currentModeId);
+  if (what === "mode") {
+    // the opening plays when entering Pixel Quest and cancels cleanly on exit
+    if (prevModeId === "pixelquest" && controller.currentModeId !== "pixelquest") pixelquest.opening.onExitMode();
+    if (controller.currentModeId === "pixelquest") pixelquest.opening.onEnterMode();
+    prevModeId = controller.currentModeId;
+  }
   if (what === "mode" || what === "favorites" || what === "lock" || what === "preset") buildPanel();
 });
 
@@ -420,6 +439,10 @@ applyPreset();
 applyControlsVisible();
 applyModeControls();
 buildPanel();
+
+// if we boot straight into Pixel Quest, kick off the opening now
+prevModeId = controller.currentModeId;
+if (controller.currentModeId === "pixelquest") pixelquest.opening.onEnterMode();
 
 // hide the controls + cursor after a few seconds of inactivity
 let idleTimer;

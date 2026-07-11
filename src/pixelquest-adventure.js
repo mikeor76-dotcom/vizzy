@@ -200,6 +200,23 @@ function drawFragment(o, pal, x, y, a, size) {
   o.fillRect(x, y, 1, 1);
 }
 
+// A small glowing eighth-note glyph, drawn smoothly on the full-res overlay in
+// the orb's own hue — used for the notes that swirl around the orb (the Orb
+// Meter's highs), so they read as music energy rather than generic sparkles.
+function drawOrbNote(ctx, x, y, s, hue, a, rot) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.fillStyle = `hsla(${hue},100%,90%,${a})`;
+  ctx.strokeStyle = `hsla(${hue},100%,88%,${a})`;
+  ctx.lineWidth = Math.max(0.8, s * 0.5);
+  ctx.lineCap = "round";
+  ctx.beginPath(); ctx.ellipse(-s * 0.55, s * 0.55, s * 0.9, s * 0.62, -0.4, 0, TAU); ctx.fill(); // note head
+  ctx.beginPath(); ctx.moveTo(s * 0.32, s * 0.45); ctx.lineTo(s * 0.32, -s * 2.1); ctx.stroke(); // stem
+  ctx.beginPath(); ctx.moveTo(s * 0.32, -s * 2.1); ctx.quadraticCurveTo(s * 1.7, -s * 1.7, s * 0.85, -s * 0.55); ctx.stroke(); // flag
+  ctx.restore();
+}
+
 // ------------------------------------------------------------- the orb
 // A tiny, ever-present light near the hero: the character's silent
 // "mission". Brightens with mids and with mood energy, breathes gently
@@ -385,16 +402,17 @@ export class OrbCompanion {
         ctx.beginPath(); ctx.arc(dx, dy, swR, a0, a0 + Math.PI * 0.7); ctx.stroke();
       }
     }
-    // ORB METER — highs: a scatter of tiny sparkles around the orb
+    // ORB METER — highs: little MUSIC NOTES orbiting the orb (was plain dots),
+    // so the halo clearly reads as music energy. Each bobs on its own phase.
     const tre = r.tre || 0;
     if (tre > 0.12) {
-      const n = Math.min(7, Math.round(tre * 8));
+      const n = Math.min(6, Math.round(tre * 7));
       for (let i = 0; i < n; i++) {
-        const ang = (i / n) * TAU + pq.t * 2 + i * 1.7;
-        const rad = bloomR * (0.7 + ((i * 2654435761) >>> 0) % 100 / 260);
-        const sx = dx + Math.cos(ang) * rad, sy = dy + Math.sin(ang) * rad;
-        ctx.fillStyle = `hsla(${hue + 20},100%,92%,${clamp01(tre * 0.7)})`;
-        ctx.beginPath(); ctx.arc(sx, sy, 0.9 * scale, 0, TAU); ctx.fill();
+        const ang = (i / n) * TAU + pq.t * 1.6 + i * 1.7;
+        const rad = bloomR * (0.72 + ((i * 2654435761) >>> 0) % 100 / 260);
+        const sx = dx + Math.cos(ang) * rad, sy = dy + Math.sin(ang) * rad + Math.sin(pq.t * 3 + i) * scale;
+        const a = clamp01(tre * 0.85);
+        drawOrbNote(ctx, sx, sy, 1.7 * scale, hue + 18, a, Math.sin(pq.t * 2 + i) * 0.4);
       }
     }
     // ORB METER — transient ring burst (kick/snare edge): a quick expanding ring

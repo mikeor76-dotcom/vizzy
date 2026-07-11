@@ -390,7 +390,7 @@ export class ResonancePath {
     for (let x = 0; x < pw; x += step) {
       const gy = pq.groundY(x);
       const sw = this._swellAt(pq, x); // 0..~1 low-band energy at this column
-      const a = (0.07 + sw * 0.55 + bass * 0.26 + kick * 0.2) * glow * section.profile.bright;
+      const a = (0.1 + sw * 0.7 + bass * 0.32 + kick * 0.28) * glow * section.profile.bright;
       if (a <= 0.03) continue;
       o.fillStyle = pq.col(warm, Math.min(0.72, a));
       o.fillRect(x, gy, step, 1);

@@ -128,14 +128,33 @@ const ENCOUNTERS = [
       const base = pq.groundBase();
       const cx = Math.round(pq.pw * 0.58);
       const bodyTop = Math.round(pq.ph * 0.12);
-      // a soft glow halo so the gentle giant reads against dark biomes...
-      o.fillStyle = `rgba(${acc.glow},${a * 0.1})`;
-      o.fillRect(cx - 26, bodyTop - 2, 52, base - bodyTop + 2);
-      // ...over a misty blue-grey body (never near-black — a friendly mist
-      // creature, with the biome color carried by its eyes and its gift)
-      o.fillStyle = `rgba(128,134,160,${a * 0.6})`;
-      o.fillRect(cx - 22, bodyTop + 14, 44, base - bodyTop - 14);
-      o.fillRect(cx - 14, bodyTop, 28, 20); // head
+      const H = base - bodyTop - 14;
+      // A MIST SPIRIT, not a slab: the body is horizontal slices whose width
+      // tapers and breathes, whose edges break up into wispy dither, and which
+      // dissolves into the night toward the ground — clearly a translucent
+      // spirit by design, not an untextured box.
+      o.fillStyle = `rgba(${acc.glow},${a * 0.09})`;
+      pq.pixelDisc(o, cx, bodyTop + 8, 24); // soft halo behind the head
+      for (let y = 0; y < H; y += 2) {
+        const t = y / H;
+        const breathe = 0.86 + 0.14 * Math.sin(y * 0.08 + pq.t * 0.7);
+        const half = Math.max(6, Math.round(22 * (1 - t * 0.3) * breathe));
+        const fade = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3; // feet dissolve into mist
+        const rowA = a * 0.55 * fade;
+        if (rowA <= 0.02) continue;
+        o.fillStyle = `rgba(128,134,160,${rowA})`;
+        o.fillRect(cx - half, bodyTop + 14 + y, half * 2, 2);
+        // wispy edge dither — ragged, drifting, never a hard rectangle edge
+        const hsh = (Math.imul(y + 7, 2654435761) >>> 9) & 7;
+        o.fillStyle = `rgba(128,134,160,${rowA * 0.4})`;
+        o.fillRect(cx - half - 2 - (hsh & 3), bodyTop + 14 + y, 2 + (hsh & 1), 1);
+        o.fillRect(cx + half + (hsh >> 1), bodyTop + 14 + y + 1, 2 + (hsh & 1), 1);
+      }
+      // rounded head with a moonlit crown, over the shoulders
+      o.fillStyle = `rgba(128,134,160,${a * 0.62})`;
+      pq.pixelDisc(o, cx, bodyTop + 8, 13);
+      o.fillStyle = `rgba(168,176,200,${a * 0.35})`;
+      o.fillRect(cx - 9, bodyTop - 4, 18, 2); // faint rim light on the crown
       // two gentle glowing eyes, looking down at the hero
       const look = Math.sin(pq.t * 0.6) * 1;
       o.fillStyle = `rgba(${acc.eye},${Math.min(1, a * 1.6)})`;
@@ -144,8 +163,12 @@ const ENCOUNTERS = [
       // a lowering hand on the hero's side, dips further as it resolves
       const reachP = st.phase === "resolving" ? st.phaseP : clamp01(st.p * 1.4);
       const handY = bodyTop + 26 + Math.round(reachP * (base - bodyTop - 40));
-      o.fillStyle = `rgba(128,134,160,${a * 0.6})`;
-      o.fillRect(cx - 30, bodyTop + 24, 8, handY - bodyTop - 24); // arm
+      for (let y = bodyTop + 24; y < handY; y += 2) { // arm in drifting slices too
+        const hsh = (Math.imul(y, 2654435761) >>> 9) & 3;
+        o.fillStyle = `rgba(128,134,160,${a * 0.5})`;
+        o.fillRect(cx - 30 - (hsh & 1), y, 7, 2);
+      }
+      o.fillStyle = `rgba(128,134,160,${a * 0.58})`;
       o.fillRect(cx - 34, handY, 12, 6); // hand
       // palm glow, building through the encounter and blooming at resolve
       const palmA = (st.phase === "resolving" ? 0.4 + st.phaseP * 0.6 : 0.15 + st.p * 0.25) * a;

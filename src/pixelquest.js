@@ -502,9 +502,12 @@ export class PixelQuest {
     const midFluxN = Math.min(1.5, (mfl / (174 * 255)) * gain * 9);
     const kickHit = analyser && this.kickBeat.update(bassFluxN, dt);
     const snareHit = analyser && this.snareBeat.update(midFluxN, dt);
-    // when both fire at once, the dominant band wins
-    if (kickHit && (!snareHit || bassFluxN >= midFluxN * 0.9)) this.onKick();
-    if (snareHit && (!kickHit || midFluxN > bassFluxN * 0.9)) this.onSnare();
+    // when both fire at once, the dominant band wins. Each also requires REAL
+    // absolute band energy: the adaptive gain amplifies mic room-noise ×4 in
+    // silence, enough for random flux to trip the detectors — a real kick has
+    // real bass under it, hiss doesn't (no phantom beats before the music).
+    if (kickHit && rawBass > 0.12 && (!snareHit || bassFluxN >= midFluxN * 0.9)) this.onKick();
+    if (snareHit && this.mids.value > 0.1 && (!kickHit || midFluxN > bassFluxN * 0.9)) this.onSnare();
 
     // MELODY onsets: a rising edge in the mid-band LEVEL that HOLDS for ~100ms
     // — the lead line / vocal moving. Sustain is what separates melody from
@@ -625,8 +628,11 @@ export class PixelQuest {
   }
 
   // kick drum: he JUMPS, the world's flames answer. Every grounded kick —
-  // no randomness, just a tiny anti-jitter cooldown.
+  // no randomness, just a tiny anti-jitter cooldown. Gated on real signal:
+  // the adaptive gain amplifies mic ROOM NOISE in silence enough to trip the
+  // flux detectors, and an orb thumping to nothing reads as broken.
   onKick() {
+    if ((this.gate || 0) < 0.25) return;
     this.kickPulse = 1;
     this.kickHit = true; // one-frame flag, consumed by the event manager
     this.torchFlare = 1;
@@ -647,6 +653,7 @@ export class PixelQuest {
 
   // snare: sword slash + sparkles, fireflies startle, sometimes the bat bolts
   onSnare() {
+    if ((this.gate || 0) < 0.25) return; // no phantom snares from mic hiss
     this.snarePulse = 1;
     this.snareHit = true; // one-frame flag, consumed by the event manager
     if (this.snareCooldown <= 0 && (this.gate || 0) > 0.3) {
@@ -859,21 +866,24 @@ export class PixelQuest {
       prevY = y1;
     }
 
-    // stars twinkle with treble; the bright ones carry a faint cross
+    // stars twinkle with treble; the bright ones carry a faint cross. On each
+    // SNARE the whole starfield glints TOGETHER for a beat — one synchronized
+    // breath across the sky that says "everything here is listening".
     const tw = this.treble.value;
+    const snap = this.snarePulse || 0;
     for (const s of this.stars) {
       const sx = Math.round(((((s.x - this.scrollX * 0.05) % 512) + 512) % 512) * (pw / 512));
       const pulse = Math.sin(s.ph + this.t * s.sp);
-      const a = 0.25 + 0.75 * clamp01(0.4 + 0.6 * pulse + tw * 0.6);
-      o.fillStyle = this.col(pal.star, a * 0.9);
+      const a = 0.25 + 0.75 * clamp01(0.4 + 0.6 * pulse + tw * 0.6 + snap * 0.5);
+      o.fillStyle = this.col(pal.star, Math.min(1, a * (0.9 + snap * 0.1)));
       o.fillRect(sx, s.y, 1, 1);
       if (s.bright) {
-        o.fillStyle = this.col(pal.star, a * 0.35);
+        o.fillStyle = this.col(pal.star, a * (0.35 + snap * 0.3));
         o.fillRect(sx - 1, s.y, 3, 1);
         o.fillRect(sx, s.y - 1, 1, 3);
       }
-      if (tw > 0.55 && pulse > 0.93) {
-        o.fillStyle = this.col(pal.star, 0.5);
+      if ((tw > 0.55 && pulse > 0.93) || snap > 0.75) {
+        o.fillStyle = this.col(pal.star, 0.5 + snap * 0.2);
         o.fillRect(sx - 1, s.y, 3, 1);
         o.fillRect(sx, s.y - 1, 1, 3);
       }
@@ -969,11 +979,11 @@ export class PixelQuest {
       this._aur[i] += (v - this._aur[i]) * Math.min(1, dt * (v > this._aur[i] ? 10 : 2.2));
     }
     const sec = this.resonance?.section;
-    const vis = (sec?.intensity || 0) * (0.3 + (sec?.profile?.bright || 1) * 0.4) * (this.gate || 0);
+    const vis = (sec?.intensity || 0) * (0.5 + (sec?.profile?.bright || 1) * 0.55) * (this.gate || 0);
     if (vis <= 0.04) return;
     const { pw } = this;
     const y0 = Math.round(19 * this.S); // curtain hem line, upper sky
-    const rise = 14 * this.S; // max ribbon height above the hem
+    const rise = 20 * this.S; // max ribbon height above the hem
     const step = this.cfg.detail === "pi_safe" ? 3 : 2;
     for (let x = 0; x < pw; x += step) {
       // smoothstep between band EMAs + a slow traveling undulation
@@ -986,10 +996,11 @@ export class PixelQuest {
       if (v < 0.06) continue;
       const h = Math.max(2, Math.round(v * rise));
       const yTop = y0 - h;
-      // curtain body: teal-violet, dim — then the classic bright green hem
-      o.fillStyle = `rgba(110,200,235,${(0.05 + v * 0.1) * vis})`;
+      // curtain body: teal shifting VIOLET where the band burns hot — then the
+      // classic bright green hem
+      o.fillStyle = `rgba(${110 + Math.round(v * 70)},${200 - Math.round(v * 55)},235,${(0.07 + v * 0.16) * vis})`;
       o.fillRect(x, yTop, step, h);
-      o.fillStyle = `rgba(130,255,190,${(0.12 + v * 0.24) * vis})`;
+      o.fillStyle = `rgba(130,255,190,${(0.16 + v * 0.34) * vis})`;
       o.fillRect(x, y0 - Math.max(1, h >> 2), step, Math.max(1, h >> 2));
     }
   }

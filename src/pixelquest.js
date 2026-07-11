@@ -858,11 +858,25 @@ export class PixelQuest {
       o.fillStyle = this.col(pal.moon, g === r + 1 ? 0.16 : 0.05);
       this.pixelDisc(o, mx, my, g);
     }
-    // lit crescent: a bright rim on the upper-left, then the main face
-    o.fillStyle = this.lit(pal.moon, 34);
-    this.pixelDisc(o, mx, my, r);
-    o.fillStyle = this.col(pal.moon);
-    this.pixelDisc(o, mx + 1, my + 1, r - 1);
+    // lit crescent with a PERFECT circular outline: every row is the base
+    // disc's exact span, filled bright, then the main face overlaid as a
+    // same-radius disc shifted down-right and CLAMPED inside the row — the
+    // shading offset lives inside the silhouette, so the edge never bulges
+    // (the old two-offset-disc union read as a warped, egg-shaped moon)
+    const rimCol = this.lit(pal.moon, 34);
+    const faceCol = this.col(pal.moon);
+    for (let dy = -r; dy <= r; dy++) {
+      const half = Math.floor(Math.sqrt(r * r - dy * dy));
+      const y = my + dy;
+      o.fillStyle = rimCol;
+      o.fillRect(mx - half, y, half * 2 + 1, 1);
+      const fdy = dy - 1; // face disc: radius r-1, centered (+1,+1)
+      if (Math.abs(fdy) > r - 1) continue;
+      const fh = Math.floor(Math.sqrt((r - 1) * (r - 1) - fdy * fdy));
+      const cl = Math.max(mx - half, mx + 1 - fh);
+      const cr = Math.min(mx + half, mx + 1 + fh);
+      if (cr >= cl) { o.fillStyle = faceCol; o.fillRect(cl, y, cr - cl + 1, 1); }
+    }
     // maria and craters
     o.fillStyle = this.col(pal.skyMid, 0.4);
     o.fillRect(mx - 2, my - 1, 3, 2);

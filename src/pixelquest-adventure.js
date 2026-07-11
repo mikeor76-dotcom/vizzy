@@ -494,6 +494,18 @@ export class DistantDestination {
     this.cross = pq.biomeT; // same 0..1 progress driving the sky/mountain crossfade
   }
   draw(o, pq, pal, mood, journey = 1, charge = 0) {
+    // With a full-scene BACKDROP the sky is open and the treeline sits low, so
+    // the tiny marker (tuned to peek above the old procedural mountains) reads
+    // as a box floating in empty sky. The imported biome GATE landmark plays
+    // the visible-destination role there — skip drawing the marker and keep
+    // the arrival beam/flourish aimed at the gate (or ahead on the road).
+    if (pq.useAssets?.() && pq.assets?.hasBackdrop?.(pq.currentBiome?.()?.name)) {
+      const gx = pq.landmarkScreenX;
+      const onScreen = gx != null && gx > -40 && gx < pq.pw + 40;
+      this.lastX = onScreen ? gx : Math.round(pq.pw * 0.86);
+      this.lastY = onScreen && pq.landmarkScreenY != null ? pq.landmarkScreenY : Math.round(pq.groundBase() - 24 * pq.S * 0.7);
+      return;
+    }
     // AHEAD of the traveler on the road (he journeys rightward — the goal
     // lives in the open space in front of him, like the reference's distant
     // castle), below the moon (~78%) and above the mountain silhouettes so

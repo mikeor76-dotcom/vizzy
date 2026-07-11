@@ -1023,6 +1023,9 @@ export class PixelQuest {
     if (this.useAssets() && gate && this.assets.ready(gate)) {
       const goff = this.scrollX * 0.7;
       const gsx = Math.round((((this.landmarkX - goff) % this.worldLen) + this.worldLen) % this.worldLen);
+      // the DistantDestination aims arrival effects here when backdrops are on
+      this.landmarkScreenX = gsx;
+      this.landmarkScreenY = this.groundY(Math.max(0, Math.min(this.pw - 1, gsx))) - Math.round(18 * this.S * 0.7);
       if (gsx < -90 || gsx > this.pw + 90) return;
       this.assets.drawSprite(o, gate, "idle", 0, gsx, this.groundY(gsx) + 1, { anchor: "bottom-center", scale: 1.3 });
       return;

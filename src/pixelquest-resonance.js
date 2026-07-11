@@ -100,8 +100,10 @@ export class SongSection {
 // ---------------------------------------------------------------------------
 // Songstream — music-light flowing through the air toward the orb.
 //   mote  : ambient glowing energy speck  (energy + mids level → density)
-//   note  : a tiny eighth-note glyph      (MELODY-BORN ONLY: each melody onset
-//           launches 2-3 from the ground — never random, never drums)
+//   note  : a tiny eighth-note glyph      (MELODY-BORN ONLY — each onset adds
+//           one note to a phrase, read like sheet music: right of the last,
+//           higher/lower with the pitch; the phrase lingers, then swoops to
+//           the orb. Never random, never drums.)
 //   spark : a firefly twinkle             (highs/transients → rate)
 //   ribbon: a soft golden/blue streamer   (sustained mids → rare, thicker)
 // Spawns across the WHOLE screen — left and right — so everything visibly
@@ -115,6 +117,7 @@ export class Songstream {
     this._moteAcc = 0;
     this._prevTre = 0;
     this._ribbonCd = 0;
+    this._phrase = null; // the melodic staircase being written (x,y,c,steps,idle)
   }
 
   // let the world feed the stream — e.g. a flower releasing a mote on a high.
@@ -154,34 +157,42 @@ export class Songstream {
 
     // ---- spawn ----
     if (alive > 0.02) {
-      // NOTES ARE THE MELODY: a note glyph only ever appears on a melody onset
-      // (the lead line / vocal moving — pq.melodyHit), launching from the
-      // ground ACROSS THE WHOLE SCREEN, left and right, all converging on the
-      // orb. The orb keeps the bassline (halo + heartbeat); the notes' shared
-      // shimmer still throbs softly to the kick, so melody-born notes visibly
-      // dance to the groove. In drum-only passages notes go quiet — honest.
-      const bornNote = (x, y, vy) => {
-        // FIXED TRAVEL TIME: every note reaches the orb ~1.4s after its onset,
-        // however far away it was born — each phrase's cohort zips in and
-        // ARRIVES together, and nothing from a previous bar lingers around to
-        // muddy which notes are new.
-        const d0 = Math.hypot(target.x - x, target.y - y);
-        const T = 1.3 + Math.random() * 0.4;
+      // NOTES DRAW THE MELODY'S SHAPE, read like sheet music: each melody
+      // onset places ONE note a step to the RIGHT of the phrase's previous
+      // note — HIGHER on screen if the pitch (spectral centroid) rose, LOWER
+      // if it fell, level if it held. A rising line writes an ascending
+      // staircase, a falling line steps down. The phrase floats in place long
+      // enough to READ, then each note swoops into the orb — the orb collects
+      // the phrase you just heard. Drum-only passages go note-quiet: honest.
+      if (pq.melodyHit && this.parts.length < B.motes) {
+        const c = pq.midCentroid || 45;
+        const cur = this._phrase;
+        const stale = !cur || cur.idle > 1.4 || cur.steps >= 8 || cur.x > pq.pw * 0.9;
+        if (stale) {
+          this._phrase = {
+            x: pq.pw * (0.12 + Math.random() * 0.45),
+            y: pq.ph * (0.28 + Math.random() * 0.22),
+            c, steps: 0, idle: 0,
+          };
+        } else {
+          const dy = -Math.max(-11, Math.min(11, (c - cur.c) * 1.3)); // pitch up = higher on screen
+          cur.x += 9 + Math.random() * 4; // reading order: left to right
+          cur.y = Math.max(pq.ph * 0.1, Math.min(pq.groundBase() - 16, cur.y + (Math.abs(dy) < 1.5 ? (Math.random() - 0.5) * 2 : dy)));
+          cur.c = c;
+          cur.steps++;
+        }
+        const P = this._phrase;
+        P.idle = 0;
+        const hold = 0.85 + Math.random() * 0.25; // linger: the contour must be readable
+        const T = 1.0 + Math.random() * 0.3; // then a quick swoop into the orb
         this.parts.push({
-          type: "note", x, y, vx: 0, vy, age: 0,
-          life: T + 0.35, spd: d0 / T, ph: Math.random() * TAU, seed: Math.random(),
+          type: "note", x: P.x, y: P.y, vx: 0, vy: 0, age: 0,
+          holdUntil: hold, swoopT: T, life: hold + T + 0.3, spd: 0,
+          ph: Math.random() * TAU, seed: Math.random(),
           big: section.state === "chorus" && Math.random() < 0.35, // chorus hero-notes
         });
-      };
-      if (pq.melodyHit) {
-        const n = Math.min(3, 2 + (section.state === "chorus" ? 1 : 0));
-        for (let i = 0; i < n && this.parts.length < B.motes; i++) {
-          const x = pq.pw * 0.04 + Math.random() * pq.pw * 0.92; // full width, both sides of the orb
-          if (Math.abs(x - target.x) < 20) continue; // not right on top of the orb
-          const gy = pq.groundY(Math.max(0, Math.min(pq.pw - 1, Math.round(x)))) - 2;
-          bornNote(x, gy, -16);
-        }
       }
+      if (this._phrase) this._phrase.idle += dt;
       // ambient motes carry the continuous energy + melody level (the old
       // random NOTE trickle lives here now, as plain motes)
       this._moteAcc += (1.4 + energy * 5 + mids * 3.5) * dens * dt;
@@ -217,6 +228,17 @@ export class Songstream {
       p.age += dt;
       const dx = target.x - p.x, dy = target.y - p.y;
       const dist = Math.hypot(dx, dy) || 1;
+      // phrase notes HOLD in place first (a gentle float, so the melodic
+      // contour stays readable exactly where it was written), then lock a
+      // swoop speed from wherever they are and dive to the orb
+      if (p.holdUntil) {
+        if (p.age < p.holdUntil) {
+          p.x += Math.cos(p.age * 2 + p.ph) * 2 * dt;
+          p.y += (Math.sin(p.age * 2.4 + p.ph) * 2 - 1.5) * dt;
+          continue;
+        }
+        if (!p.spd) p.spd = dist / p.swoopT;
+      }
       // notes carry their own fixed-travel-time speed; ambient motes/sparks cruise
       const cruise = p.spd || (14 + energy * 26) * spd; // px/s toward the orb
       p.x += ((dx / dist) * cruise + (p.vx || 0)) * dt + Math.cos(p.age * 3 + p.ph) * 7 * dt;

@@ -516,6 +516,15 @@ export class PixelQuest {
     const midsLvl = this.mids.value;
     const midsRise = midsLvl - (this._prevMidsLvl ?? midsLvl);
     this._prevMidsLvl = midsLvl;
+    // melody PITCH proxy: the spectral centroid of the melody band — rises
+    // when the line goes up, falls when it goes down. Smoothed lightly; the
+    // Songstream compares it between onsets to draw the melodic CONTOUR.
+    let cs = 0, cw = 0;
+    for (let i = 11; i < 92; i++) { const m = this.freq[i]; cs += m; cw += m * i; }
+    if (cs > 60) {
+      const c = cw / cs;
+      this.midCentroid = (this.midCentroid || c) + (c - (this.midCentroid || c)) * 0.5;
+    }
     this.melodyHit = false; // one-frame flag, consumed by World Resonance
     if (this._melodyPend) {
       this._melodyPend.t -= dt;
@@ -939,22 +948,6 @@ export class PixelQuest {
       const half = Math.floor(Math.sqrt(r * r - dy * dy));
       o.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
     }
-  }
-
-  // MOON BASS-HALO (World Resonance): the biggest object in the sky becomes a
-  // live bass meter — a soft breathing glow around the BAKED moon (we know its
-  // exact screen position via moonScreenPos) that swells with the low end and
-  // blooms on kicks. The procedural sky already draws its own moon glow.
-  drawMoonHalo(o, pal) {
-    const m = this.assets.moonScreenPos?.(this.currentBiome().name, this.scrollX, this.pw);
-    if (!m || m.offscreen) return;
-    const a = (0.05 + this.bass.value * 0.15 + this.kickPulse * 0.12) * (this.gate || 0);
-    if (a <= 0.025) return;
-    const g = Math.round(3 + this.bass.value * 7 + this.kickPulse * 5);
-    o.fillStyle = this.col(pal.moon, Math.min(0.16, a * 0.5));
-    this.pixelDisc(o, m.mx, m.my, m.r + g + Math.round(g * 0.9));
-    o.fillStyle = this.col(pal.moon, Math.min(0.3, a));
-    this.pixelDisc(o, m.mx, m.my, m.r + g);
   }
 
   // AURORA SPECTRUM (World Resonance): the night sky itself is the analyzer —
@@ -2452,7 +2445,6 @@ export class PixelQuest {
     o.fillRect(0, -2, pw, ph + 4);
     this.drawSky(o, pal);
     this.drawAurora(o, pal, dt); // the sky IS the spectrum (World Resonance)
-    this.drawMoonHalo(o, pal); // the moon breathes with the bass
     this.adventure.draw(o, pal, "destination"); // far-background silhouette
     this.events.draw(o, pal, "sky");
     this.drawMountains(o, pal);

@@ -568,26 +568,46 @@ export class PixelQuest {
       if (this.lastBeatT >= 0) {
         const iv = this.clock - this.lastBeatT;
         if (iv > 0.24 && iv < 2) {
-          // fold each interval into one octave band BEFORE the median:
-          // kick/snare alternation otherwise seesaws the estimate wildly
+          // fold each interval by octaves toward CONTINUITY with the current
+          // tempo (kick/snare alternation otherwise seesaws the estimate).
+          // A FIXED fold band snapped an accelerando to half tempo the moment
+          // it crossed the band edge — the hero slowed at the fastest bars.
+          // Folding toward the tracked period follows a speeding-up or
+          // slowing-down song smoothly across any boundary. The reference is
+          // its own fast EMA seeded by the FIRST interval — never the slowly
+          // warming bps output, which starts near 0 and would drag the fold
+          // into a slow alias it can't escape.
+          const ref = this._tempoRef ?? Math.max(0.25, Math.min(1.35, iv));
           let fiv = iv;
-          while (fiv < 0.34) fiv *= 2;
-          while (fiv > 1.0) fiv /= 2;
+          while (fiv < ref / 1.45) fiv *= 2;
+          while (fiv > ref * 1.45) fiv /= 2;
+          fiv = Math.max(0.25, Math.min(1.35, fiv)); // ~44..240 BPM sanity
+          this._tempoRef = this._tempoRef == null ? fiv : this._tempoRef + (fiv - this._tempoRef) * 0.3;
           this.intervals.push(fiv);
-          if (this.intervals.length > 10) this.intervals.shift();
+          if (this.intervals.length > 8) this.intervals.shift();
           const sorted = [...this.intervals].sort((a, b) => a - b);
           const med = sorted[sorted.length >> 1];
-          // stability: only trust (and display) the tempo when the recent
-          // intervals actually agree with each other
+          // stability: trust the tempo when recent intervals roughly agree —
+          // the tolerance leaves room for a genuine accelerando/ritardando
+          // (systematic drift) without dropping the lock
           const mad = sorted.reduce((s, v) => s + Math.abs(v - med), 0) / sorted.length;
-          this.tempoStable = this.intervals.length >= 6 && mad / med < 0.12;
-          this.bps += (1 / med - this.bps) * 0.2;
+          this.tempoStable = this.intervals.length >= 5 && mad / med < 0.18;
+          // ...but FOLLOW the median of just the last few beats, so a tempo
+          // that climbs or falls drags the hero's pace with it in real time
+          const recent = this.intervals.slice(-4).sort((a, b) => a - b);
+          const rmed = recent[recent.length >> 1];
+          this.bps += (1 / rmed - this.bps) * 0.28;
           this.tempoConf = 1;
         }
       }
       this.lastBeatT = this.clock; // RMS onsets drive TEMPO tracking only
     }
-    if (this.lastBeatT >= 0 && this.clock - this.lastBeatT > 2.5) this.tempoConf *= Math.exp(-dt * 1.2);
+    if (this.lastBeatT >= 0 && this.clock - this.lastBeatT > 2.5) {
+      this.tempoConf *= Math.exp(-dt * 1.2);
+      // the lock has fully lapsed — drop the fold reference and history so the
+      // next song seeds a fresh tempo instead of folding into the old one
+      if (this.tempoConf < 0.08 && this._tempoRef != null) { this._tempoRef = null; this.intervals.length = 0; }
+    }
 
     // "drive": how fast the song FEELS. Onset density (hits per second over
     // the last 3s) + spectral flux (frame-to-frame busyness) + loudness,
@@ -2320,7 +2340,9 @@ export class PixelQuest {
     let target;
     if (this.tempoStable && this.tempoConf > 0.5 && this.bps > 0) {
       // 60 BPM ambles ~20, 120 jogs ~60, 175+ sprints ~100 (lowres px/s)
-      target = Math.pow(this.bps, 1.15) * 30 * (0.65 + this.energy * 0.7) * (this.gate || 0);
+      // capped where the stride stays legible — the wider tracked BPM range
+      // (accelerandos can reach ~240) would otherwise outrun his legs
+      target = Math.min(140, Math.pow(this.bps, 1.15) * 30 * (0.65 + this.energy * 0.7)) * (this.gate || 0);
     } else {
       target = Math.pow(this.energy, 1.3) * 100 * (this.gate || 0);
     }

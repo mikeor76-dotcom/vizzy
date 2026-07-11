@@ -367,7 +367,32 @@ export class PixelQuest {
     this.trees = [];
     this.torches = [];
     this.rocks = [];
-    for (let x = 20; x < this.worldLen - 20; x += 34 + rnd() * 30) this.trees.push({ x, s: 0.8 + rnd() * 0.5, variant: (rnd() * 3) | 0 });
+    // GROVES, not a picket fence: trees gather in clumps of 2-5 with tight,
+    // overlapping spacing and a wide size range, separated by real clearings —
+    // plus the occasional lone tree standing in the open. Sorted small→large so
+    // bigger trees overlap in front of smaller ones (reads as depth).
+    {
+      let tx = 20 + rnd() * 60;
+      while (tx < this.worldLen - 30) {
+        if (rnd() < 0.24) {
+          this.trees.push({ x: tx, s: 0.8 + rnd() * 0.7, variant: (rnd() * 3) | 0 });
+          tx += 100 + rnd() * 140; // a lone tree, then open ground
+          continue;
+        }
+        const grove = 2 + ((rnd() * 4) | 0);
+        for (let i = 0; i < grove && tx < this.worldLen - 30; i++) {
+          this.trees.push({ x: tx + (rnd() - 0.5) * 6, s: 0.55 + rnd() * 0.95, variant: (rnd() * 3) | 0 });
+          tx += 9 + rnd() * 20; // tight, overlapping inside the grove
+        }
+        tx += 120 + rnd() * 160; // a real clearing between groves
+      }
+      this.trees.sort((a, b) => a.s - b.s);
+    }
+    // a distant tree line: sparse, small, hazy silhouettes behind the groves at
+    // deeper parallax — the depth layer that keeps the mid-row from reading flat
+    this.backTrees = [];
+    for (let x = 40 + rnd() * 80; x < this.worldLen; x += 55 + rnd() * 110)
+      this.backTrees.push({ x, s: 0.34 + rnd() * 0.22, variant: (rnd() * 3) | 0 });
     for (let x = 70; x < this.worldLen - 40; x += 150 + rnd() * 90) this.torches.push({ x, ph: rnd() * TAU });
     for (let x = 10; x < this.worldLen; x += 55 + rnd() * 70) this.rocks.push({ x, w: 2 + ((rnd() * 3) | 0), variant: (rnd() * 3) | 0 });
     // foreground silhouettes: dark grass tufts sweeping past FASTER than the
@@ -1033,6 +1058,18 @@ export class PixelQuest {
     const foliage = BIOME_FOLIAGE[pal.biome];
     const foliageReady = this.useAssets() && foliage && this.assets.ready(foliage);
     const rocksReady = this.useAssets() && this.assets.ready("rocks");
+    // distant tree line first: deeper parallax (0.45), small, drawn hazy so it
+    // fades into the night — pure depth, never competing with the near groves
+    if (foliageReady) {
+      const boff = this.scrollX * 0.45;
+      o.globalAlpha = 0.42;
+      for (const bt of this.backTrees) {
+        const sx = Math.round((((bt.x - boff) % L) + L) % L);
+        if (sx < -30 || sx > this.pw + 30) continue;
+        this.assets.drawSprite(o, foliage, "v", 0, sx, this.groundY(sx) - 1, { anchor: "bottom-center", frame: bt.variant, scale: bt.s });
+      }
+      o.globalAlpha = 1;
+    }
     for (const tr of this.trees) {
       const sx = Math.round((((tr.x - off) % L) + L) % L);
       if (sx < -40 || sx > this.pw + 40) continue;
@@ -1532,31 +1569,62 @@ export class PixelQuest {
     o.drawImage(this._vig, 0, 0);
   }
 
+  // one static soil-mottle tile (dark clump dashes + sparse light flecks),
+  // alpha-only so it textures ANY biome's ground color. Generated once ever.
+  _groundTexTile() {
+    if (this._gtex) return this._gtex;
+    const t = document.createElement("canvas");
+    t.width = 64; t.height = 64;
+    const g = t.getContext("2d");
+    const rnd = makePRNG(48271);
+    for (let i = 0; i < 170; i++) {
+      const x = (rnd() * 64) | 0, y = (rnd() * 64) | 0, w = 1 + ((rnd() * 3) | 0);
+      const darkDash = rnd() < 0.8;
+      g.fillStyle = darkDash ? `rgba(6,8,16,${0.1 + rnd() * 0.17})` : `rgba(255,250,235,${0.04 + rnd() * 0.06})`;
+      g.fillRect(x, y, w, 1);
+      if (x + w > 64) g.fillRect(x - 64, y, w, 1); // seamless wrap
+      if (darkDash && rnd() < 0.3) g.fillRect(x, y + 1, Math.max(1, w - 1), 1); // chunkier clump
+    }
+    this._gtex = t;
+    return t;
+  }
+
   drawTerrain(o, pal) {
     const { pw, ph } = this;
     const s0 = this.scrollX | 0;
     const rim = this.lit(pal.groundTop, 26 + Math.round((this.groundBoost || 0) * 50));
     const dark = this.col(pal.groundDark);
+    const band = this.col(pal.groundTop);
+    const body = this.col(pal.ground);
+    const strata = this.col(this.mix(pal.ground, pal.groundDark, 0.55));
+    if (!this._gys || this._gys.length !== pw) this._gys = new Int16Array(pw);
+    let minGy = ph;
     for (let x = 0; x < pw; x++) {
       const gy = this.groundY(x);
+      this._gys[x] = gy;
+      if (gy < minGy) minGy = gy;
       const wx = x + s0;
-      // moonlit rim, grass band, soil body
+      const hsh = (Math.imul(wx, 2654435761) >>> 8) & 1023;
+      // soil body first, then the moonlit rim + an UNEVEN grass band on top —
+      // the hashed 1-3px edge breaks the dead-flat stripe the old 2px band had
+      o.fillStyle = body;
+      o.fillRect(x, gy + 1, 1, ph - gy - 1);
       o.fillStyle = rim;
       o.fillRect(x, gy, 1, 1);
-      o.fillStyle = this.col(pal.groundTop);
-      o.fillRect(x, gy + 1, 1, 2);
-      o.fillStyle = this.col(pal.ground);
-      o.fillRect(x, gy + 3, 1, ph - gy - 3);
+      o.fillStyle = band;
+      o.fillRect(x, gy + 1, 1, 1 + ((hsh >> 4) % 3));
+      // sedimentary strata following the ground contour — broken, jittered
+      // lines that make the soil read as layered earth, not a flat fill
+      if ((wx & 15) < 11) { o.fillStyle = strata; o.fillRect(x, gy + 7 + ((hsh >> 3) & 1), 1, 1); }
+      if (((wx + 9) & 31) < 20) { o.fillStyle = strata; o.fillRect(x, gy + 15 + ((hsh >> 5) & 3), 1, 1); }
       // buried pebbles and roots (world-anchored hash so they scroll)
-      const hsh = (Math.imul(wx, 2654435761) >>> 8) & 1023;
       if (hsh < 90) {
         o.fillStyle = dark;
         const d = 4 + (hsh % Math.max(3, ph - gy - 8));
         o.fillRect(x, gy + d, 1 + (hsh & 1), 1);
       }
       // THE PATH: worn stepping stones catching the moonlight along the
-      // surface — the road he walks reads as a road, like the reference's
-      // stone trail (brighter as returning music wakes the world)
+      // surface (brighter as returning music wakes the world)
       if (hsh > 940) {
         const alive = 0.5 + (this.adventure?.orb?.charge || 0) * 0.3;
         o.fillStyle = this.lit(pal.groundTop, 40, alive);
@@ -1579,12 +1647,29 @@ export class PixelQuest {
         o.fillRect(x, gy - 1, 1, 1);
       }
     }
-    // sparse grass tufts anchored in the world — terrain detail, not an EQ
-    o.fillStyle = this.col(pal.groundTop, 0.85);
+    // mottle-texture overlay: the cached alpha tile, scrolled with the world and
+    // clipped to the soil, so the big flat fill reads as textured pixel dirt
+    const tex = this._groundTexTile();
+    o.save();
+    o.beginPath();
+    o.moveTo(0, ph);
+    for (let x = 0; x < pw; x += 2) o.lineTo(x, this._gys[x] + 3);
+    o.lineTo(pw - 1, this._gys[pw - 1] + 3);
+    o.lineTo(pw, ph);
+    o.closePath();
+    o.clip();
+    const tw = 64, offx = -(s0 % tw) - tw;
+    const ty0 = Math.max(0, Math.floor((minGy - 2) / tw) * tw);
+    for (let tx = offx; tx < pw + tw; tx += tw)
+      for (let ty = ty0; ty < ph; ty += tw) o.drawImage(tex, tx, ty);
+    o.restore();
+    // sparse grass tufts anchored in the world, with varied blade heights
     for (let x = 8 - (s0 % 9); x < pw; x += 9) {
       const wx = x + s0;
       if ((wx * 7) % 27 < 9) continue;
-      o.fillRect(x, this.groundY(x) - 1, 1, 1);
+      const hh = 1 + ((wx * 13) >> 3) % 2;
+      o.fillStyle = this.col(pal.groundTop, 0.85);
+      o.fillRect(x, this.groundY(x) - hh, 1, hh);
     }
   }
 

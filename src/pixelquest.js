@@ -2146,11 +2146,12 @@ export class PixelQuest {
     this.heroGrooveY = Math.abs(Math.sin(this.groovePhase * Math.PI)) * grooveAmp + (this.kickPulse || 0) * 1.8;
 
     if (speed > 2.5) {
-      // stride cadence: LOCK it to the beat when a tempo is confident, so his
-      // feet land on the beat (world speed is already tempo-derived, so the
-      // stride stays matched to the ground — no foot-slide). Otherwise fall back
-      // to the speed-based rate, capped so the walk frames stay legible.
-      const cadence = musicalTempo ? Math.max(2.6, Math.min(6, this.bps * 2)) : Math.min(5.5, 3 + speed * 0.2);
+      // stride cadence tracks GROUND SPEED (constant stride length) so his feet
+      // match the scroll at EVERY speed — no fast-legs-over-slow-ground slide
+      // while the song is still building and he's moving slowly. World speed is
+      // tempo-derived, so the footfalls still ride the music; they just also stay
+      // locked to the ground. (this.S cancels out: rate ≈ cruise·mult / 13.)
+      const cadence = Math.max(1.3, Math.min(6.5, speed / (13 * this.S)));
       this.heroAnimT +=
         dt * cadence *
         (this.egg && this.egg.type === "moonwalk" ? 0.55 : this.egg && this.egg.type === "redshoes" ? 1.6 : 1);

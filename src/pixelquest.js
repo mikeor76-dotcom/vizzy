@@ -2393,9 +2393,9 @@ export class PixelQuest {
     if ((this.debugPage || 0) === 1) { this.drawDebugEggs(ctx, w, h); return; }
     const sum = this.assets.summary();
     const a = this.adventure, orb = a?.orb, mood = a?.mood;
-    const G = "rgba(90,230,120,1)", A = "rgba(255,200,90,1)", R = "rgba(255,90,90,1)";
+    const G = "rgba(90,230,120,1)", A = "rgba(255,200,90,1)", R = "rgba(255,90,90,1)", B = "rgba(120,180,255,0.95)";
     const col = (s) => (s === "external" ? G : s === "baked" ? A : R);
-    const word = (s) => (s === "external" ? "image" : s === "baked" ? "baked" : "OLD");
+    const word = (s) => (s === "external" ? "image" : s === "baked" ? "baked" : "proc");
     ctx.save();
     ctx.fillStyle = "rgba(6,9,16,0.95)";
     ctx.fillRect(0, 0, w, h);
@@ -2403,9 +2403,10 @@ export class PixelQuest {
     ctx.font = "bold 16px monospace";
     ctx.fillStyle = "rgba(255,255,255,0.96)"; ctx.fillText("PIXEL QUEST — DEBUG", 20, 16);
     ctx.font = "12px monospace";
-    ctx.fillStyle = G; ctx.fillText("● textured", 230, 20);
-    ctx.fillStyle = A; ctx.fillText("● baked", 330, 20);
-    ctx.fillStyle = R; ctx.fillText("● procedural (needs art)", 415, 20);
+    ctx.fillStyle = G; ctx.fillText("● art", 210, 20);
+    ctx.fillStyle = A; ctx.fillText("● baked", 260, 20);
+    ctx.fillStyle = B; ctx.fillText("● live fx", 330, 20);
+    ctx.fillStyle = R; ctx.fillText("● missing", 405, 20);
     ctx.fillStyle = "rgba(150,160,185,0.9)"; ctx.textAlign = "right"; ctx.fillText("page 1/2  ← →  ·  D close", w - 18, 20); ctx.textAlign = "left";
     ctx.font = "12.5px monospace";
     const lh = 16, top = 48;
@@ -2427,25 +2428,46 @@ export class PixelQuest {
     for (const b of this.allBiomeIds()) {
       const img = this.assets.hasBackdrop(b) || this.assets.hasReadyLayer(b, "sky") || this.assets.hasReadyLayer(b, "far");
       const active = b === this.palRef?.biome;
-      rowAt(xA, yA, img ? G : R, b + (active ? " ◄" : ""), img ? "image" : "OLD", active ? "rgba(255,255,170,0.95)" : null); yA += lh;
+      rowAt(xA, yA, img ? G : B, b + (active ? " ◄" : ""), img ? "image" : "proc", active ? "rgba(255,255,170,0.95)" : null); yA += lh;
     }
 
-    // ---- COL B: procedural (not yet textured) ----
+    // ---- COL B: scene elements — REAL per-item status (art / live-fx / todo).
+    // `art` = drawn from an imported sprite (green); `fx` = a live procedural
+    // effect that needs no art by design (blue); neither = a genuine gap (red).
+    const rdy = (...ids) => ids.every((id) => this.assets.ready(id));
     const PROC = [
-      { h: "BIOME SCENERY" }, "path grass & flowers", "foreground silhouettes",
-      { h: "LANDMARKS" }, "shrine (meadow)", "mushroom (neon)", "clock tower (moonlit)", "arcade gate (arcade)", "castle (castle)",
-      { h: "ATTRACTIONS" }, "windmill", "campfire + brazier", "arcade cabinet", "snail",
-      { h: "SKY & FX" }, "stars · moon · clouds", "fireflies", "dust & sparkles", "torch flames",
+      { h: "BIOME SCENERY" },
+      { t: "path grass & flowers", art: rdy("grass", "flower") },
+      { t: "foreground silhouettes", fx: true },
+      { h: "LANDMARKS (biome gates)" },
+      { t: "meadow gate", art: this.assets.ready("meadowGate") },
+      { t: "neon gate", art: this.assets.ready("neonGate") },
+      { t: "moonlit gate", art: this.assets.ready("moonlitGate") },
+      { t: "arcade ruins", fx: true },
+      { t: "castle gate", art: this.assets.ready("castleGate") },
+      { h: "ATTRACTIONS" },
+      { t: "windmill", art: this.assets.ready("windmill") },
+      { t: "campfire + brazier", art: rdy("campfire", "brazier") },
+      { t: "arcade cabinet", art: this.assets.ready("arcadeCabinet") },
+      { t: "snail", art: this.assets.ready("snail") },
+      { h: "SKY & FX  (live effects — no art)" },
+      { t: "stars · moon · clouds", fx: true },
+      { t: "fireflies", fx: true },
+      { t: "dust & sparkles", fx: true },
+      { t: "torch flames", fx: true },
     ];
     const xB = Math.round(w * 0.34); let yB = top;
-    colHdr(xB, yB, "PROCEDURAL  (no art yet)"); yB += lh + 4;
+    colHdr(xB, yB, "SCENE ELEMENTS"); yB += lh + 4;
     for (const p of PROC) {
       if (p.h) { secHdr(xB, yB, p.h); yB += lh; continue; }
-      rowAt(xB, yB, R, p, "OLD"); yB += lh;
+      const sc = p.art ? G : p.fx ? B : R;
+      rowAt(xB, yB, sc, p.t, p.art ? "art" : p.fx ? "fx" : "todo"); yB += lh;
     }
     yB += 6; secHdr(xB, yB, "CAMEOS / EASTER EGGS"); yB += lh;
-    const nEv = this.events?.defs?.length || 63;
-    rowAt(xB, yB, R, `${nEv} events`, "OLD"); yB += lh;
+    const defs = this.events?.defs || [];
+    const artEv = defs.filter((d) => d.asset && this.assets.ready(d.asset)).length;
+    const nEv = defs.length || 60;
+    rowAt(xB, yB, artEv > 0 ? G : R, `${nEv} events`, `${artEv} art`); yB += lh;
     ctx.fillStyle = "rgba(150,190,255,0.95)"; ctx.fillText("→ press → for per-event status", xB + 15, yB); yB += lh;
     ctx.fillStyle = "rgba(150,160,182,0.8)"; ctx.fillText("moon flybys, dragon, giant,", xB + 15, yB); yB += lh - 3;
     ctx.fillText("jukebox, boulder chase, …", xB + 15, yB);
@@ -2467,7 +2489,7 @@ export class PixelQuest {
     kv("orb", `${chg < 0.15 ? "dim" : chg < 0.55 ? "awake" : chg < 0.9 ? "charged" : "radiant"} ${chg.toFixed(2)}`);
     kv("hero", `f${this.heroFrame} ${Math.round(this.lastSpeed || 0)}px/s`);
     kv("counts", `p${this.particles.length} f${a?.fragments?.items.length || 0} pr${this.propField.props.length}`);
-    kv("assets", `${sum.external} img · ${sum.procedural} old`);
+    kv("assets", `${sum.external} img · ${sum.procedural} proc`);
     yC += 6; hdr("KEYS");
     ctx.fillStyle = "rgba(195,200,215,0.9)";
     for (const l of ["D  close", "← →  page", "B / ⇧B  biome", "1–5  jump biome", "J  arrival", "H  controls"]) { ctx.fillText(l, xC, yC); yC += lh; }

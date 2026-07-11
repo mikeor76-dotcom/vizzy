@@ -483,7 +483,9 @@ export class PixelQuest {
     };
     const rawLoud = band(1, 372);
     this.peak = Math.max(this.peak * (1 - dt * 0.04), rawLoud, 0.06);
-    const gain = Math.min(4, 0.55 / this.peak) * this.cfg.sensitivity;
+    // gain ceiling 6 (was 4): quiet playback still normalizes to full drive —
+    // the musical silence gate keeps the extra gain from waking up room noise
+    const gain = Math.min(6, 0.55 / this.peak) * this.cfg.sensitivity;
     this.gain = gain;
     const rawBass = Math.min(1, band(1, 11) * gain);
     this.bass.update(rawBass);
@@ -563,7 +565,12 @@ export class PixelQuest {
       sq += d * d;
     }
     const rms = Math.sqrt(sq / (this.time.length / 4));
-    if (analyser && this.beat.update(Math.min(1.5, rms * 2.6), dt)) {
+    // normalize the onset signal by the mic's own recent peak so the TEMPO
+    // lock forms at ANY playback volume — the raw-rms version sat under the
+    // detector's absolute floor at low volume, the lock never happened, and
+    // the hero quietly fell back to the slower energy-only pace
+    const rmsN = Math.min(1.5, (rms / Math.max(0.02, this.rmsPeak || 0.02)) * 0.85);
+    if (analyser && this.beat.update(rmsN, dt)) {
       this.onsetTimes.push(this.clock);
       if (this.lastBeatT >= 0) {
         const iv = this.clock - this.lastBeatT;

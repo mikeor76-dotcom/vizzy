@@ -99,20 +99,20 @@ export class SongSection {
 
 // ---------------------------------------------------------------------------
 // Songstream — music-light flowing through the air toward the orb.
-//   mote  : ambient glowing energy speck  (energy → density)
-//   note  : a tiny eighth-note glyph       (mids/melody → rate)
-//   spark : a firefly twinkle              (highs/transients → rate)
-//   ribbon: a soft golden/blue streamer    (sustained mids → rare, thicker)
-// Spawns to the right of / around the hero and converges on the orb, so the
-// world's music visibly sweeps INTO the orb as he walks. Capped push+filter
-// (same pattern as PixelQuest.particles) keeps it allocation-light.
+//   mote  : ambient glowing energy speck  (energy + melody level → density)
+//   note  : a tiny eighth-note glyph      (RHYTHM-BORN ONLY: kicks launch 2-4
+//           from the ground, snares drop one from the air — never random)
+//   spark : a firefly twinkle             (highs/transients → rate)
+//   ribbon: a soft golden/blue streamer   (sustained mids → rare, thicker)
+// Spawns across the WHOLE screen — left and right — so everything visibly
+// converges on the orb from both sides. Capped push+filter (same pattern as
+// PixelQuest.particles) keeps it allocation-light.
 // ---------------------------------------------------------------------------
 export class Songstream {
   constructor() {
     this.parts = [];
     this.ribbons = [];
     this._moteAcc = 0;
-    this._noteAcc = 0;
     this._prevTre = 0;
     this._ribbonCd = 0;
   }
@@ -131,7 +131,7 @@ export class Songstream {
 
   _spawn(pq, section, kind, bandY) {
     const pw = pq.pw, gb = pq.groundBase();
-    const x = pw * 0.34 + Math.random() * (pw * 0.72); // ahead of the hero, spread across
+    const x = pw * 0.05 + Math.random() * (pw * 0.92); // full width — both sides of the orb
     // motes/notes rise out of the world (lower); sparks ride the air (upper)
     const y = bandY != null ? bandY : lerp(pq.ph * 0.2, gb - 6, kind === "spark" ? Math.random() * 0.5 : 0.35 + Math.random() * 0.55);
     this.parts.push({
@@ -154,27 +154,34 @@ export class Songstream {
 
     // ---- spawn ----
     if (alive > 0.02) {
-      // BEAT-BORN NOTES: every kick visibly LAUNCHES notes out of the world
-      // ahead of the hero — the stream's rhythm IS the song's rhythm. (The
-      // smooth accumulators below stay as the quiet baseline between beats.)
+      // NOTES ARE RHYTHM-BORN, PERIOD: a note glyph only ever appears on a
+      // kick (2-4, launching from the ground ACROSS THE WHOLE SCREEN, left and
+      // right, all converging on the orb) or a snare (one from the air). No
+      // random trickle — if you see a note, the song just did something.
+      const bornNote = (x, y, vy) => {
+        this.parts.push({
+          type: "note", x, y, vx: 0, vy, age: 0,
+          life: 2.8 + Math.random() * 1.2, ph: Math.random() * TAU, seed: Math.random(),
+          big: section.state === "chorus" && Math.random() < 0.35, // chorus hero-notes
+        });
+      };
       if (pq.kickHit) {
-        const n = Math.min(3, 2 + ((pq.driveFx || 0) > 0.6 ? 1 : 0));
+        const n = Math.min(4, 2 + ((pq.driveFx || 0) > 0.6 ? 1 : 0) + (section.state === "chorus" ? 1 : 0));
         for (let i = 0; i < n && this.parts.length < B.motes; i++) {
-          const x = (pq.heroScreenX ?? pq.pw * 0.27) + 10 + Math.random() * pq.pw * 0.38;
+          const x = pq.pw * 0.04 + Math.random() * pq.pw * 0.92; // full width, both sides of the orb
+          if (Math.abs(x - target.x) < 20) continue; // not right on top of the orb
           const gy = pq.groundY(Math.max(0, Math.min(pq.pw - 1, Math.round(x)))) - 2;
-          this.parts.push({
-            type: "note", x, y: gy, vx: 0, vy: -16, age: 0,
-            life: 2.8 + Math.random() * 1.2, ph: Math.random() * TAU, seed: Math.random(),
-            big: section.state === "chorus" && Math.random() < 0.35, // chorus hero-notes
-          });
+          bornNote(x, gy, -16);
         }
       }
-      // ambient motes: density from energy·section
-      this._moteAcc += (1.4 + energy * 7) * dens * dt;
+      if (pq.snareHit && this.parts.length < B.motes) {
+        const x = pq.pw * 0.1 + Math.random() * pq.pw * 0.85;
+        bornNote(x, lerp(pq.ph * 0.22, pq.ph * 0.5, Math.random()), -6);
+      }
+      // ambient motes carry the continuous energy + melody level (the old
+      // random NOTE trickle lives here now, as plain motes)
+      this._moteAcc += (1.4 + energy * 5 + mids * 3.5) * dens * dt;
       while (this._moteAcc >= 1 && this.parts.length < B.motes) { this._moteAcc -= 1; this._spawn(pq, section, "mote"); }
-      // notes: the melody — mids drive the rate
-      this._noteAcc += Math.pow(mids, 1.25) * (4.5 * dens) * dt;
-      while (this._noteAcc >= 1 && this.parts.length < B.motes) { this._noteAcc -= 1; this._spawn(pq, section, "note"); }
       // sparks: a crisp one-frame scatter on each snare + on rising treble
       const treRise = tre - this._prevTre;
       if ((treRise > 0.1 || pq.snareHit) && this.parts.length < B.motes) {

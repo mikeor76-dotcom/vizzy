@@ -348,6 +348,8 @@ export class PixelQuest {
     this.heroAnimT = 0;
     this.heroJumpV = 0;
     this.heroJumpY = 0;
+    this.groovePhase = 0; // beat-locked phase driving the musical walk bounce
+    this.heroGrooveY = 0; // current vertical groove offset (px, up)
     this.swordFlash = 0;
     this.lanternFlash = 0;
 
@@ -1601,9 +1603,10 @@ export class PixelQuest {
     const reactionLean = this.reaction && this.reaction.type === "stepback" ? -reactionEase : reactionEase;
     const hx = Math.round(this.pw * this.heroAnchor) - 8 + Math.round(this.heroOffX || 0) + lunge + reactionLean;
     const gy = this.groundY(Math.round(this.pw * this.heroAnchor + (this.heroOffX || 0)));
-    // bob is heavier when the bass is heavy
-    const bob = this.heroFrame % 2 === 0 && this.bass.value > 0.25 ? 1 : 0;
-    const hy = Math.round(gy - 24 + this.heroJumpY + bob);
+    // MUSICAL GROOVE bounce (beat-locked, computed in update) lifts him as he
+    // walks; the kick jump still stacks its big hops on top.
+    const groove = Math.round(this.heroGrooveY || 0);
+    const hy = Math.round(gy - 24 + this.heroJumpY - groove);
     // spin easter egg: he pirouettes — the sprite mirrors back and forth.
     // The moonwalk keeps him TURNED AROUND the whole time.
     const spinning = this.egg && this.egg.type === "spin";
@@ -1682,11 +1685,12 @@ export class PixelQuest {
       if (anim === "walk" && this.assets.ready("heroWalk")) {
         const wp = this.heroFrame + this.heroAnimT;
         const wf = ((Math.floor(wp * 3) % 6) + 6) % 6;
-        this.assets.drawSprite(o, "heroWalk", "walk", 0, hx + 8, gy + 1, { anchor: "bottom-center", frame: wf });
+        const wy = gy + 1 + Math.round(this.heroJumpY) - groove; // jump + musical bounce
+        this.assets.drawSprite(o, "heroWalk", "walk", 0, hx + 8, wy, { anchor: "bottom-center", frame: wf });
         return;
       }
       // idle / poses / reactions (and the walk fallback) use the traveler sheet
-      this.assets.drawSprite(o, "hero", anim, this.heroAnimT + this.heroFrame, hx + 8, gy + 1, { anchor: "bottom-center", frame: anim === "walk" ? this.heroFrame : 0 });
+      this.assets.drawSprite(o, "hero", anim, this.heroAnimT + this.heroFrame, hx + 8, gy + 1 + Math.round(this.heroJumpY) - groove, { anchor: "bottom-center", frame: anim === "walk" ? this.heroFrame : 0 });
       return;
     }
     const rows = HERO_TORSO.concat(
@@ -2132,15 +2136,23 @@ export class PixelQuest {
     // after a moonwalk he eases back to his spot
     if (!this.egg && Math.abs(this.heroOffX) > 0.1) this.heroOffX += (0 - this.heroOffX) * Math.min(1, dt * 3);
 
+    // MUSICAL GROOVE — a smooth vertical bounce locked to the beat (plus a small
+    // kick pop) so the hero visibly MOVES WITH THE MUSIC as he walks, instead of
+    // sliding flat. Applied to the sprite + the orb anchor in drawHero.
+    const musicalTempo = this.tempoStable && this.tempoConf > 0.5 && this.bps > 0;
+    const beatRate = musicalTempo ? this.bps : 2;
+    this.groovePhase = ((this.groovePhase || 0) + beatRate * dt) % 1;
+    const grooveAmp = (0.6 + (this.energy || 0) * 2.2) * (this.gate || 0);
+    this.heroGrooveY = Math.abs(Math.sin(this.groovePhase * Math.PI)) * grooveAmp + (this.kickPulse || 0) * 1.8;
+
     if (speed > 2.5) {
-      // stride rate follows the ground speed so his feet never moonwalk
-      // (the actual moonwalk steps at half-time — smooth, deliberate)
-      // stride cadence rises with speed but is CAPPED so the two walk frames
-      // stay readable as distinct steps (uncapped it hit ~17 steps/s at high
-      // energy — a blur; the cap keeps it to a legible brisk walk/jog).
+      // stride cadence: LOCK it to the beat when a tempo is confident, so his
+      // feet land on the beat (world speed is already tempo-derived, so the
+      // stride stays matched to the ground — no foot-slide). Otherwise fall back
+      // to the speed-based rate, capped so the walk frames stay legible.
+      const cadence = musicalTempo ? Math.max(2.6, Math.min(6, this.bps * 2)) : Math.min(5.5, 3 + speed * 0.2);
       this.heroAnimT +=
-        dt *
-        Math.min(5.5, 3 + speed * 0.2) *
+        dt * cadence *
         (this.egg && this.egg.type === "moonwalk" ? 0.55 : this.egg && this.egg.type === "redshoes" ? 1.6 : 1);
       if (this.heroAnimT > 1) {
         this.heroAnimT = 0;

@@ -266,21 +266,25 @@ export class Songstream {
         o.fillRect(x, y, 1, 1);
         if (a > 0.55) { o.fillStyle = `rgba(255,250,220,${a * 0.5})`; o.fillRect(x - 1, y, 3, 1); o.fillRect(x, y - 1, 1, 3); }
       } else if (p.type === "note" && p.big) {
-        // chorus hero-note: a bigger glyph that reads from across the room
-        o.fillStyle = `rgba(${halo},${a * 0.45})`; o.fillRect(x - 1, y - 6, 7, 10);
+        // chorus hero-note: a bigger glyph that reads from across the room.
+        // Glow is a soft DISC (never a rectangle — boxes read as tiles).
+        o.fillStyle = `rgba(${halo},${a * 0.28})`;
+        pq.pixelDisc(o, x + 1, y - 2, 4);
         o.fillStyle = `rgba(${STREAM_ENERGY},${a})`;
         o.fillRect(x, y, 3, 3); // head
         o.fillRect(x + 3, y - 6, 1, 8); // stem
         o.fillRect(x + 3, y - 6, 3, 1); // flag
         o.fillRect(x + 3, y - 5, 2, 1); // flag taper
       } else if (p.type === "note") {
-        o.fillStyle = `rgba(${halo},${a * 0.4})`; o.fillRect(x - 1, y - 4, 5, 7); // halo
+        // bare glyph — bright enough on the night sky without any backing halo
         o.fillStyle = `rgba(${STREAM_ENERGY},${a})`;
         o.fillRect(x, y, 2, 2); // head
         o.fillRect(x + 2, y - 4, 1, 6); // stem (taller — legible at wall distance)
         o.fillRect(x + 2, y - 4, 2, 1); // flag
       } else {
-        o.fillStyle = `rgba(${halo},${a * 0.4})`; o.fillRect(x - 1, y - 1, 3, 3);
+        // mote: a tiny diamond glow instead of a square
+        o.fillStyle = `rgba(${halo},${a * 0.35})`;
+        pq.pixelDisc(o, x, y, 1);
         o.fillStyle = `rgba(${STREAM_ENERGY},${a})`; o.fillRect(x, y, 1, 1);
         if (a > 0.7) { o.fillStyle = `rgba(235,255,255,${a})`; o.fillRect(x, y, 1, 1); }
       }

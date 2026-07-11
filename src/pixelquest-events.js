@@ -394,8 +394,27 @@ const CATEGORY_STORY_TAGS = {
   transition: ["transition", "mystery"],
 };
 
+// Where the moon actually is on screen. With an imported sky plate the REAL
+// moon is baked into the art (and scrolls with the plate) — track it via the
+// asset store so moon overlays/flybys land ON the moon instead of floating in
+// empty sky. Falls back to the procedural moon's spot (drawSky) otherwise.
+// Always returns coords (never null) so a mid-event biome swap can't crash a
+// caller; use hasVisibleMoon() to gate SPAWNING.
 function moonPos(pq, pal) {
-  return { mx: Math.round(pq.pw * 0.78), my: Math.round(16 * pq.S) };
+  const biome = pq.currentBiome?.()?.name;
+  const baked = pq.assets?.moonScreenPos?.(biome, pq.scrollX, pq.pw);
+  if (baked) return baked;
+  return { mx: Math.round(pq.pw * 0.78), my: Math.round(16 * pq.S), r: Math.round(5 * pq.S) };
+}
+// is there really a moon on screen right now? (baked moon present + on-screen,
+// or a procedural sky where drawSky paints one). Gates moon-cameo spawns.
+function hasVisibleMoon(pq) {
+  const biome = pq.currentBiome?.()?.name;
+  if (pq.useAssets?.() && pq.assets?.hasReadyLayer?.(biome, "sky")) {
+    const m = pq.assets.moonScreenPos?.(biome, pq.scrollX, pq.pw);
+    return !!m && !m.offscreen && m.mx > -m.r && m.mx < pq.pw + m.r;
+  }
+  return true; // procedural sky always draws its moon
 }
 
 // Locked Door Moment (Biome System v1): same door mechanic everywhere,
@@ -3212,9 +3231,9 @@ export const CHAPTER_EVENTS = [
 // back to procedural, e.g. the sports car's lingering trail after it exits).
 const _gy = (pq, x) => pq.groundY(Math.max(0, Math.min(pq.pw - 1, Math.round(x)))) + 1;
 const _moonOverlayAt = (st, pq, pal) => {
-  const { mx, my } = moonPos(pq, pal);
-  const d = Math.round(5 * pq.S) * 2 + 4; // ~ the moon's diameter (+ a hair)
-  return { x: mx, y: my, scale: d / (71 * (pq.assets?.artScale || 1)) }; // 71 = overlay frameW
+  const m = moonPos(pq, pal); // baked-moon aware: position AND size
+  const d = (m.r || Math.round(5 * pq.S)) * 2 + 4; // the moon's diameter (+ a hair)
+  return { x: m.mx, y: m.my, scale: d / (71 * (pq.assets?.artScale || 1)) }; // 71 = overlay frameW
 };
 const CAMEO_SPRITES = {
   // sky — floating silhouettes, center-anchored
@@ -3285,6 +3304,15 @@ for (const [id, s] of Object.entries(CAMEO_SPRITES)) {
   d.assetScale = s.scale;
   d.assetAnchor = s.anchor;
   if (s.drawExtra) d.drawExtra = s.drawExtra;
+}
+
+// Moon-anchored cameos only make sense when there's actually a moon on screen
+// (a sky plate may have its moon scrolled off, or none at all — neon-forest).
+for (const id of ["disco_moon", "record_moon", "moon_face_wink", "bicycle_moon", "winged_moon_shadow"]) {
+  const d = PIXEL_EVENTS.find((e) => e.id === id);
+  if (!d) continue;
+  const prev = d.when;
+  d.when = (pq, a, m) => hasVisibleMoon(pq) && (!prev || prev(pq, a, m));
 }
 
 // ------------------------------------------------------------ future library

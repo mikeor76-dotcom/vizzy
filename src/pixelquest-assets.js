@@ -245,6 +245,18 @@ export const PARALLAX_MANIFEST = {
   ],
 };
 
+// Baked full-moon position inside each biome's sky backdrop (plate pixels,
+// measured by scripts/fix-moon.mjs blob detection). Lets moon-anchored cameos
+// (disco/record/wink overlays, moon flybys) track the REAL on-screen moon when
+// the imported sky replaces the procedural one. Neon-forest's plate has no
+// moon, so it's absent — moon cameos skip that biome.
+const BAKED_MOON = {
+  "meadow-road": { x: 492, y: 82, r: 21 },
+  "moonlit-town": { x: 432, y: 73, r: 33 },
+  "arcade-ruins": { x: 243, y: 98, r: 27 },
+  "castle-approach": { x: 669, y: 116, r: 31 },
+};
+
 // Per-biome prop placement recipes for the PropField (world-anchored spans;
 // only activates for props whose sheets are READY, so today with only the
 // baked lantern demo it stays quiet unless renderMode uses it).
@@ -710,6 +722,25 @@ export class AssetStore {
   hasBackdrop(biome) {
     const layers = PARALLAX_MANIFEST[biome] || [];
     return layers.some((ld, i) => ld.backdrop && this.parallax[`${biome}/${i}`]?.status === "ready");
+  }
+  // On-screen position {mx,my,r[,offscreen]} of the biome's BAKED moon (in its
+  // sky plate), or null when the plate isn't ready / has no moon. Mirrors
+  // drawParallax's transform exactly (artScale + factor-scroll + tiling).
+  moonScreenPos(biome, scrollX, pw) {
+    const bm = BAKED_MOON[biome];
+    if (!bm) return null;
+    const layers = PARALLAX_MANIFEST[biome] || [];
+    const i = layers.findIndex((ld) => ld.layer === "sky");
+    const rec = i >= 0 ? this.parallax[`${biome}/${i}`] : null;
+    if (!rec || rec.status !== "ready") return null;
+    const as = this.artScale ?? 1;
+    const w = Math.max(1, Math.round(rec.img.width * as));
+    const off = ((Math.round(scrollX * rec.def.factor) % w) + w) % w;
+    const r = Math.max(2, Math.round(bm.r * as));
+    let mx = Math.round(bm.x * as) - off;
+    if (mx < -r) mx += w; // the next tile instance to the right
+    const my = Math.round(bm.y * as);
+    return mx > pw + r ? { mx, my, r, offscreen: true } : { mx, my, r };
   }
   // draw all ready plates of a biome in a given layer
   drawParallaxLayer(o, biome, layer, scrollX, pw, groundBase) {

@@ -20,14 +20,14 @@ const W = info.width, H = info.height;
 const px = (x, y) => (y * W + x) * 4;
 
 // ---- 1) mask: bright blue-ish pixels in the upper-left sky quarter ---------
-const rx0 = Math.floor(W * 0.18), rx1 = Math.floor(W * 0.45);
-const ry0 = 0, ry1 = Math.floor(H * 0.4);
+const rx0 = Math.floor(W * 0.08), rx1 = Math.floor(W * 0.9);
+const ry0 = 0, ry1 = Math.floor(H * 0.42);
 const mask = new Uint8Array(W * H);
 for (let y = ry0; y < ry1; y++)
   for (let x = rx0; x < rx1; x++) {
     const i = px(x, y), r = data[i], g = data[i + 1], b = data[i + 2];
-    const lum = (r + g + b) / 3;
-    if (lum > 105 && b >= r - 8) mask[y * W + x] = 1;
+    const lum = (r + g + b) / 3; // bright = moon (cool OR warm); clouds sit well below
+    if (lum > 105) mask[y * W + x] = 1;
   }
 // keep only the LARGEST connected component (stars are tiny separate blobs)
 const label = new Int32Array(W * H).fill(-1);

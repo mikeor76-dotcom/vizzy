@@ -431,6 +431,14 @@ export class PixelQuest {
         ax += 300 + rnd() * 340;
       }
     }
+    // no doubled-up lights: attractions carry their own light (lit windows,
+    // campfires, lamps), and the biome gate glows too — drop any lamppost that
+    // landed beside one (all placed at the same 0.7 parallax, so world distance
+    // IS screen distance and this cull is exact)
+    const ringDist = (a, b) => { const d = Math.abs(a - b) % this.worldLen; return Math.min(d, this.worldLen - d); };
+    this.torches = this.torches.filter(
+      (t) => this.attractions.every((a) => ringDist(t.x, a.x) > 46) && ringDist(t.x, this.landmarkX) > 60
+    );
     this.dog = null;
     this.dogTimer = 18 + Math.random() * 30;
 
@@ -893,6 +901,17 @@ export class PixelQuest {
     }
   }
 
+  // soft radial lamp glow: three stacked pixel discs (dim wide → bright core).
+  // Replaces the old single translucent SQUARES that read as "lit boxes".
+  glowDisc(o, cx, cy, r, rgb, a) {
+    o.fillStyle = this.col(rgb, Math.min(1, a * 0.35));
+    this.pixelDisc(o, cx, cy, r);
+    o.fillStyle = this.col(rgb, Math.min(1, a * 0.5));
+    this.pixelDisc(o, cx, cy, Math.max(1, Math.round(r * 0.66)));
+    o.fillStyle = this.col(rgb, Math.min(1, a * 0.7));
+    this.pixelDisc(o, cx, cy, Math.max(1, Math.round(r * 0.36)));
+  }
+
   mtHeight(wx, amp, jag, seedPh) {
     return (
       amp * (0.55 + 0.45 * Math.sin(wx * 0.021 + seedPh)) +
@@ -1215,18 +1234,16 @@ export class PixelQuest {
     if (biome === "arcade-ruins") return this.drawCampfireCabinet(o, pal, x, gy);
     if (biome === "castle-approach") return this.drawCampfireBrazier(o, pal, x, gy);
     if (this.useAssets() && this.assets.ready("campfire")) {
-      // warm glow pool + rising embers layered live on the imported campfire
-      o.fillStyle = this.col(pal.torch, 0.08 + this.bass.value * 0.05 + this.kickPulse * 0.13);
-      o.fillRect(x - 6, gy - 11, 16, 11);
+      // warm radial glow + rising embers layered live on the imported campfire
+      this.glowDisc(o, x + 2, gy - 5, 8, pal.torch, 0.08 + this.bass.value * 0.05 + this.kickPulse * 0.13);
       this.assets.drawSprite(o, "campfire", "idle", this.t, x, gy + 1, { anchor: "bottom-center" });
       if (this.particles.length < 90 && Math.random() < 0.04 + this.bass.value * 0.05)
         this.particles.push({ kind: "ember", x: x + 1, y: gy - 8, vx: (Math.random() - 0.5) * 4, vy: -8 - Math.random() * 6, age: 0, life: 0.9 });
       return;
     }
     const fl = 0.5 + 0.5 * Math.sin(this.t * 11 + x) + this.kickPulse;
-    // warm glow pool, pumping on the kick
-    o.fillStyle = this.col(pal.torch, 0.09 + this.bass.value * 0.05 + this.kickPulse * 0.14);
-    o.fillRect(x - 4, gy - 9, 13, 9);
+    // warm radial glow, pumping on the kick
+    this.glowDisc(o, x + 2, gy - 4, 7, pal.torch, 0.09 + this.bass.value * 0.05 + this.kickPulse * 0.14);
     // logs
     o.fillStyle = this.col(pal.trunk);
     o.fillRect(x - 2, gy - 2, 9, 1);
@@ -1251,8 +1268,7 @@ export class PixelQuest {
 
   drawCampfireMushrooms(o, pal, x, gy) {
     const glow = 0.55 + this.bass.value * 0.3 + this.kickPulse * 0.25;
-    o.fillStyle = this.col(pal.torch, 0.08 + glow * 0.08);
-    o.fillRect(x - 4, gy - 8, 13, 8);
+    this.glowDisc(o, x + 2, gy - 4, 7, pal.torch, 0.08 + glow * 0.08);
     for (const [dx, h] of [[0, 5], [4, 7], [8, 4]]) {
       o.fillStyle = this.col(pal.trunk, 0.9);
       o.fillRect(x + dx, gy - h, 2, h);
@@ -1272,8 +1288,8 @@ export class PixelQuest {
     o.fillRect(x, gy - 16, 5, 2); // lamp housing
     o.fillStyle = this.col(pal.torch, 0.5 + flick * 0.5);
     o.fillRect(x + 1, gy - 15, 3, 1); // the light itself
-    o.fillStyle = this.col(pal.torch, 0.06 + flick * 0.1 + this.bass.value * 0.05);
-    o.fillRect(x - 5, gy - 20, 15, 15); // soft pool of lamplight
+    // soft radial pool of lamplight
+    this.glowDisc(o, x + 2, gy - 14, 7, pal.torch, 0.06 + flick * 0.1 + this.bass.value * 0.05);
   }
 
   drawCampfireCabinet(o, pal, x, gy) {
@@ -1286,14 +1302,12 @@ export class PixelQuest {
     o.fillStyle = this.col(pal.torch, 0.3 + this.kickPulse * 0.4);
     o.fillRect(x + 3, gy - 4, 1, 1);
     o.fillRect(x + 5, gy - 4, 1, 1);
-    o.fillStyle = this.col(pal.prop, 0.06 + flick * 0.1);
-    o.fillRect(x - 3, gy - 15, 14, 15);
+    this.glowDisc(o, x + 4, gy - 8, 7, pal.prop, 0.06 + flick * 0.1);
   }
 
   drawCampfireBrazier(o, pal, x, gy) {
     if (this.useAssets() && this.assets.ready("brazier")) {
-      o.fillStyle = this.col(pal.torch, 0.08 + this.bass.value * 0.05 + this.kickPulse * 0.14);
-      o.fillRect(x - 5, gy - 16, 14, 16);
+      this.glowDisc(o, x + 2, gy - 10, 8, pal.torch, 0.08 + this.bass.value * 0.05 + this.kickPulse * 0.14);
       this.assets.drawSprite(o, "brazier", "idle", this.t, x, gy + 1, { anchor: "bottom-center" });
       if (this.particles.length < 90 && Math.random() < 0.04 + this.bass.value * 0.05)
         this.particles.push({ kind: "ember", x: x + 1, y: gy - 12, vx: (Math.random() - 0.5) * 3, vy: -7 - Math.random() * 5, age: 0, life: 0.8 });
@@ -1305,8 +1319,7 @@ export class PixelQuest {
     o.fillRect(x - 1, gy - 7, 5, 2); // bowl
     o.fillStyle = this.col(pal.torch, 0.85);
     o.fillRect(x, gy - 10 - Math.round(fl * 2), 3, 3 + Math.round(fl * 2));
-    o.fillStyle = this.col(pal.torch, 0.09 + this.bass.value * 0.05 + this.kickPulse * 0.14);
-    o.fillRect(x - 5, gy - 15, 13, 15);
+    this.glowDisc(o, x + 1, gy - 9, 7, pal.torch, 0.09 + this.bass.value * 0.05 + this.kickPulse * 0.14);
     if (this.particles.length < 90 && Math.random() < 0.04 + this.bass.value * 0.05) {
       this.particles.push({ kind: "ember", x: x + 1, y: gy - 10, vx: (Math.random() - 0.5) * 3, vy: -7 - Math.random() * 5, age: 0, life: 0.8 });
     }
@@ -1433,9 +1446,8 @@ export class PixelQuest {
       const alive2 = 1 + (this.adventure?.orb?.charge || 0) * 0.5;
       const glow2 = (this.bass.value * 0.35 + this.torchFlare * 1.1) * alive2;
       this.assets.drawSprite(o, "lantern", "lit", this.t + ph, x, gy + 1);
-      // halo + road pool + embers stay live-reactive on top of the art
-      o.fillStyle = this.col(pal.torch, (0.07 + glow2 * 0.12) * alive2);
-      o.fillRect(x + 2 - Math.round(glow2), gy - Math.round(16 * this.S * 0.7) - Math.round(glow2), 11 + Math.round(glow2) * 2, 11 + Math.round(glow2) * 2);
+      // radial halo + road pool + embers stay live-reactive on top of the art
+      this.glowDisc(o, x + 7, gy - Math.round(16 * this.S * 0.7) + 6, 6 + Math.round(glow2 * 2), pal.torch, (0.07 + glow2 * 0.12) * alive2);
       o.fillStyle = this.col(pal.torch, (0.06 + glow2 * 0.08) * alive2);
       o.fillRect(x + 1, gy - 1, 9, 2);
       if (this.cfg.renderMode === "asset_showcase")
@@ -1472,9 +1484,8 @@ export class PixelQuest {
     o.fillRect(lx - 1, ly + 1, 3, 3);
     o.fillStyle = "rgba(255,240,200,0.95)";
     o.fillRect(lx, ly + 2, 1, 1 + Math.round(flick * 0.9)); // the flame
-    // stepped halo around the lantern
-    o.fillStyle = this.col(pal.torch, (0.07 + glow * 0.12) * alive);
-    o.fillRect(lx - 5 - Math.round(glow), ly - 3 - Math.round(glow), 11 + Math.round(glow) * 2, 11 + Math.round(glow) * 2);
+    // radial halo around the lantern
+    this.glowDisc(o, lx, ly + 2, 6 + Math.round(glow), pal.torch, (0.07 + glow * 0.12) * alive);
     // pool of light on the road beneath
     o.fillStyle = this.col(pal.torch, (0.06 + glow * 0.08) * alive);
     o.fillRect(lx - 4, gy - 1, 9, 2);
@@ -2597,14 +2608,15 @@ export class PixelQuest {
   }
 
   // Debug page 2 — per-event asset status for every cameo / easter egg.
-  // An event is "image" once its def names an `asset` sprite that is loaded,
-  // "missing" if it names one that failed to load, else "procedural".
+  // "image" = drawn from a loaded sprite; "missing" = names a sprite that
+  // failed to load (a real gap); "fx" = procedural BY DESIGN (hero-costume
+  // motions reusing accessory art, weather/light effects) — not missing art.
   drawDebugEggs(ctx, w, h) {
-    const G = "rgba(90,230,120,1)", A = "rgba(255,200,90,1)", R = "rgba(255,90,90,1)";
+    const G = "rgba(90,230,120,1)", A = "rgba(255,200,90,1)", B = "rgba(120,180,255,0.95)";
     const defs = (this.events && this.events.defs) || [];
-    const stateOf = (d) => (d.asset && this.assets.ready(d.asset)) ? "img" : (d.asset ? "miss" : "proc");
-    const colOf = (s) => (s === "img" ? G : s === "miss" ? A : R);
-    const wordOf = (s) => (s === "img" ? "image" : s === "miss" ? "missing" : "proc");
+    const stateOf = (d) => (d.asset && this.assets.ready(d.asset)) ? "img" : (d.asset ? "miss" : "fx");
+    const colOf = (s) => (s === "img" ? G : s === "miss" ? A : B);
+    const wordOf = (s) => (s === "img" ? "image" : s === "miss" ? "missing" : "fx");
 
     ctx.save();
     ctx.fillStyle = "rgba(6,9,16,0.96)"; ctx.fillRect(0, 0, w, h);
@@ -2617,7 +2629,7 @@ export class PixelQuest {
     ctx.font = "12px monospace";
     ctx.fillStyle = G; ctx.fillText(`● ${nImg} image`, 300, 20);
     ctx.fillStyle = A; ctx.fillText(`● ${nMiss} missing`, 392, 20);
-    ctx.fillStyle = R; ctx.fillText(`● ${nProc} procedural`, 500, 20);
+    ctx.fillStyle = B; ctx.fillText(`● ${nProc} live fx (by design)`, 500, 20);
     ctx.fillStyle = "rgba(150,160,185,0.9)"; ctx.textAlign = "right";
     ctx.fillText("page 2/2  ← →  ·  D close", w - 18, 20); ctx.textAlign = "left";
 

@@ -329,7 +329,8 @@ export class OrbCompanion {
     }
     this._rs = { x, y, hue, sc, bright: this.bright, charge: this.charge, flare: this.absorbFlash,
                  arriving: arrival?.phase === "arriving", destX, destY,
-                 bass, mids, tre, energy, ring: this._ring, beat: pq.kickPulse || 0 };
+                 bass, mids, tre, energy, ring: this._ring, beat: pq.kickPulse || 0,
+                 melody: pq.melodyPulse || 0 };
   }
 
   // Full-resolution overlay: the orb, its soft glow and trail, drawn on the real
@@ -395,14 +396,16 @@ export class OrbCompanion {
       ctx.beginPath(); ctx.arc(dx - coreR * 0.25, dy - coreR * 0.25, coreR * 0.3, 0, TAU); ctx.fill();
     }
 
-    // ORB METER — inner swirl (mids/melody): two faint arcs orbiting the core
-    const mids = r.mids || 0;
-    if (mids > 0.08) {
-      const swR = (3.2 + mids * 3) * r.sc * scale;
-      ctx.lineWidth = 1 * scale;
+    // ORB METER — inner swirl: two faint arcs orbiting the core, riding the
+    // mids level and FLARING on each melody onset (the orb's "heart" answers
+    // the lead line while its body keeps the bassline)
+    const mids = r.mids || 0, mel = r.melody || 0;
+    if (mids > 0.08 || mel > 0.1) {
+      const swR = (3.2 + mids * 3 + mel * 1.5) * r.sc * scale;
+      ctx.lineWidth = (1 + mel * 0.8) * scale;
       for (let k = 0; k < 2; k++) {
-        const a0 = pq.t * (1.4 + mids * 2) + k * Math.PI;
-        ctx.strokeStyle = `hsla(${hue + 8},95%,84%,${clamp01(0.12 + mids * 0.4)})`;
+        const a0 = pq.t * (1.4 + mids * 2 + mel * 2.5) + k * Math.PI;
+        ctx.strokeStyle = `hsla(${hue + 8},95%,84%,${clamp01(0.12 + mids * 0.35 + mel * 0.4)})`;
         ctx.beginPath(); ctx.arc(dx, dy, swR, a0, a0 + Math.PI * 0.7); ctx.stroke();
       }
     }

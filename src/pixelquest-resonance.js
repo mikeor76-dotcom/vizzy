@@ -99,9 +99,9 @@ export class SongSection {
 
 // ---------------------------------------------------------------------------
 // Songstream — music-light flowing through the air toward the orb.
-//   mote  : ambient glowing energy speck  (energy + melody level → density)
-//   note  : a tiny eighth-note glyph      (RHYTHM-BORN ONLY: kicks launch 2-4
-//           from the ground, snares drop one from the air — never random)
+//   mote  : ambient glowing energy speck  (energy + mids level → density)
+//   note  : a tiny eighth-note glyph      (MELODY-BORN ONLY: each melody onset
+//           launches 2-3 from the ground — never random, never drums)
 //   spark : a firefly twinkle             (highs/transients → rate)
 //   ribbon: a soft golden/blue streamer   (sustained mids → rare, thicker)
 // Spawns across the WHOLE screen — left and right — so everything visibly
@@ -154,15 +154,17 @@ export class Songstream {
 
     // ---- spawn ----
     if (alive > 0.02) {
-      // NOTES ARE RHYTHM-BORN, PERIOD: a note glyph only ever appears on a
-      // kick (2-4, launching from the ground ACROSS THE WHOLE SCREEN, left and
-      // right, all converging on the orb) or a snare (one from the air). No
-      // random trickle — if you see a note, the song just did something.
+      // NOTES ARE THE MELODY: a note glyph only ever appears on a melody onset
+      // (the lead line / vocal moving — pq.melodyHit), launching from the
+      // ground ACROSS THE WHOLE SCREEN, left and right, all converging on the
+      // orb. The orb keeps the bassline (halo + heartbeat); the notes' shared
+      // shimmer still throbs softly to the kick, so melody-born notes visibly
+      // dance to the groove. In drum-only passages notes go quiet — honest.
       const bornNote = (x, y, vy) => {
-        // FIXED TRAVEL TIME: every note reaches the orb ~1.4s after its beat,
-        // however far away it was born — so each beat's cohort of notes zips in
-        // and ARRIVES together, and nothing from a previous bar lingers around
-        // to muddy which notes are new.
+        // FIXED TRAVEL TIME: every note reaches the orb ~1.4s after its onset,
+        // however far away it was born — each phrase's cohort zips in and
+        // ARRIVES together, and nothing from a previous bar lingers around to
+        // muddy which notes are new.
         const d0 = Math.hypot(target.x - x, target.y - y);
         const T = 1.3 + Math.random() * 0.4;
         this.parts.push({
@@ -171,18 +173,14 @@ export class Songstream {
           big: section.state === "chorus" && Math.random() < 0.35, // chorus hero-notes
         });
       };
-      if (pq.kickHit) {
-        const n = Math.min(4, 2 + ((pq.driveFx || 0) > 0.6 ? 1 : 0) + (section.state === "chorus" ? 1 : 0));
+      if (pq.melodyHit) {
+        const n = Math.min(3, 2 + (section.state === "chorus" ? 1 : 0));
         for (let i = 0; i < n && this.parts.length < B.motes; i++) {
           const x = pq.pw * 0.04 + Math.random() * pq.pw * 0.92; // full width, both sides of the orb
           if (Math.abs(x - target.x) < 20) continue; // not right on top of the orb
           const gy = pq.groundY(Math.max(0, Math.min(pq.pw - 1, Math.round(x)))) - 2;
           bornNote(x, gy, -16);
         }
-      }
-      if (pq.snareHit && this.parts.length < B.motes) {
-        const x = pq.pw * 0.1 + Math.random() * pq.pw * 0.85;
-        bornNote(x, lerp(pq.ph * 0.22, pq.ph * 0.5, Math.random()), -6);
       }
       // ambient motes carry the continuous energy + melody level (the old
       // random NOTE trickle lives here now, as plain motes)

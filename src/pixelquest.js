@@ -506,6 +506,31 @@ export class PixelQuest {
     if (kickHit && (!snareHit || bassFluxN >= midFluxN * 0.9)) this.onKick();
     if (snareHit && (!kickHit || midFluxN > bassFluxN * 0.9)) this.onSnare();
 
+    // MELODY onsets: a rising edge in the mid-band LEVEL that HOLDS for ~100ms
+    // — the lead line / vocal moving. Sustain is what separates melody from
+    // percussion: a snare spikes the same band but falls straight back, so the
+    // pending onset cancels itself; a held note confirms. A short cooldown caps
+    // the rate at roughly 16th notes so arpeggios don't machine-gun. Drives the
+    // Songstream's note births (melody = notes; the orb keeps the bassline).
+    this._melodyCd = (this._melodyCd || 0) - dt;
+    const midsLvl = this.mids.value;
+    const midsRise = midsLvl - (this._prevMidsLvl ?? midsLvl);
+    this._prevMidsLvl = midsLvl;
+    this.melodyHit = false; // one-frame flag, consumed by World Resonance
+    if (this._melodyPend) {
+      this._melodyPend.t -= dt;
+      if (midsLvl < this._melodyPend.base + 0.02) this._melodyPend = null; // fell back — percussive
+      else if (this._melodyPend.t <= 0) {
+        this._melodyPend = null; // held — a real melody onset
+        this.melodyHit = true;
+        this.melodyPulse = 1;
+        this._melodyCd = 0.14;
+      }
+    } else if (analyser && midsRise > 0.035 && midsLvl > 0.18 && this._melodyCd <= 0 && (this.gate || 0) > 0.3) {
+      this._melodyPend = { t: 0.1, base: midsLvl - midsRise * 0.5 };
+    }
+    this.melodyPulse = (this.melodyPulse || 0) * Math.exp(-dt * 6);
+
     // rolling ground swells: grouped low bins, blurred, glided over time
     const gp = this.groundPts;
     const rawG = this._rawG; // reused scratch buffer (no per-frame alloc)
@@ -913,6 +938,66 @@ export class PixelQuest {
     for (let dy = -r; dy <= r; dy++) {
       const half = Math.floor(Math.sqrt(r * r - dy * dy));
       o.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
+    }
+  }
+
+  // MOON BASS-HALO (World Resonance): the biggest object in the sky becomes a
+  // live bass meter — a soft breathing glow around the BAKED moon (we know its
+  // exact screen position via moonScreenPos) that swells with the low end and
+  // blooms on kicks. The procedural sky already draws its own moon glow.
+  drawMoonHalo(o, pal) {
+    const m = this.assets.moonScreenPos?.(this.currentBiome().name, this.scrollX, this.pw);
+    if (!m || m.offscreen) return;
+    const a = (0.05 + this.bass.value * 0.15 + this.kickPulse * 0.12) * (this.gate || 0);
+    if (a <= 0.025) return;
+    const g = Math.round(3 + this.bass.value * 7 + this.kickPulse * 5);
+    o.fillStyle = this.col(pal.moon, Math.min(0.16, a * 0.5));
+    this.pixelDisc(o, m.mx, m.my, m.r + g + Math.round(g * 0.9));
+    o.fillStyle = this.col(pal.moon, Math.min(0.3, a));
+    this.pixelDisc(o, m.mx, m.my, m.r + g);
+  }
+
+  // AURORA SPECTRUM (World Resonance): the night sky itself is the analyzer —
+  // a soft aurora curtain across the upper sky whose ribbon heights are
+  // per-band FFT energy (log-spread, time-smoothed), undulating slowly.
+  // Faint shimmer when calm, a full curtain at the chorus. Diegetic northern
+  // lights, unmistakably a spectrum. Cheap: two fills per column.
+  drawAurora(o, pal, dt) {
+    if (!this._aur) this._aur = new Float32Array(18);
+    const B = this._aur.length;
+    for (let i = 0; i < B; i++) {
+      // log-ish band spread over the useful bins (2..342)
+      const lo = Math.round(2 + Math.pow(i / B, 1.6) * 340);
+      const hi = Math.max(lo + 1, Math.round(2 + Math.pow((i + 1) / B, 1.6) * 340));
+      let s = 0;
+      for (let k = lo; k < hi; k++) s += this.freq[k];
+      const v = Math.min(1, (s / ((hi - lo) * 255)) * this.gain * 1.25);
+      // fast attack, slow release — ribbons leap with the music, settle gently
+      this._aur[i] += (v - this._aur[i]) * Math.min(1, dt * (v > this._aur[i] ? 10 : 2.2));
+    }
+    const sec = this.resonance?.section;
+    const vis = (sec?.intensity || 0) * (0.3 + (sec?.profile?.bright || 1) * 0.4) * (this.gate || 0);
+    if (vis <= 0.04) return;
+    const { pw } = this;
+    const y0 = Math.round(19 * this.S); // curtain hem line, upper sky
+    const rise = 14 * this.S; // max ribbon height above the hem
+    const step = this.cfg.detail === "pi_safe" ? 3 : 2;
+    for (let x = 0; x < pw; x += step) {
+      // smoothstep between band EMAs + a slow traveling undulation
+      const u = (x / pw) * (B - 1);
+      const i0 = Math.min(B - 2, Math.floor(u));
+      const f = u - i0, sm = f * f * (3 - 2 * f);
+      const bandV = this._aur[i0] + (this._aur[i0 + 1] - this._aur[i0]) * sm;
+      const wob = 0.7 + 0.3 * Math.sin(x * 0.045 + this.t * 1.1);
+      const v = Math.min(1, bandV * wob * 1.15);
+      if (v < 0.06) continue;
+      const h = Math.max(2, Math.round(v * rise));
+      const yTop = y0 - h;
+      // curtain body: teal-violet, dim — then the classic bright green hem
+      o.fillStyle = `rgba(110,200,235,${(0.05 + v * 0.1) * vis})`;
+      o.fillRect(x, yTop, step, h);
+      o.fillStyle = `rgba(130,255,190,${(0.12 + v * 0.24) * vis})`;
+      o.fillRect(x, y0 - Math.max(1, h >> 2), step, Math.max(1, h >> 2));
     }
   }
 
@@ -2366,6 +2451,8 @@ export class PixelQuest {
     o.fillStyle = "rgb(4,4,8)";
     o.fillRect(0, -2, pw, ph + 4);
     this.drawSky(o, pal);
+    this.drawAurora(o, pal, dt); // the sky IS the spectrum (World Resonance)
+    this.drawMoonHalo(o, pal); // the moon breathes with the bass
     this.adventure.draw(o, pal, "destination"); // far-background silhouette
     this.events.draw(o, pal, "sky");
     this.drawMountains(o, pal);

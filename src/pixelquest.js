@@ -1511,12 +1511,29 @@ export class PixelQuest {
     o.fillStyle = "rgba(7,6,12,0.88)";
     for (const p of this.fgPlants) {
       const sx = Math.round((((p.x - off) % L) + L) % L);
-      if (sx < -8 || sx > this.pw + 8) continue;
+      if (sx < -10 || sx > this.pw + 10) continue;
       const sway = Math.sin(this.t * 1.2 + p.ph) * this.mids.value * 1.5;
+      // a low mound the blades grow from, so the tuft reads as one clump
+      // (the old version drew bare 1px bars with staircase heights — barcode
+      // lines, not grass)
+      const tw = p.blades * 2 + 2;
+      o.fillRect(sx - 1, baseY, tw, 2);
+      o.fillRect(sx, baseY - 1, tw - 2, 1);
+      const mid = (p.blades - 1) / 2;
       for (let b = 0; b < p.blades; b++) {
-        const h = Math.round((4 + b * 2) * p.s * this.S * 0.55);
-        const bx = sx + b * 2 + Math.round(sway * (b % 2 ? 1 : -0.5));
-        o.fillRect(bx, baseY - h, 1, h + 2);
+        // arched heights (tallest near the clump's middle) + a per-blade hash
+        // so no two tufts match; blades fan outward and curve as they rise
+        const arch = 1 - Math.abs(b - mid) / (mid + 1);
+        const hv = ((Math.abs(Math.round(p.x)) * 31 + b * 17) % 7) / 7;
+        const h = Math.round((3 + arch * 5 + hv * 4) * p.s * this.S * 0.55);
+        const bx = sx + b * 2;
+        const lean = (b < mid ? -1 : b > mid ? 1 : 0) * (1 + (hv > 0.6 ? 1 : 0));
+        const swayPx = sway * (b % 2 ? 1 : -0.5);
+        const seg = Math.max(1, Math.round(h / 3));
+        for (let k = 0; k < 3; k++) {
+          const xo = Math.round(lean * (k / 2) + swayPx * (k / 2));
+          o.fillRect(bx + xo, baseY - seg * (k + 1), 1, seg + (k === 0 ? 2 : 1));
+        }
       }
     }
   }

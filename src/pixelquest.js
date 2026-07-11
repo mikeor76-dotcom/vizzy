@@ -603,9 +603,13 @@ export class PixelQuest {
     // quiet passages of a playing song never read as silence. Opens fast,
     // closes slowly (~2s of true quiet before he stops).
     this.rmsPeak = Math.max((this.rmsPeak || 0.01) * (1 - dt * 0.03), rms, 0.008);
-    // 5% of recent peak: quiet bars and breakdowns stay comfortably above
-    // it, mic noise stays under. Closes over ~4s so a lull never stalls him.
-    const gateT = rms > Math.max(0.006, this.rmsPeak * 0.05) ? 1 : 0;
+    // Two conditions: loud enough (vs the mic's own recent peak, with an
+    // absolute floor), AND musically shaped — ambient room noise is rumble +
+    // hiss with almost no RAW mid-band content, while any actual music (or
+    // voice) always carries mids. Without the second test, HVAC/traffic rumble
+    // through a hot mic kept the world grooving in a silent room.
+    const rawMidHi = band(11, 372); // NO adaptive gain — absolute content above the rumble
+    const gateT = rms > Math.max(0.01, this.rmsPeak * 0.05) && rawMidHi > 0.016 ? 1 : 0;
     this.gate = (this.gate || 0) + (gateT - (this.gate || 0)) * Math.min(1, dt * (gateT ? 6 : 0.45));
     let driveT = clamp01(rateN * 0.4 + flux * 0.3 + this.loud.value * 0.15 + tempoNudge * 0.15) * this.gate;
     // while music is playing he never stops dead — at worst a steady walk

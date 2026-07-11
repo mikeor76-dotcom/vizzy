@@ -221,15 +221,17 @@ export class OrbCompanion {
     // a quick flare each time it swallows a fragment — the companion visibly
     // "brightens when absorbing", so the collection reads as the orb's doing
     this.absorbFlash = 0;
-    // a short light trail behind it (fixed slots — zero per-frame allocation)
+    // a short light trail behind it (fixed slots — zero per-frame allocation);
+    // its drawn length scales with SUSTAINED energy (the Orb Meter's tail)
     this._trail = [
-      { x: 0, y: 0 },
-      { x: 0, y: 0 },
-      { x: 0, y: 0 },
-      { x: 0, y: 0 },
+      { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 },
+      { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 },
     ];
     this._trailT = 0;
     this._trailI = 0;
+    // Orb Meter: a short "ring burst" fired on transients (kick/snare edge)
+    this._ring = 0;
+    this._prevTransient = 0;
     // full-resolution overlay: a soft glowing note drawn on the real canvas (not
     // the low-res buffer) so it moves smoothly. `_rs` is the per-frame render
     // snapshot; `_img` is an optional high-res soft-glow PNG (procedural glow if
@@ -292,6 +294,14 @@ export class OrbCompanion {
     this.bright += (target - this.bright) * Math.min(1, dt * 5);
     const baseHue = BIOME_ORB_HUE[pq.currentBiome?.()?.name] ?? 42;
     const hue = baseHue + mood.energy * 30;
+    // Orb Meter audio taps: bass→halo, mids→inner swirl, highs→sparkles,
+    // energy→trail length, transient→ring burst.
+    const bass = pq.bass?.value || 0, mids = pq.mids?.value || 0;
+    const tre = pq.treble?.value || 0, energy = pq.energy || 0;
+    const transient = Math.max(pq.kickPulse || 0, pq.snarePulse || 0);
+    if (transient > 0.6 && this._prevTransient < 0.45) this._ring = 1;
+    this._prevTransient = transient;
+    this._ring = Math.max(0, this._ring - dt * 2.4);
     // trail history (float positions; rendered smoothly in the overlay)
     this._trailT += dt;
     if (this._trailT > 0.05) {
@@ -301,7 +311,8 @@ export class OrbCompanion {
       this._trail[this._trailI].y = y;
     }
     this._rs = { x, y, hue, sc, bright: this.bright, charge: this.charge, flare: this.absorbFlash,
-                 arriving: arrival?.phase === "arriving", destX, destY };
+                 arriving: arrival?.phase === "arriving", destX, destY,
+                 bass, mids, tre, energy, ring: this._ring };
   }
 
   // Full-resolution overlay: the orb, its soft glow and trail, drawn on the real
@@ -319,8 +330,8 @@ export class OrbCompanion {
     ctx.save();
     ctx.imageSmoothingEnabled = true;
 
-    // soft fading trail behind the orb
-    const trailN = Math.min(this._trail.length, 2 + Math.round(r.charge * 3));
+    // soft fading trail behind the orb — length grows with SUSTAINED energy
+    const trailN = Math.min(this._trail.length, 2 + Math.round(r.charge * 2 + (r.energy || 0) * 3));
     for (let i = 1; i <= trailN; i++) {
       const s = this._trail[(this._trailI - i + this._trail.length * 2) % this._trail.length];
       if (!s.x) continue;
@@ -334,9 +345,9 @@ export class OrbCompanion {
       ctx.beginPath(); ctx.arc(tx, ty, tr, 0, TAU); ctx.fill();
     }
 
-    // soft biome-hued bloom, breathing with `bright`
-    const bloom = clamp01(0.06 + r.bright * 0.16 + r.charge * 0.06 + r.flare * 0.28);
-    const bloomR = (7 + r.bright * 5 + r.charge * 3 + r.flare * 4) * r.sc * scale;
+    // soft biome-hued bloom, breathing with `bright` — outer HALO swells with BASS
+    const bloom = clamp01(0.06 + r.bright * 0.16 + r.charge * 0.06 + r.flare * 0.28 + (r.bass || 0) * 0.1);
+    const bloomR = (7 + r.bright * 5 + r.charge * 3 + r.flare * 4 + (r.bass || 0) * 7) * r.sc * scale;
     const bg = ctx.createRadialGradient(dx, dy, 0, dx, dy, bloomR);
     bg.addColorStop(0, `hsla(${hue},85%,82%,${bloom})`);
     bg.addColorStop(0.45, `hsla(${hue},80%,66%,${bloom * 0.5})`);
@@ -361,6 +372,37 @@ export class OrbCompanion {
       ctx.beginPath(); ctx.arc(dx, dy, coreR, 0, TAU); ctx.fill();
       ctx.fillStyle = `hsla(${hue},100%,98%,${clamp01(0.65 + r.flare * 0.3)})`; // specular highlight
       ctx.beginPath(); ctx.arc(dx - coreR * 0.25, dy - coreR * 0.25, coreR * 0.3, 0, TAU); ctx.fill();
+    }
+
+    // ORB METER — inner swirl (mids/melody): two faint arcs orbiting the core
+    const mids = r.mids || 0;
+    if (mids > 0.08) {
+      const swR = (3.2 + mids * 3) * r.sc * scale;
+      ctx.lineWidth = 1 * scale;
+      for (let k = 0; k < 2; k++) {
+        const a0 = pq.t * (1.4 + mids * 2) + k * Math.PI;
+        ctx.strokeStyle = `hsla(${hue + 8},95%,84%,${clamp01(0.12 + mids * 0.4)})`;
+        ctx.beginPath(); ctx.arc(dx, dy, swR, a0, a0 + Math.PI * 0.7); ctx.stroke();
+      }
+    }
+    // ORB METER — highs: a scatter of tiny sparkles around the orb
+    const tre = r.tre || 0;
+    if (tre > 0.12) {
+      const n = Math.min(7, Math.round(tre * 8));
+      for (let i = 0; i < n; i++) {
+        const ang = (i / n) * TAU + pq.t * 2 + i * 1.7;
+        const rad = bloomR * (0.7 + ((i * 2654435761) >>> 0) % 100 / 260);
+        const sx = dx + Math.cos(ang) * rad, sy = dy + Math.sin(ang) * rad;
+        ctx.fillStyle = `hsla(${hue + 20},100%,92%,${clamp01(tre * 0.7)})`;
+        ctx.beginPath(); ctx.arc(sx, sy, 0.9 * scale, 0, TAU); ctx.fill();
+      }
+    }
+    // ORB METER — transient ring burst (kick/snare edge): a quick expanding ring
+    if (r.ring > 0.02) {
+      const rr = bloomR * (0.85 + (1 - r.ring) * 1.0);
+      ctx.strokeStyle = `hsla(${hue},95%,86%,${r.ring * 0.5})`;
+      ctx.lineWidth = (1 + r.ring) * scale;
+      ctx.beginPath(); ctx.arc(dx, dy, rr, 0, TAU); ctx.stroke();
     }
 
     // full-charge "ready" ring — a slow, smooth pulse

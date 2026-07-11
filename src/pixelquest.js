@@ -10,6 +10,7 @@ import { PixelQuestEventManager } from "./pixelquest-events.js";
 import { PixelQuestAdventureManager, ADVENTURE_TUNING } from "./pixelquest-adventure.js";
 import { AssetStore, PropField, GlowQueue, PerfMeter, PARALLAX_MANIFEST } from "./pixelquest-assets.js";
 import { PixelQuestOpening } from "./pixelquest-opening.js";
+import { WorldResonance } from "./pixelquest-resonance.js";
 
 const TAU = Math.PI * 2;
 
@@ -321,6 +322,10 @@ export class PixelQuest {
     // Adventure Layer v1: silent mood/orb/destination + a couple of short,
     // mood-gated story beats. Fully additive — see pixelquest-adventure.js.
     this.adventure = new PixelQuestAdventureManager(this);
+    // World Resonance: the diegetic music analyzer (Songstream + Resonance Path
+    // + song-section inference). Reads existing audio features; see
+    // pixelquest-resonance.js. Updated after the mood, drawn in the pipeline.
+    this.resonance = new WorldResonance();
     this.opening = new PixelQuestOpening(this); // cinematic intro (runs before gameplay)
     this.reaction = null; // brief non-verbal cue: lookup/lean/celebrate
     this.adventureCtl = null; // adventure beats can gently slow the world
@@ -1030,7 +1035,10 @@ export class PixelQuest {
       const sx = Math.round((((tr.x - off) % L) + L) % L);
       if (sx < -40 || sx > this.pw + 40) continue;
       const gy = this.groundY(sx) + 1;
-      const sway = Math.round(Math.sin(this.t * (1 + this.mids.value * 2) + tr.x) * this.mids.value * 1.2);
+      // trees sway with BASS (the low-end groove) plus a touch of mids shimmer,
+      // gently amplified in the chorus by the song section
+      const swayAmt = (this.bass.value * 1.6 + this.mids.value * 0.7) * ((this.resonance?.section?.profile?.bright) || 1);
+      const sway = Math.round(Math.sin(this.t * (1 + this.bass.value * 1.5) + tr.x) * swayAmt);
       if (foliageReady) this.assets.drawSprite(o, foliage, "v", 0, sx + sway, gy, { anchor: "bottom-center", frame: tr.variant, scale: tr.s });
       else this.drawTree(o, pal, sx + sway, gy, tr.s * this.S);
     }
@@ -1462,6 +1470,10 @@ export class PixelQuest {
       const gy = this.groundY(Math.max(0, Math.min(this.pw - 1, sx))) + 1;
       const sway = Math.round(Math.sin(this.t * 1.6 + f.ph) * (0.6 + this.mids.value * 1.4));
       const src = now < f._srcGlow; // a fragment just bloomed from here
+      // flowers release a mote of music-light on the highs — the world visibly
+      // feeds the Songstream (rate-limited so it never becomes a fountain)
+      if (f.type === "flower" && this.treble.value > 0.5 && Math.random() < 0.015 + this.treble.value * 0.04)
+        this.resonance.stream.emitAt(this, "spark", sx + sway, gy - 8);
       // ASSET PATH: baked grass/flower sprites; the source-glow + firefly
       // bloom stay procedural on top so they still pulse with the music
       const asset = f.type === "grass" ? "grass" : "flower";
@@ -2094,6 +2106,9 @@ export class PixelQuest {
     // frame's speed calc above and so the one-frame kickHit/snareHit flags
     // are still set when it reads them (the event manager clears them next)
     this.adventure.update(dt);
+    // World Resonance rides on the fresh mood (section inference) + this frame's
+    // audio + the one-frame kickHit/snareHit flags (path pulse-waves/ripples).
+    this.resonance.update(this, this.adventure.mood, dt);
     if (this.reaction) {
       this.reaction.t += dt;
       if (this.reaction.t >= this.reaction.dur) this.reaction = null;
@@ -2203,11 +2218,13 @@ export class PixelQuest {
     this.drawProps(o, pal);
     if (this.useAssets()) this.propField.draw(o, "ground"); // asset props (dormant until recipes+art)
     this.drawTerrain(o, pal);
+    this.resonance.drawGround(o, pal); // Resonance Path: bass glow travelling along the surface
     this.drawFlora(o, pal); // path-edge grass + glowing flowers (fragment sources)
     this.events.draw(o, pal, "ground");
     this.updateDog(o, pal, dt, speed);
     this.drawHero(o, pal);
     this.adventure.draw(o, pal, "encounter-fg"); // encounters in front of hero (guardian, owl, rival)
+    this.resonance.drawStream(o, pal); // Songstream: music-light flowing through the air to the orb
     this.adventure.drawFragments(o, pal); // Sound Fragments, drifting toward the orb
     this.adventure.drawOrb(o, pal); // orb: updates motion/charge/trail here; BODY draws on the overlay below
     this.drawParticles(o, pal, dt);

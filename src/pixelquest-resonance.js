@@ -159,9 +159,15 @@ export class Songstream {
       // right, all converging on the orb) or a snare (one from the air). No
       // random trickle — if you see a note, the song just did something.
       const bornNote = (x, y, vy) => {
+        // FIXED TRAVEL TIME: every note reaches the orb ~1.4s after its beat,
+        // however far away it was born — so each beat's cohort of notes zips in
+        // and ARRIVES together, and nothing from a previous bar lingers around
+        // to muddy which notes are new.
+        const d0 = Math.hypot(target.x - x, target.y - y);
+        const T = 1.3 + Math.random() * 0.4;
         this.parts.push({
           type: "note", x, y, vx: 0, vy, age: 0,
-          life: 2.8 + Math.random() * 1.2, ph: Math.random() * TAU, seed: Math.random(),
+          life: T + 0.35, spd: d0 / T, ph: Math.random() * TAU, seed: Math.random(),
           big: section.state === "chorus" && Math.random() < 0.35, // chorus hero-notes
         });
       };
@@ -213,7 +219,8 @@ export class Songstream {
       p.age += dt;
       const dx = target.x - p.x, dy = target.y - p.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const cruise = (14 + energy * 26) * spd; // px/s toward the orb
+      // notes carry their own fixed-travel-time speed; ambient motes/sparks cruise
+      const cruise = p.spd || (14 + energy * 26) * spd; // px/s toward the orb
       p.x += ((dx / dist) * cruise + (p.vx || 0)) * dt + Math.cos(p.age * 3 + p.ph) * 7 * dt;
       p.y += ((dy / dist) * cruise + (p.vy || 0)) * dt + Math.sin(p.age * 2.4 + p.ph) * 7 * dt;
       const k = Math.exp(-dt * 2.2);
@@ -272,22 +279,35 @@ export class Songstream {
         o.fillStyle = `rgba(255,250,220,${a})`;
         o.fillRect(x, y, 1, 1);
         if (a > 0.55) { o.fillStyle = `rgba(255,250,220,${a * 0.5})`; o.fillRect(x - 1, y, 3, 1); o.fillRect(x, y - 1, 1, 3); }
-      } else if (p.type === "note" && p.big) {
-        // chorus hero-note: a bigger glyph that reads from across the room.
-        // Glow is a soft DISC (never a rectangle — boxes read as tiles).
-        o.fillStyle = `rgba(${halo},${a * 0.28})`;
-        pq.pixelDisc(o, x + 1, y - 2, 4);
-        o.fillStyle = `rgba(${STREAM_ENERGY},${a})`;
-        o.fillRect(x, y, 3, 3); // head
-        o.fillRect(x + 3, y - 6, 1, 8); // stem
-        o.fillRect(x + 3, y - 6, 3, 1); // flag
-        o.fillRect(x + 3, y - 5, 2, 1); // flag taper
       } else if (p.type === "note") {
-        // bare glyph — bright enough on the night sky without any backing halo
-        o.fillStyle = `rgba(${STREAM_ENERGY},${a})`;
-        o.fillRect(x, y, 2, 2); // head
-        o.fillRect(x + 2, y - 4, 1, 6); // stem (taller — legible at wall distance)
-        o.fillRect(x + 2, y - 4, 2, 1); // flag
+        // BIRTH POP: a fresh note flashes in bright with a quick expanding halo
+        // for its first ~0.3s, so the moment the beat lands is unmistakable —
+        // and you always know which notes are NEW vs. leftovers in flight.
+        const born = Math.max(0, 1 - p.age / 0.3);
+        if (born > 0.1) {
+          o.fillStyle = `rgba(${halo},${born * 0.35})`;
+          pq.pixelDisc(o, x + 1, y - 1, 2 + Math.round((1 - born) * 3));
+        }
+        const aa = clamp01(a + born * 0.6);
+        if (p.big) {
+          // chorus hero-note: a bigger glyph that reads from across the room.
+          // Glow is a soft DISC (never a rectangle — boxes read as tiles).
+          o.fillStyle = `rgba(${halo},${a * 0.28})`;
+          pq.pixelDisc(o, x + 1, y - 2, 4);
+          o.fillStyle = `rgba(${STREAM_ENERGY},${aa})`;
+          o.fillRect(x, y, 3, 3); // head
+          o.fillRect(x + 3, y - 6, 1, 8); // stem
+          o.fillRect(x + 3, y - 6, 3, 1); // flag
+          o.fillRect(x + 3, y - 5, 2, 1); // flag taper
+          if (born > 0.15) { o.fillStyle = `rgba(255,255,255,${born * 0.9})`; o.fillRect(x, y, 3, 3); }
+        } else {
+          // bare glyph — bright enough on the night sky without a backing halo
+          o.fillStyle = `rgba(${STREAM_ENERGY},${aa})`;
+          o.fillRect(x, y, 2, 2); // head
+          o.fillRect(x + 2, y - 4, 1, 6); // stem (taller — legible at wall distance)
+          o.fillRect(x + 2, y - 4, 2, 1); // flag
+          if (born > 0.15) { o.fillStyle = `rgba(255,255,255,${born * 0.9})`; o.fillRect(x, y, 2, 2); }
+        }
       } else {
         // mote: a tiny diamond glow instead of a square
         o.fillStyle = `rgba(${halo},${a * 0.35})`;

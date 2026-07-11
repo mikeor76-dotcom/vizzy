@@ -690,9 +690,16 @@ const TRANSITION_DRAW = {
     o.fillRect(cx - 2, gy - 20, 4, 20);
   },
   "horizon-fade"(o, pq, t, boost = 1) {
-    const a = Math.sin(t * Math.PI) * 0.22 * boost;
-    o.fillStyle = `rgba(205,215,245,${a})`;
-    o.fillRect(0, 0, pq.pw, Math.round(pq.ph * 0.5));
+    // a soft moonlight swell in the sky, brightest at the top and easing out in
+    // stepped bands — the old single half-screen rect had a razor-straight
+    // bottom edge that read as a glitchy white wash over half the screen
+    const a = Math.sin(t * Math.PI) * 0.18 * boost;
+    const H = Math.round(pq.ph * 0.55), steps = 14;
+    for (let i = 0; i < steps; i++) {
+      const f = 1 - i / steps;
+      o.fillStyle = `rgba(205,215,245,${a * f * f})`;
+      o.fillRect(0, Math.round((H * i) / steps), pq.pw, Math.ceil(H / steps));
+    }
   },
   "pixel-wipe"(o, pq, t, boost = 1) {
     const x = Math.round(t * (pq.pw + 40) - 20);

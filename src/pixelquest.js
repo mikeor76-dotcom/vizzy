@@ -439,6 +439,21 @@ export class PixelQuest {
     this.torches = this.torches.filter(
       (t) => this.attractions.every((a) => ringDist(t.x, a.x) > 46) && ringDist(t.x, this.landmarkX) > 60
     );
+    // the moonlit-town foliage strip's 3rd variant is a STREET LAMP, so lamp
+    // posts can double up when variant-2 trees cluster in a grove or a dynamic
+    // lantern lands beside one — both read as a duplicated light. Demote
+    // clustered lamp-variant trees to plain trees and keep lanterns clear.
+    {
+      const lampTrees = this.trees.filter((tr) => tr.variant === 2).sort((a, b) => a.x - b.x);
+      let lastLampX = null;
+      for (const tr of lampTrees) {
+        if (lastLampX != null && ringDist(tr.x, lastLampX) < 56) tr.variant = Math.round(tr.x) % 2;
+        else lastLampX = tr.x;
+      }
+      this.torches = this.torches.filter(
+        (t) => this.trees.every((tr) => tr.variant !== 2 || ringDist(t.x, tr.x) > 36)
+      );
+    }
     this.dog = null;
     this.dogTimer = 18 + Math.random() * 30;
 

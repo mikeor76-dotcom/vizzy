@@ -250,11 +250,14 @@ export const PARALLAX_MANIFEST = {
 // (disco/record/wink overlays, moon flybys) track the REAL on-screen moon when
 // the imported sky replaces the procedural one. Neon-forest's plate has no
 // moon, so it's absent — moon cameos skip that biome.
+// All four moons sit at ONE canonical plate position (aligned by
+// scripts/move-moon.mjs) so crossfading biomes show one moon morphing instead
+// of two moons side by side. Radii stay per-plate.
 const BAKED_MOON = {
   "meadow-road": { x: 492, y: 82, r: 21 },
-  "moonlit-town": { x: 432, y: 73, r: 33 },
-  "arcade-ruins": { x: 243, y: 98, r: 27 },
-  "castle-approach": { x: 669, y: 116, r: 31 },
+  "moonlit-town": { x: 492, y: 82, r: 33 },
+  "arcade-ruins": { x: 492, y: 82, r: 27 },
+  "castle-approach": { x: 492, y: 82, r: 31 },
 };
 
 // Per-biome prop placement recipes for the PropField (world-anchored spans;

@@ -154,15 +154,30 @@ export class Songstream {
 
     // ---- spawn ----
     if (alive > 0.02) {
+      // BEAT-BORN NOTES: every kick visibly LAUNCHES notes out of the world
+      // ahead of the hero — the stream's rhythm IS the song's rhythm. (The
+      // smooth accumulators below stay as the quiet baseline between beats.)
+      if (pq.kickHit) {
+        const n = Math.min(3, 2 + ((pq.driveFx || 0) > 0.6 ? 1 : 0));
+        for (let i = 0; i < n && this.parts.length < B.motes; i++) {
+          const x = (pq.heroScreenX ?? pq.pw * 0.27) + 10 + Math.random() * pq.pw * 0.38;
+          const gy = pq.groundY(Math.max(0, Math.min(pq.pw - 1, Math.round(x)))) - 2;
+          this.parts.push({
+            type: "note", x, y: gy, vx: 0, vy: -16, age: 0,
+            life: 2.8 + Math.random() * 1.2, ph: Math.random() * TAU, seed: Math.random(),
+            big: section.state === "chorus" && Math.random() < 0.35, // chorus hero-notes
+          });
+        }
+      }
       // ambient motes: density from energy·section
       this._moteAcc += (1.4 + energy * 7) * dens * dt;
       while (this._moteAcc >= 1 && this.parts.length < B.motes) { this._moteAcc -= 1; this._spawn(pq, section, "mote"); }
       // notes: the melody — mids drive the rate
       this._noteAcc += Math.pow(mids, 1.25) * (4.5 * dens) * dt;
       while (this._noteAcc >= 1 && this.parts.length < B.motes) { this._noteAcc -= 1; this._spawn(pq, section, "note"); }
-      // sparks: highs + transients — a quick scatter on rising treble/snare
+      // sparks: a crisp one-frame scatter on each snare + on rising treble
       const treRise = tre - this._prevTre;
-      if ((treRise > 0.1 || (pq.snarePulse || 0) > 0.5) && this.parts.length < B.motes) {
+      if ((treRise > 0.1 || pq.snareHit) && this.parts.length < B.motes) {
         const n = Math.min(B.sparks, 1 + Math.round(tre * 3));
         for (let i = 0; i < n && this.parts.length < B.motes; i++) this._spawn(pq, section, "spark");
       }
@@ -182,16 +197,26 @@ export class Songstream {
 
     // ---- advance particles toward the orb ----
     // A gentle CURRENT: each mote cruises toward the orb at a modest speed (so a
-    // visible stream lingers en route, ~2-3s transit) with a sideways waft. It
-    // winks out over a beat as it reaches the orb, feeding the "powered by song".
+    // visible stream lingers en route, ~2-3s transit) with a sideways waft.
+    // Beat-born notes carry a launch kick (vy) that decays as the flow catches
+    // them. Reaching the orb FEEDS it: a small absorb-flash per arrival, so the
+    // orb visibly blinks brighter with every note it swallows.
+    const orb = pq.adventure?.orb;
     for (const p of this.parts) {
       p.age += dt;
       const dx = target.x - p.x, dy = target.y - p.y;
       const dist = Math.hypot(dx, dy) || 1;
       const cruise = (14 + energy * 26) * spd; // px/s toward the orb
-      p.x += (dx / dist) * cruise * dt + Math.cos(p.age * 3 + p.ph) * 7 * dt;
-      p.y += (dy / dist) * cruise * dt + Math.sin(p.age * 2.4 + p.ph) * 7 * dt;
-      if (dist < 7) p.age = Math.max(p.age, p.life - 0.18); // fade into the orb
+      p.x += ((dx / dist) * cruise + (p.vx || 0)) * dt + Math.cos(p.age * 3 + p.ph) * 7 * dt;
+      p.y += ((dy / dist) * cruise + (p.vy || 0)) * dt + Math.sin(p.age * 2.4 + p.ph) * 7 * dt;
+      const k = Math.exp(-dt * 2.2);
+      p.vx = (p.vx || 0) * k;
+      p.vy = (p.vy || 0) * k;
+      if (dist < 7 && !p.fed) {
+        p.fed = true;
+        p.age = Math.max(p.age, p.life - 0.18); // fade into the orb
+        if (orb) orb.absorbFlash = Math.min(1, (orb.absorbFlash || 0) + (p.type === "note" ? 0.5 : 0.25));
+      }
     }
     this.parts = this.parts.filter((p) => p.age < p.life && p.x > -6 && p.y < pq.ph + 6);
 
@@ -225,23 +250,35 @@ export class Songstream {
         o.fillRect(Math.round(s.x), Math.round(s.y), 2, 1);
       }
     }
-    // motes / notes / sparks
+    // motes / notes / sparks — SYNCHRONIZED SHIMMER: everything throbs together
+    // on the beat (kickPulse decays over ~250ms) with a whisper of per-particle
+    // variation, so the whole field reads as dancing to the song rather than
+    // twinkling at random.
+    const beat = pq.kickPulse || 0;
     for (const p of this.parts) {
       const fade = clamp01(Math.min(p.age / 0.25, (p.life - p.age) / 0.5));
       if (fade <= 0.03) continue;
-      const tw = 0.6 + 0.4 * Math.sin(p.age * 8 + p.ph); // gentle twinkle
+      const tw = (0.6 + 0.4 * beat) * (0.9 + 0.18 * Math.sin(p.age * 2 + p.ph));
       const a = clamp01(fade * tw * bright);
       const x = Math.round(p.x), y = Math.round(p.y);
       if (p.type === "spark") {
         o.fillStyle = `rgba(255,250,220,${a})`;
         o.fillRect(x, y, 1, 1);
         if (a > 0.55) { o.fillStyle = `rgba(255,250,220,${a * 0.5})`; o.fillRect(x - 1, y, 3, 1); o.fillRect(x, y - 1, 1, 3); }
+      } else if (p.type === "note" && p.big) {
+        // chorus hero-note: a bigger glyph that reads from across the room
+        o.fillStyle = `rgba(${halo},${a * 0.45})`; o.fillRect(x - 1, y - 6, 7, 10);
+        o.fillStyle = `rgba(${STREAM_ENERGY},${a})`;
+        o.fillRect(x, y, 3, 3); // head
+        o.fillRect(x + 3, y - 6, 1, 8); // stem
+        o.fillRect(x + 3, y - 6, 3, 1); // flag
+        o.fillRect(x + 3, y - 5, 2, 1); // flag taper
       } else if (p.type === "note") {
-        o.fillStyle = `rgba(${halo},${a * 0.4})`; o.fillRect(x - 1, y - 1, 4, 5); // halo
+        o.fillStyle = `rgba(${halo},${a * 0.4})`; o.fillRect(x - 1, y - 4, 5, 7); // halo
         o.fillStyle = `rgba(${STREAM_ENERGY},${a})`;
         o.fillRect(x, y, 2, 2); // head
-        o.fillRect(x + 2, y - 3, 1, 4); // stem
-        o.fillRect(x + 2, y - 3, 2, 1); // flag
+        o.fillRect(x + 2, y - 4, 1, 6); // stem (taller — legible at wall distance)
+        o.fillRect(x + 2, y - 4, 2, 1); // flag
       } else {
         o.fillStyle = `rgba(${halo},${a * 0.4})`; o.fillRect(x - 1, y - 1, 3, 3);
         o.fillStyle = `rgba(${STREAM_ENERGY},${a})`; o.fillRect(x, y, 1, 1);

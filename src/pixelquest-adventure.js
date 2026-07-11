@@ -329,7 +329,7 @@ export class OrbCompanion {
     }
     this._rs = { x, y, hue, sc, bright: this.bright, charge: this.charge, flare: this.absorbFlash,
                  arriving: arrival?.phase === "arriving", destX, destY,
-                 bass, mids, tre, energy, ring: this._ring };
+                 bass, mids, tre, energy, ring: this._ring, beat: pq.kickPulse || 0 };
   }
 
   // Full-resolution overlay: the orb, its soft glow and trail, drawn on the real
@@ -362,9 +362,13 @@ export class OrbCompanion {
       ctx.beginPath(); ctx.arc(tx, ty, tr, 0, TAU); ctx.fill();
     }
 
-    // soft biome-hued bloom, breathing with `bright` — outer HALO swells with BASS
-    const bloom = clamp01(0.06 + r.bright * 0.16 + r.charge * 0.06 + r.flare * 0.28 + (r.bass || 0) * 0.1);
-    const bloomR = (7 + r.bright * 5 + r.charge * 3 + r.flare * 4 + (r.bass || 0) * 7) * r.sc * scale;
+    // BEAT HEARTBEAT: the whole orb (halo + core) thumps on each kick — the
+    // same musical clock as the hero's bounce, so orb and hero groove together
+    const heartbeat = 1 + (r.beat || 0) * 0.18;
+    // soft biome-hued bloom, breathing with `bright` — outer HALO swells with
+    // BASS; baseline raised so the orb holds real presence even in quiet parts
+    const bloom = clamp01(0.08 + r.bright * 0.16 + r.charge * 0.06 + r.flare * 0.28 + (r.bass || 0) * 0.1);
+    const bloomR = (8.5 + r.bright * 5 + r.charge * 3 + r.flare * 4 + (r.bass || 0) * 7) * heartbeat * r.sc * scale;
     const bg = ctx.createRadialGradient(dx, dy, 0, dx, dy, bloomR);
     bg.addColorStop(0, `hsla(${hue},85%,82%,${bloom})`);
     bg.addColorStop(0.45, `hsla(${hue},80%,66%,${bloom * 0.5})`);
@@ -375,12 +379,12 @@ export class OrbCompanion {
     // the note itself: high-res soft art if present, else a smooth glowing core
     const img = this._img;
     if (img && img.complete && img.naturalWidth) {
-      const size = (14 + r.charge * 3) * r.sc * scale;
+      const size = (14 + r.charge * 3) * heartbeat * r.sc * scale;
       ctx.globalAlpha = clamp01(0.82 + r.bright * 0.18);
       ctx.drawImage(img, dx - size / 2, dy - size / 2, size, size);
       ctx.globalAlpha = 1;
     } else {
-      const coreR = (2.4 + r.charge * 1.3) * r.sc * scale;
+      const coreR = (2.4 + r.charge * 1.3) * heartbeat * r.sc * scale;
       const cg = ctx.createRadialGradient(dx - coreR * 0.3, dy - coreR * 0.3, 0, dx, dy, coreR);
       cg.addColorStop(0, `hsla(${hue},100%,97%,${clamp01(0.85 + r.flare * 0.15)})`);
       cg.addColorStop(0.5, `hsla(${hue},95%,72%,${clamp01(0.55 + r.bright * 0.35)})`);
@@ -421,6 +425,15 @@ export class OrbCompanion {
       ctx.strokeStyle = `hsla(${hue},95%,86%,${r.ring * 0.5})`;
       ctx.lineWidth = (1 + r.ring) * scale;
       ctx.beginPath(); ctx.arc(dx, dy, rr, 0, TAU); ctx.stroke();
+    }
+    // CHORUS — a slow radiant ring swelling off the orb, so peak sections are
+    // unmistakable at a glance
+    const sec = pq.resonance?.section;
+    if (sec?.state === "chorus" && sec.intensity > 0.5) {
+      const k = (pq.t * 0.55) % 1;
+      ctx.strokeStyle = `hsla(${hue},95%,82%,${(1 - k) * 0.2 * sec.intensity})`;
+      ctx.lineWidth = 1.3 * scale;
+      ctx.beginPath(); ctx.arc(dx, dy, bloomR * (0.9 + k * 1.1), 0, TAU); ctx.stroke();
     }
 
     // full-charge "ready" ring — a slow, smooth pulse

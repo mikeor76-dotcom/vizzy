@@ -247,7 +247,10 @@ export class PixelQuestEventManager {
       if (!this.conditionMet(def, a)) continue;
       // probability: expected spacing = interval while the condition holds.
       // Edge triggers roll once per kick (~2/s); continuous triggers per frame.
-      const iv = this.interval(def);
+      // the session's ONE epic already waited out its ~20-40min window — once
+      // eligible it seizes the next musical moment instead of also rolling its
+      // enormous rarity interval (which added an expected quarter-hour more)
+      const iv = def.rarity === "epic" ? 15 : this.interval(def);
       // Biome System v1: a SOFT nudge (unlike allowedBiomes' hard filter) —
       // an event tagged with preferredBiomes still fires everywhere, just
       // more often when the current biome matches

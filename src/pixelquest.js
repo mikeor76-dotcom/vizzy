@@ -165,6 +165,18 @@ const BIOME_GATE = {
   "castle-approach": "castleGate",
 };
 
+// Each biome's HEART recipe (world plan): how the generic heart spots are
+// skinned. Sprite ids upgrade automatically when dedicated heart art lands
+// (heart_<biome>_anchor etc. — see PIXELQUEST-WORLD-ART-PROMPT.md); until
+// then the heart is furnished from the existing catalog.
+const HEART_RECIPES = {
+  "meadow-road": { anchor: ["heart_meadow_anchor", "windmill", 1.05], sideA: ["heart_meadow_sideA", "house", 1], sideB: ["heart_meadow_sideB", "campfire", 1], decor: "flowers" },
+  "neon-forest": { anchorFol: [1.7, 1], sideAFol: [1.2, 0], sideBFol: [0.9, 2], anchor: ["heart_neon_anchor", null, 1], sideA: ["heart_neon_sideA", null, 1], sideB: ["heart_neon_sideB", null, 1], decor: "spores" },
+  "moonlit-town": { anchor: ["heart_town_anchor", "house", 1.1], sideA: ["heart_town_sideA", "house", 0.9], sideB: ["heart_town_sideB", "jukebox", 0.8], decor: "sign" },
+  "arcade-ruins": { anchor: ["heart_arcade_anchor", "arcadeCabinet", 1.15], sideA: ["heart_arcade_sideA", "blueTimeBooth", 0.85], sideB: ["heart_arcade_sideB", "jukebox", 0.8], decor: "rubble" },
+  "castle-approach": { anchor: ["heart_castle_anchor", "statue", 1.1], sideA: ["heart_castle_sideA", "swordInStone", 0.85], sideB: ["heart_castle_sideB", "brazier", 1], decor: "brazier" },
+};
+
 // STORYBOOK PROPORTIONS: a bigger hood/head (7 of 17 torso rows) with a
 // VISIBLE FACE and two dark eyes — a tiny warm human traveler, lovable and
 // readable from across the room. Same 16-wide dims as always, so every
@@ -367,30 +379,51 @@ export class PixelQuest {
     this.particles = [];
     this.bat = null;
 
-    // looping world layout (positions in a fixed-length world loop)
+    // looping world layout (positions in a fixed-length world loop) — with
+    // STRUCTURE (world plan): every biome's loop is a journey. Quiet OUTSKIRTS
+    // → a rising APPROACH → the biome's HEART (a real place, dense and lit,
+    // behind its gate) → a gentle DEPARTURE. "Never arriving anywhere" was a
+    // layout problem: even spacing everywhere means everywhere is nowhere.
     const rnd = makePRNG(20260707);
-    this.worldLen = 1280;
+    this.worldLen = 1920;
+    this.zones = { outskirts: [0, 500], approach: [500, 880], heart: [900, 1260], departure: [1260, 1920] };
+    this.landmarkX = 880; // the gate IS the heart's threshold now, not a drifter
+    // the heart's furniture: generic SPOTS, skinned per-biome at draw time
+    // (drawHeart) — existing sprites today, upgraded automatically as heart
+    // art packs land in the manifest
+    this.heartSpots = [
+      { x: 1080, kind: "anchor" },
+      { x: 990, kind: "sideA" },
+      { x: 1180, kind: "sideB" },
+      { x: 945, kind: "light" },
+      { x: 1235, kind: "light" },
+      { x: 1035, kind: "decor" },
+      { x: 1135, kind: "decor" },
+    ];
     this.trees = [];
     this.torches = [];
     this.rocks = [];
-    // GROVES, not a picket fence: trees gather in clumps of 2-5 with tight,
-    // overlapping spacing and a wide size range, separated by real clearings —
-    // plus the occasional lone tree standing in the open. Sorted small→large so
-    // bigger trees overlap in front of smaller ones (reads as depth).
+    // GROVES, not a picket fence — now ZONE-AWARE: lonely outskirts (big
+    // clearings), a thickening approach, NOTHING inside the heart (its recipe
+    // owns that ground), medium departure. Sorted small→large for depth.
     {
+      const density = (x) =>
+        x < this.zones.outskirts[1] ? 0.55 : x < this.zones.approach[1] ? 1.2 : x < this.zones.heart[1] + 40 ? 0 : 0.85;
       let tx = 20 + rnd() * 60;
       while (tx < this.worldLen - 30) {
+        const d = density(tx);
+        if (d === 0) { tx = this.zones.heart[1] + 50 + rnd() * 40; continue; } // skip the heart
         if (rnd() < 0.24) {
           this.trees.push({ x: tx, s: 0.8 + rnd() * 0.7, variant: (rnd() * 3) | 0 });
-          tx += 100 + rnd() * 140; // a lone tree, then open ground
+          tx += (100 + rnd() * 140) / d; // a lone tree, then open ground
           continue;
         }
-        const grove = 2 + ((rnd() * 4) | 0);
+        const grove = Math.max(2, Math.round((2 + rnd() * 4) * Math.min(1.2, d)));
         for (let i = 0; i < grove && tx < this.worldLen - 30; i++) {
           this.trees.push({ x: tx + (rnd() - 0.5) * 6, s: 0.55 + rnd() * 0.95, variant: (rnd() * 3) | 0 });
           tx += 9 + rnd() * 20; // tight, overlapping inside the grove
         }
-        tx += 120 + rnd() * 160; // a real clearing between groves
+        tx += (120 + rnd() * 160) / d; // clearings shrink as the heart nears
       }
       this.trees.sort((a, b) => a.s - b.s);
     }
@@ -399,7 +432,13 @@ export class PixelQuest {
     this.backTrees = [];
     for (let x = 40 + rnd() * 80; x < this.worldLen; x += 55 + rnd() * 110)
       this.backTrees.push({ x, s: 0.34 + rnd() * 0.22, variant: (rnd() * 3) | 0 });
-    for (let x = 70; x < this.worldLen - 40; x += 150 + rnd() * 90) this.torches.push({ x, ph: rnd() * TAU });
+    // lamps line the APPROACH densely (civilization nearing) and thin elsewhere
+    for (let x = 70; x < this.worldLen - 40; ) {
+      const inApproach = x > this.zones.approach[0] - 60 && x < this.zones.approach[1];
+      const inHeart = x > this.zones.heart[0] - 30 && x < this.zones.heart[1] + 30;
+      if (!inHeart) this.torches.push({ x, ph: rnd() * TAU });
+      x += inApproach ? 95 + rnd() * 60 : 220 + rnd() * 140;
+    }
     for (let x = 10; x < this.worldLen; x += 55 + rnd() * 70) this.rocks.push({ x, w: 2 + ((rnd() * 3) | 0), variant: (rnd() * 3) | 0 });
     // foreground silhouettes: dark grass tufts sweeping past FASTER than the
     // path (1.25x parallax) at the bottom edge — the classic depth trick that
@@ -423,18 +462,20 @@ export class PixelQuest {
         });
       }
     }
-    this.landmarkX = 400;
-    // roadside attractions: cottages, windmills, campfires — and a snail
-    // in a tiny fedora, because the road is long
+    // roadside attractions: a lonely cottage or campfire out in the OUTSKIRTS
+    // and DEPARTURE only — the heart owns the dense settlement, so the lands
+    // between actually read as between
     this.attractions = [];
     {
-      const types = ["cottage", "windmill", "campfire", "snail", "cottage", "windmill"];
-      let ax = 150 + rnd() * 200;
+      const types = ["campfire", "snail", "cottage", "windmill"];
       let ti = (rnd() * types.length) | 0;
-      while (ax < this.worldLen - 80) {
-        this.attractions.push({ x: ax, type: types[ti % types.length] });
-        ti++;
-        ax += 300 + rnd() * 340;
+      for (const [lo, hi] of [[120, 460], [1330, 1840]]) {
+        let ax = lo + rnd() * 120;
+        while (ax < hi) {
+          this.attractions.push({ x: ax, type: types[ti % types.length] });
+          ti++;
+          ax += 300 + rnd() * 300;
+        }
       }
     }
     // no doubled-up lights: attractions carry their own light (lit windows,
@@ -1487,6 +1528,81 @@ export class PixelQuest {
     }
   }
 
+  // ------------------------------------------------- the biome's HEART
+  // The place the road actually leads to (world plan): a dense lit set-piece
+  // at the loop's center, skinned per biome from generic spots. Existing
+  // sprites furnish it today; dedicated heart art upgrades it automatically
+  // through the same ready() checks when the packs land.
+  drawHeart(o, pal) {
+    const off = this.scrollX * 0.7;
+    const L = this.worldLen;
+    const glow = this.heartGlow || 0;
+    const recipe = HEART_RECIPES[pal.biome];
+    if (!recipe) return;
+    for (const spot of this.heartSpots) {
+      const sx = Math.round((((spot.x - off) % L) + L) % L);
+      if (sx < -70 || sx > this.pw + 70) continue;
+      const gy = this.groundY(Math.max(0, Math.min(this.pw - 1, sx))) + 1;
+      this.#drawHeartSpot(o, pal, recipe, spot.kind, sx, gy);
+    }
+    // the heart's warm communal light, swelling as the hero walks through it
+    if (glow > 0.05) {
+      const cx = Math.round((((1080 - off) % L) + L) % L);
+      if (cx > -90 && cx < this.pw + 90) {
+        const gy = this.groundY(Math.max(0, Math.min(this.pw - 1, cx)));
+        this.glowDisc(o, cx, gy - Math.round(6 * this.S), Math.round(15 * this.S * 0.55), pal.torch, 0.1 * glow + this.kickPulse * 0.04 * glow);
+      }
+    }
+  }
+
+  #drawHeartSpot(o, pal, recipe, kind, sx, gy) {
+    const A = this.assets;
+    const spr = (id, scale) => {
+      if (!id || !this.useAssets() || !A.ready(id)) return false;
+      A.drawSprite(o, id, "idle", this.t, sx, gy, { anchor: "bottom-center", scale });
+      return true;
+    };
+    const foliage = BIOME_FOLIAGE[pal.biome];
+    const fol = (conf) => {
+      if (!conf || !this.useAssets() || !foliage || !A.ready(foliage)) return false;
+      A.drawSprite(o, foliage, "v", 0, sx, gy, { anchor: "bottom-center", frame: conf[1], scale: conf[0] });
+      return true;
+    };
+    if (kind === "light") {
+      if (pal.biome === "neon-forest") this.drawCampfireMushrooms(o, pal, sx, gy);
+      else this.drawTorch(o, pal, sx, gy, sx * 0.7);
+      return;
+    }
+    if (kind === "decor") {
+      if (recipe.decor === "flowers" || recipe.decor === "spores") {
+        for (let k = 0; k < 3; k++) {
+          const fx = sx + (k - 1) * 3;
+          const glowA = 0.5 + 0.4 * Math.sin(this.t * 2 + k * 2.1);
+          o.fillStyle = this.col(pal.firefly, glowA);
+          o.fillRect(fx, gy - 3 - (k % 2), 1, 1);
+          o.fillStyle = this.col(pal.groundTop, 0.9);
+          o.fillRect(fx, gy - 2, 1, 2);
+        }
+      } else if (recipe.decor === "sign" && spr("sign", 0.85)) return;
+      else if (recipe.decor === "brazier") this.drawCampfireBrazier(o, pal, sx, gy);
+      else {
+        // rubble: a low tumble of stones
+        if (this.useAssets() && A.ready("rocks")) A.drawSprite(o, "rocks", "v", 0, sx, gy, { anchor: "bottom-center", frame: (sx | 0) % 3, scale: 0.5 });
+        else { o.fillStyle = this.col(pal.groundDark); o.fillRect(sx - 2, gy - 2, 5, 2); }
+      }
+      return;
+    }
+    // anchor / sideA / sideB: dedicated heart art first, catalog sprite next,
+    // then a procedural stand-in so the heart NEVER reads empty
+    const slot = recipe[kind] || [];
+    const folSlot = recipe[kind + "Fol"];
+    if (spr(slot[0], slot[2] ?? 1)) return; // dedicated heart art
+    if (folSlot && fol(folSlot)) return; // neon's mother-grove mushrooms
+    if (spr(slot[1], slot[2] ?? 1)) return; // catalog sprite
+    if (kind === "anchor") this.drawCottage(o, pal, sx - 8, gy);
+    else this.drawCampfire(o, pal, sx, gy);
+  }
+
   drawCottage(o, pal, x, gy) {
     // ASSET PATH: a real baked cottage (roof, timber, warm window, chimney)
     // with reactive window glow + curling smoke layered live on top
@@ -1962,21 +2078,44 @@ export class PixelQuest {
 
   // one static soil-mottle tile (dark clump dashes + sparse light flecks),
   // alpha-only so it textures ANY biome's ground color. Generated once ever.
-  _groundTexTile() {
-    if (this._gtex) return this._gtex;
+  // PER-BIOME soil tiles (world plan): five distinct grounds instead of one
+  // shared mottle — organic meadow dirt, violet neon soil with rare glow
+  // flecks, moonlit cobble courses, broken arcade tiling, castle flagstones.
+  // Alpha-only overlays, so each still tints with the biome palette.
+  _groundTexTile(biome) {
+    this._gtexMap ??= {};
+    if (this._gtexMap[biome]) return this._gtexMap[biome];
+    const style = {
+      "meadow-road": { n: 170, w: 3, dark: "8,10,6", light: "245,255,225", rows: 0, glow: null },
+      "neon-forest": { n: 150, w: 2, dark: "14,6,24", light: "196,150,255", rows: 0, glow: "130,255,225" },
+      "moonlit-town": { n: 120, w: 5, dark: "6,7,14", light: "212,220,250", rows: 8, glow: null },
+      "arcade-ruins": { n: 120, w: 5, dark: "10,4,18", light: "96,225,250", rows: 6, glow: "255,90,190" },
+      "castle-approach": { n: 100, w: 7, dark: "9,7,5", light: "255,228,190", rows: 9, glow: null },
+    }[biome] || { n: 170, w: 3, dark: "6,8,16", light: "255,250,235", rows: 0, glow: null };
     const t = document.createElement("canvas");
     t.width = 64; t.height = 64;
     const g = t.getContext("2d");
-    const rnd = makePRNG(48271);
-    for (let i = 0; i < 170; i++) {
-      const x = (rnd() * 64) | 0, y = (rnd() * 64) | 0, w = 1 + ((rnd() * 3) | 0);
-      const darkDash = rnd() < 0.8;
-      g.fillStyle = darkDash ? `rgba(6,8,16,${0.1 + rnd() * 0.17})` : `rgba(255,250,235,${0.04 + rnd() * 0.06})`;
+    const rnd = makePRNG(48271 + (biome ? biome.length * 977 : 0));
+    for (let i = 0; i < style.n; i++) {
+      const x = (rnd() * 64) | 0;
+      // rows > 0 = masonry: dashes snap to horizontal courses (cobbles,
+      // tiles, flagstones); 0 = loose organic scatter
+      const y = style.rows ? ((rnd() * (64 / style.rows)) | 0) * style.rows + ((rnd() * 2) | 0) : (rnd() * 64) | 0;
+      const w = 1 + ((rnd() * style.w) | 0);
+      const darkDash = rnd() < 0.78;
+      g.fillStyle = darkDash ? `rgba(${style.dark},${0.1 + rnd() * 0.17})` : `rgba(${style.light},${0.04 + rnd() * 0.06})`;
       g.fillRect(x, y, w, 1);
       if (x + w > 64) g.fillRect(x - 64, y, w, 1); // seamless wrap
       if (darkDash && rnd() < 0.3) g.fillRect(x, y + 1, Math.max(1, w - 1), 1); // chunkier clump
     }
-    this._gtex = t;
+    if (style.glow) {
+      // rare luminous flecks for the unearthly grounds
+      for (let i = 0; i < 7; i++) {
+        g.fillStyle = `rgba(${style.glow},${0.1 + rnd() * 0.12})`;
+        g.fillRect((rnd() * 64) | 0, (rnd() * 64) | 0, 1, 1);
+      }
+    }
+    this._gtexMap[biome] = t;
     return t;
   }
 
@@ -2040,7 +2179,7 @@ export class PixelQuest {
     }
     // mottle-texture overlay: the cached alpha tile, scrolled with the world and
     // clipped to the soil, so the big flat fill reads as textured pixel dirt
-    const tex = this._groundTexTile();
+    const tex = this._groundTexTile(pal.biome);
     o.save();
     o.beginPath();
     o.moveTo(0, ph);
@@ -2596,11 +2735,31 @@ export class PixelQuest {
           : this.egg && this.egg.type === "starpower"
             ? 1.22
             : 1;
+    // THE HEART MOMENT (world plan): as the hero crosses the biome's heart the
+    // world eases to a stroll, the communal light swells (heartGlow feeds
+    // drawHeart), and he celebrates once per crossing — every loop pass is a
+    // small arrival at an actual PLACE.
+    {
+      const off = this.scrollX * 0.7;
+      let hd = ((((1080 - off) % this.worldLen) + this.worldLen) % this.worldLen) - this.pw * this.heroAnchor;
+      if (hd > this.worldLen / 2) hd -= this.worldLen;
+      const near = Math.abs(hd) < 130;
+      this.heartGlow = (this.heartGlow || 0) + ((near ? 1 : 0) - (this.heartGlow || 0)) * Math.min(1, dt * (near ? 1.1 : 0.7));
+      this.heartCtl = this.heartGlow > 0.25 && (this.gate || 0) > 0.3 ? { scrollMul: 1 - this.heartGlow * 0.45 } : null;
+      if (near && !this._heartHailed && Math.abs(hd) < 22 && (this.gate || 0) > 0.4) {
+        this._heartHailed = true;
+        this.triggerReaction?.("celebrate", 1.2);
+        this.adventure?.fragments?.spawnAt?.(this, Math.round(this.pw * this.heroAnchor) + 24, this.groundBase() - 22, 6, 1);
+      }
+      if (!near) this._heartHailed = false;
+    }
     // chapter set pieces AND adventure beats (e.g. the campfire pause) can
     // gently slow or pause the whole world; the adventure mood adds a small
     // steady nudge (energetic/peak a touch faster, breakdown a touch slower)
     const ctlMul =
-      (this.heroCtl ? (this.heroCtl.scrollMul ?? 1) : 1) * (this.adventureCtl ? (this.adventureCtl.scrollMul ?? 1) : 1);
+      (this.heroCtl ? (this.heroCtl.scrollMul ?? 1) : 1) *
+      (this.adventureCtl ? (this.adventureCtl.scrollMul ?? 1) : 1) *
+      (this.heartCtl ? (this.heartCtl.scrollMul ?? 1) : 1);
     const speed = this.cruise * (1 + this.kickPulse * 0.12) * eggPace * ctlMul * (this.moodPaceMul || 1) * (this.resonance?.direction?.pace || 1) * this.S;
     this.lastSpeed = speed;
     this.scrollX += speed * dt;
@@ -2760,6 +2919,7 @@ export class PixelQuest {
     this.adventure.draw(o, pal, "midground"); // e.g. the note bridge tiles
     this.adventure.draw(o, pal, "encounter-bg"); // encounters behind props/hero (giant, gate, arcade face)
     this.drawProps(o, pal);
+    this.drawHeart(o, pal); // the biome's heart set-piece (world plan)
     if (this.useAssets()) this.propField.draw(o, "ground"); // asset props (dormant until recipes+art)
     this.drawTerrain(o, pal);
     this.resonance.drawGround(o, pal); // Resonance Path: bass glow travelling along the surface

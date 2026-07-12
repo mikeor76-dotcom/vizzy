@@ -181,6 +181,10 @@ export class Songstream {
           };
         } else {
           const dy = -Math.max(-11, Math.min(11, (c - cur.c) * 1.3)); // pitch up = higher on screen
+          // a BIG melodic leap earns a shooting star from the note's row —
+          // the sky answers the melody (engagement plan 4)
+          if (Math.abs(dy) >= 10 && !pq.shoot)
+            pq.shoot = { x: Math.max(4, cur.x - 6), y: Math.max(4, cur.y - 12), life: 0.8 };
           cur.x += 9 + Math.random() * 4; // reading order: left to right
           cur.y = Math.max(pq.ph * 0.1, Math.min(pq.groundBase() - 16, cur.y + (Math.abs(dy) < 1.5 ? (Math.random() - 0.5) * 2 : dy)));
           cur.c = c;

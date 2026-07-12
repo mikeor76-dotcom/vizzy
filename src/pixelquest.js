@@ -765,6 +765,12 @@ export class PixelQuest {
       this._songTime = 0;
     }
     this.finalePulse = (this.finalePulse || 0) * Math.exp(-dt * 0.35);
+    // SLEEPING WORLD (engagement plan 4): after ~10s of true quiet the scene
+    // eases into a rest state — dimmer, slower fireflies, the odd lone
+    // shooting star. Silence becomes watchable; music wakes it instantly.
+    this._quietFor = this.gate < 0.1 ? (this._quietFor || 0) + dt : 0;
+    const sleepT = this._quietFor > 10 ? 1 : 0;
+    this.sleep = (this.sleep || 0) + (sleepT - (this.sleep || 0)) * Math.min(1, dt * (sleepT ? 0.35 : 3));
 
     // ABSOLUTE INTENSITY (engagement plan 1.1): how intense the music IS,
     // from volume-proof STRUCTURE — onset density, spectral fullness,
@@ -1016,12 +1022,15 @@ export class PixelQuest {
     if (this.useAssets() && this.assets.hasReadyLayer(curBiome, "sky")) {
       o.fillStyle = "rgb(6,6,14)";
       o.fillRect(0, 0, pw, ph);
-      this.assets.drawParallaxLayer(o, curBiome, "sky", this.scrollX, pw, this.groundBase());
+      // micro-drift (engagement plan 4): a slow ±2px breath in the plate's
+      // scroll so the backdrop never fully freezes, even when the hero stands
+      const drift = Math.sin(this.t * 0.06) * 24;
+      this.assets.drawParallaxLayer(o, curBiome, "sky", this.scrollX + drift, pw, this.groundBase());
       const nextBiome = BIOMES[this.biomeNext].name;
       if (this.biomeT < 1 && nextBiome !== curBiome && this.assets.hasReadyLayer(nextBiome, "sky")) {
         o.save();
         o.globalAlpha = this.biomeT;
-        this.assets.drawParallaxLayer(o, nextBiome, "sky", this.scrollX, pw, this.groundBase());
+        this.assets.drawParallaxLayer(o, nextBiome, "sky", this.scrollX + drift, pw, this.groundBase());
         o.restore();
       }
       return;
@@ -1069,7 +1078,7 @@ export class PixelQuest {
 
     // a rare shooting star streaks the sky (a little more often when the
     // highs are singing)
-    if (!this.shoot && Math.random() < (0.008 + tw * 0.02) * 0.016) {
+    if (!this.shoot && Math.random() < (0.008 + tw * 0.02 + (this.sleep || 0) * 0.06) * 0.016) {
       this.shoot = { x: 10 + Math.random() * pw * 0.6, y: 4 + Math.random() * 18, life: 0.8 };
     }
     if (this.shoot) {
@@ -2444,11 +2453,17 @@ export class PixelQuest {
       });
     }
 
+    // FLOCKING (engagement plan 4): fireflies drift as a loose swarm, and
+    // during a chorus they gather into a slow living cloud around the orb
+    const chorusFlock = this.resonance?.section?.state === "chorus" && this.adventure?.orb?.visible;
+    const flockX = chorusFlock ? this.adventure.orb.x : this.pw * 0.5;
+    const flockY = chorusFlock ? this.adventure.orb.y : this.ph * 0.45;
+    const flockPull = (chorusFlock ? 0.55 : 0.12) * (1 - (this.sleep || 0) * 0.7);
     for (const p of this.particles) {
       p.age += dt;
       if (p.kind === "firefly") {
-        p.x += Math.sin(p.ph + this.t * 1.3) * 8 * dt;
-        p.y += Math.cos(p.ph * 1.7 + this.t) * 5 * dt;
+        p.x += (Math.sin(p.ph + this.t * 1.3) * 8 + (flockX - p.x) * flockPull) * dt * (1 - (this.sleep || 0) * 0.5);
+        p.y += (Math.cos(p.ph * 1.7 + this.t) * 5 + (flockY - p.y) * flockPull) * dt * (1 - (this.sleep || 0) * 0.5);
         // snares startle the fireflies: a bright scattered blink
         const jx = (Math.random() - 0.5) * 3 * this.snarePulse;
         const jy = (Math.random() - 0.5) * 2 * this.snarePulse;
@@ -2765,6 +2780,11 @@ export class PixelQuest {
     this.drawForeground(o, pal); // foreground silhouettes sweep past in front
     this.adventure.drawTransitionEffect(o, pal); // screen effects: biome-swap flourish
     this.drawVignette(o); // soft cinematic frame, cached
+    // the sleeping world's gentle dim — a rest state, not a blackout
+    if ((this.sleep || 0) > 0.05) {
+      o.fillStyle = `rgba(3,5,12,${this.sleep * 0.24})`;
+      o.fillRect(0, -2, pw, ph + 4);
+    }
     o.restore();
 
     // nearest-neighbor upscale keeps the pixels crisp

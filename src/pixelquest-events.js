@@ -53,7 +53,13 @@ export const EVENT_TUNING = {
     background: 30,
   },
   // expected seconds between firings while a trigger condition holds
-  rarityIntervals: { common: 30, uncommon: 70, rare: 160, legendary: 420 },
+  rarityIntervals: { common: 30, uncommon: 70, rare: 160, legendary: 420, epic: 900 },
+  // TIER PACING (engagement plan 3.1): variable-ratio spacing per rarity tier —
+  // commons hum along, uncommons surprise, rares are events, the epic happens
+  // ONCE a session, at least ~20 minutes in. ±40% jitter applied on each use.
+  tierSpacing: { common: 26, uncommon: 150, rare: 480, legendary: 480, epic: 0 },
+  epicMinSessionSeconds: 1200, // the one epic never fires before this
+  epicMaxSessionSeconds: 2400, // ...and is scheduled by this point (music permitting)
   rareEventMultiplier: 1,
   legendaryEventMultiplier: 1,
   audioTriggerSensitivity: 1,
@@ -217,6 +223,22 @@ export class PixelQuestEventManager {
       if (def.category === "hero" && !T.heroShowpieces) continue;
       if (this.active.some((s) => s.def.category === def.category)) continue; // one per category
       if ((this.cooldownUntil[def.id] || -99) > this.clock) continue;
+      // TIER PACING + MUSICAL MOMENTS (engagement plan 3.1): each rarity tier
+      // has its own variable-ratio spacing; the session's ONE epic waits at
+      // least ~20 minutes; rare-and-above only land ON a moment — a peak, a
+      // chorus, or the tail of a drop — so the special things feel earned.
+      const tier = def.rarity || "common";
+      if (tier === "epic") {
+        if (this._epicDone) continue;
+        this._epicAt ??= T.epicMinSessionSeconds + Math.random() * (T.epicMaxSessionSeconds - T.epicMinSessionSeconds);
+        if (this.clock < this._epicAt) continue;
+      }
+      if (((this._tierNext ??= {})[tier] || 0) > this.clock) continue;
+      if (
+        (tier === "rare" || tier === "legendary" || tier === "epic") &&
+        !(pq.adventure?.mood?.state === "peak" || pq.resonance?.section?.state === "chorus" || (pq.resonance?.dropPulse || 0) > 0.25)
+      )
+        continue;
       if (def.isMajor && this.clock - this.lastMajor < T.majorEventCooldownSeconds) continue;
       if (this.clock - (this.catLast[def.category] ?? -999) < (T.categoryCooldowns[def.category] || 0)) continue;
       if (def.energyRequired && a.drive < def.energyRequired) continue;
@@ -239,7 +261,7 @@ export class PixelQuestEventManager {
       if (Math.random() < p * T.audioTriggerSensitivity) candidates.push(def);
     }
     if (!candidates.length) return;
-    const rank = { legendary: 0, rare: 1, uncommon: 2, common: 3 };
+    const rank = { epic: -1, legendary: 0, rare: 1, uncommon: 2, common: 3 };
     candidates.sort((x, y) => rank[x.rarity] - rank[y.rarity]); // rarest wins
     this.start(candidates[0]);
   }
@@ -253,6 +275,12 @@ export class PixelQuestEventManager {
     if (def.isMajor) this.lastMajor = this.clock;
     this.catLast[def.category] = this.clock;
     this.cooldownUntil[def.id] = this.clock + def.minCooldown;
+    // tier pacing bookkeeping: next slot for this tier, ±40% jitter; the epic
+    // is once per session, full stop
+    const tier = def.rarity || "common";
+    const spacing = EVENT_TUNING.tierSpacing[tier] ?? 30;
+    (this._tierNext ??= {})[tier] = this.clock + spacing * (0.6 + Math.random() * 0.8);
+    if (tier === "epic") this._epicDone = true;
     // adventure-layer hook: any sky cameo earns a brief look-up, any
     // door/portal/prop object earns a lean-forward — generic, so it covers
     // the whole catalog (this event and any future one) without each
@@ -2894,6 +2922,65 @@ export const PIXEL_EVENTS = [
     },
     update(st, pq, a) {
       if (a.kickEdge) pq.spawnSparkles();
+    },
+  },
+
+  // ------------------------------------------------- EPIC: the Sky Whale
+  // Once per session (engagement plan 3.1): a vast mist-spirit whale swims the
+  // whole sky over ~25s, drawn in the Friendly Giant's breathing-slice mist
+  // language. The kind of thing you tell someone about — and they never see.
+  {
+    id: "sky_whale",
+    name: "Sky Whale",
+    category: "sky",
+    rarity: "epic",
+    trigger: "beat",
+    duration: [22, 28],
+    minCooldown: 99999,
+    fadeSeconds: 3,
+    layer: "sky",
+    isMajor: true,
+    onStart(st, pq) {
+      pq.triggerReaction?.("lookup", 1.4);
+    },
+    draw(o, st, pq, pal) {
+      const f = st.fade;
+      if (f <= 0.02) return;
+      const x = Math.round(pq.pw + 70 - st.p * (pq.pw + 190));
+      const y = Math.round(15 * pq.S + Math.sin(st.t * 0.35) * 3 * pq.S);
+      const L = Math.round(40 * pq.S), H = Math.round(9 * pq.S);
+      // body in breathing vertical slices — clearly a spirit, never a slab
+      for (let i = 0; i < L; i += 2) {
+        const tt = i / L;
+        const prof = Math.sin(Math.PI * Math.min(1, tt * 1.18)); // blunt head, tapering tail
+        const half = Math.max(1, Math.round(H * prof * 0.5 * (0.88 + 0.12 * Math.sin(st.t * 0.8 + i * 0.18))));
+        const a = f * 0.34 * (0.75 + 0.25 * Math.sin(i * 0.13 + st.t * 0.5));
+        o.fillStyle = `rgba(152,172,208,${a})`;
+        o.fillRect(x + i, y - half, 2, half * 2);
+        // a faint moonlit ridge line along the back
+        if ((i & 6) === 0) {
+          o.fillStyle = `rgba(210,224,248,${a * 0.55})`;
+          o.fillRect(x + i, y - half, 2, 1);
+        }
+      }
+      // tail flukes, slowly beating
+      const flap = Math.round(Math.sin(st.t * 1.1) * 3 * pq.S * 0.4);
+      o.fillStyle = `rgba(152,172,208,${f * 0.36})`;
+      o.fillRect(x + L, y - Math.round(2 * pq.S) - flap, Math.round(2.5 * pq.S), Math.round(2 * pq.S));
+      o.fillRect(x + L, y + flap, Math.round(2.5 * pq.S), Math.round(2 * pq.S));
+      // one calm bright eye
+      o.fillStyle = `rgba(240,248,255,${f * 0.85})`;
+      o.fillRect(x + Math.round(L * 0.13), y - 1, 2, 2);
+      // a drift of glow-motes falls from its belly (the world blesses the road)
+      if (Math.random() < 0.2 && pq.particles.length < 90) {
+        pq.particles.push({
+          kind: "sparkle",
+          x: x + Math.round(Math.random() * L),
+          y: y + H * 0.4,
+          vx: (Math.random() - 0.5) * 2, vy: 4 + Math.random() * 4,
+          age: 0, life: 1.2 + Math.random() * 0.8,
+        });
+      }
     },
   },
 ];

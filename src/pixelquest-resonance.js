@@ -255,6 +255,11 @@ export class Songstream {
         p.fed = true;
         p.age = Math.max(p.age, p.life - 0.18); // fade into the orb
         if (orb) orb.absorbFlash = Math.min(1, (orb.absorbFlash || 0) + (p.type === "note" ? 0.5 : 0.25));
+        // the world WAKES a little with every mote of music it collects — the
+        // session-long meter behind flora glow, fireflies, window warmth (3.3).
+        // Rates sized against measured absorb volume (~600/min at chorus): a
+        // full wake takes roughly an hour of music.
+        if (pq.journey) pq.journey.wake = Math.min(1, pq.journey.wake + (p.type === "note" ? 0.0001 : 0.000025));
       }
     }
     this.parts = this.parts.filter((p) => p.age < p.life && p.x > -6 && p.y < pq.ph + 6);

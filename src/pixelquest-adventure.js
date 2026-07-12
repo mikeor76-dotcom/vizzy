@@ -71,9 +71,12 @@ const FRAGMENT_TUNING = {
   collectRadius: 2.5,
   maxLifetime: 6, // safety cleanup if never collected
   flashSeconds: 0.18, // tiny collect-pulse before removal
-  chargePerFragment: 0.05,
-  chargeDecayPerSecond: 0.004, // "very slowly" per spec — a whole minute+ to fully drain
-  arrivalChargeRetain: 0.4, // orbCharge *= this after an arrival resolves — partial, not zero
+  // SCARCER economy (engagement plan 3.2): charge is earned slower, decays
+  // faster, and arrivals SPEND most of it — so a bright orb means something
+  // and a full one is an occasion (the golden arrival).
+  chargePerFragment: 0.035,
+  chargeDecayPerSecond: 0.007,
+  arrivalChargeRetain: 0.25, // orbCharge *= this after an arrival resolves — spent, not kept
   bassCooldown: 0.4, // a touch more spacing so kicks don't stream fragments
   midCooldown: 0.55,
   highCooldown: 0.45,
@@ -785,9 +788,12 @@ export class ArrivalSequence {
       !pq.adventureCtl &&
       !mgr.noteBridge &&
       !mgr.campfirePause &&
-      !mgr.encounters.active // an encounter owns the moment — the arrival
+      !mgr.encounters.active && // an encounter owns the moment — the arrival
       // simply waits; journey stays >=arriveAt, so it fires the instant the
       // encounter clears (nothing is skipped)
+      // ...and the arrival must be EARNED: the orb pays for it (plan 3.2).
+      // Until the charge is there, the destination stays tantalizingly ahead.
+      (pq.adventure?.orb?.charge || 0) >= 0.55
     ) {
       this.#beginArrival(pq);
     }
@@ -797,6 +803,9 @@ export class ArrivalSequence {
     this.phase = "arriving";
     this.arrivedThisCycle = true;
     this._celebrated = false;
+    // a FULL orb makes it a golden arrival — fireflies bloom for the occasion
+    this.golden = (pq.adventure?.orb?.charge || 0) >= 0.95;
+    if (this.golden) pq.finalePulse = 1;
     const [lo, hi] = ARRIVAL_TUNING.sequenceDuration;
     this.seqDur = lo + Math.random() * (hi - lo);
     this.seqT = 0;

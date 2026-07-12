@@ -328,6 +328,11 @@ export class PixelQuest {
     // pixelquest-resonance.js. Updated after the mood, drawn in the pipeline.
     this.resonance = new WorldResonance();
     this.opening = new PixelQuestOpening(this); // cinematic intro (runs before gameplay)
+    // JOURNEY (engagement plan 3.2): waypoint progress, songs completed, and
+    // the world-wake meter. Persisted SERVER-side like last-mode (kiosk-proof),
+    // localStorage fallback in dev. Loaded lazily on the first rendered frame.
+    this.journey = { waypoint: 0, songs: 0, wake: 0 };
+    this._journeyLoaded = false;
     this.reaction = null; // brief non-verbal cue: lookup/lean/celebrate
     this.adventureCtl = null; // adventure beats can gently slow the world
     this.heroOffX = 0;
@@ -466,6 +471,26 @@ export class PixelQuest {
     this.clouds = [];
     for (let i = 0; i < 4; i++) this.clouds.push({ x: rnd() * 512, y: 6 + rnd() * 24, w: 14 + (rnd() * 20) | 0 });
     this.shoot = null; // rare shooting star
+  }
+
+  // ------------------------------------------------------------- journey
+  loadJourney() {
+    if (this._journeyLoaded) return;
+    this._journeyLoaded = true;
+    const apply = (j) => {
+      if (!j) return;
+      this.journey.waypoint = Math.max(0, Math.round(Number(j.waypoint) || 0));
+      this.journey.songs = Math.max(0, Math.round(Number(j.songs) || 0));
+      this.journey.wake = Math.max(0, Math.min(1, Number(j.wake) || 0));
+    };
+    try { apply(JSON.parse(localStorage.getItem("pq-journey") || "null")); } catch {}
+    if (typeof fetch === "function")
+      fetch("/api/journey").then((r) => (r.ok ? r.json() : null)).then(apply).catch(() => {});
+  }
+  saveJourney() {
+    try { localStorage.setItem("pq-journey", JSON.stringify(this.journey)); } catch {}
+    if (typeof fetch === "function")
+      fetch("/api/journey", { method: "POST", body: JSON.stringify(this.journey) }).catch(() => {});
   }
 
   // ---------------------------------------------------------------- audio
@@ -714,6 +739,11 @@ export class PixelQuest {
         this._songWasOff = false;
         this.songSeed = (Math.random() * 1e9) >>> 0;
         this.songHueShift = (this.songSeed % 17) - 8; // ±8° — every song looks subtly its own
+        // combinatorial novelty (plan 3.4): a new song sometimes turns the
+        // weather, and the flora sway-phases reshuffle — biome × weather ×
+        // hue × phases means exact scene-states practically never repeat
+        if (this.weather && Math.random() < 0.3) this.weather.t = this.weather.dur;
+        for (const fl of this.flora) fl.ph = Math.random() * TAU;
       }
     } else if (this.gate < 0.12) {
       if (this._songWasOff === false && (this._songTime || 0) > 45) {
@@ -721,6 +751,15 @@ export class PixelQuest {
         this.lanternFlash = 1;
         this.spawnSparkles();
         this.spawnSparkles();
+        // JOURNEY: a completed song advances the road; every third song is a
+        // MILESTONE — the next waypoint arrives (the biome moves on) and the
+        // gate's progress pips reset (engagement plan 3.2)
+        this.journey.songs++;
+        if (this.journey.songs % 3 === 0) {
+          this.journey.waypoint++;
+          this.triggerBiomeTransitionNow();
+        }
+        this.saveJourney();
       }
       this._songWasOff = true;
       this._songTime = 0;
@@ -1123,7 +1162,8 @@ export class PixelQuest {
     // climbing curtain through the build, full glory at the chorus — and the
     // DROP flares it beyond full for a couple of seconds
     const vis =
-      (sec?.intensity || 0) * (0.35 + (dir?.aurora ?? 0.6) * 0.75) * (1 + (this.resonance?.dropPulse || 0) * 1.2) * (this.gate || 0);
+      (sec?.intensity || 0) * (0.35 + (dir?.aurora ?? 0.6) * 0.75) * (1 + (this.resonance?.dropPulse || 0) * 1.2) *
+      (this.weather?.state === "auroraStorm" ? 1.6 : 1) * (this.gate || 0);
     if (vis <= 0.04) return;
     const { pw } = this;
     const y0 = Math.round(19 * this.S); // curtain hem line, upper sky
@@ -1166,7 +1206,9 @@ export class PixelQuest {
   // horizon MIST for breakdowns/outros (engagement plan 2.1): soft bands
   // drifting slowly above the ground line — the world exhales between choruses
   drawMist(o, pal) {
-    const f = this.resonance?.direction?.fog || 0;
+    // section fog OR the weather's own mist — whichever is thicker
+    const wf = this.weather?.state === "mist" ? 0.55 : this.weather?.state === "rain" ? 0.3 : 0;
+    const f = Math.max(this.resonance?.direction?.fog || 0, wf);
     if (f <= 0.04) return;
     const gb = this.groundBase();
     for (let k = 0; k < 3; k++) {
@@ -1313,6 +1355,16 @@ export class PixelQuest {
       this.landmarkScreenY = this.groundY(Math.max(0, Math.min(this.pw - 1, gsx))) - Math.round(18 * this.S * 0.7);
       if (gsx < -90 || gsx > this.pw + 90) return;
       this.assets.drawSprite(o, gate, "idle", 0, gsx, this.groundY(gsx) + 1, { anchor: "bottom-center", scale: 1.3 });
+      // JOURNEY PIPS (engagement plan 3.2): tiny lanterns by the gate — one
+      // goes dark per completed song; when the last goes out, the road moves
+      // on to the next waypoint. The Slow-TV "next station" pull, in 6 pixels.
+      const need = 3 - ((this.journey?.songs || 0) % 3);
+      const py = this.groundY(Math.max(0, Math.min(this.pw - 1, gsx))) - Math.round(26 * this.S * 0.7);
+      for (let i = 0; i < 3; i++) {
+        const lit = i < need;
+        o.fillStyle = lit ? this.col(pal.torch, 0.7 + this.kickPulse * 0.2) : this.col(pal.groundDark, 0.55);
+        o.fillRect(gsx - 5 + i * 4, py, 2, 2);
+      }
       return;
     }
     const off = this.scrollX * 0.3;
@@ -1431,7 +1483,7 @@ export class PixelQuest {
     // with reactive window glow + curling smoke layered live on top
     if (this.useAssets() && this.assets.ready("house")) {
       this.assets.drawSprite(o, "house", "idle", this.t, x, gy + 1, { anchor: "bottom-left" });
-      const walive = 1 + (this.adventure?.orb?.charge || 0) * 0.45;
+      const walive = (1 + (this.adventure?.orb?.charge || 0) * 0.45) * (1 + (this.journey?.wake || 0) * 0.4);
       const wg = (0.2 + this.bass.value * 0.06 + this.kickPulse * 0.22) * walive;
       o.fillStyle = this.col(pal.torch, Math.min(0.5, wg)); // window pulse
       o.fillRect(x + 16, gy - 10, 6, 5);
@@ -1459,7 +1511,7 @@ export class PixelQuest {
     o.fillRect(x + 2, gy - Math.round(4 * S), 3, Math.round(4 * S));
     // a warm lit window (someone's home) — brighter as music returns
     const wx = x + w - 6;
-    const walive = 1 + (this.adventure?.orb?.charge || 0) * 0.45;
+    const walive = (1 + (this.adventure?.orb?.charge || 0) * 0.45) * (1 + (this.journey?.wake || 0) * 0.4);
     o.fillStyle = this.col(pal.torch, (0.2 + this.bass.value * 0.06 + this.kickPulse * 0.22) * walive);
     o.fillRect(wx - 1, gy - h + 2, 5, 5);
     o.fillStyle = this.col(pal.torch, 0.9);
@@ -1849,7 +1901,7 @@ export class PixelQuest {
       if (this.useAssets() && this.assets.ready(asset)) {
         this.assets.drawSprite(o, asset, "sway", this.t + f.ph, sx, gy + 1, { anchor: "bottom-center" });
         if (f.type === "flower") {
-          const glow = (src ? 1 : 0.35 + this.treble.value * 0.35) * (0.7 + 0.3 * Math.sin(this.t * 2 + f.ph));
+          const glow = (src ? 1 : 0.35 + this.treble.value * 0.35) * (0.7 + 0.3 * Math.sin(this.t * 2 + f.ph)) * (1 + (this.journey?.wake || 0) * 0.5);
           o.fillStyle = this.col(pal.firefly, Math.min(1, glow));
           o.fillRect(sx + sway, gy - 8, 1, 1);
           if (src) {
@@ -1869,7 +1921,7 @@ export class PixelQuest {
         const h = Math.round(4 * f.s * this.S * 0.6) + 1;
         o.fillStyle = this.col(this.mix(pal.groundTop, pal.groundDark, 0.2), 0.9);
         o.fillRect(sx, gy - h, 1, h);
-        const glow = (src ? 1 : 0.35 + this.treble.value * 0.35) * (0.7 + 0.3 * Math.sin(this.t * 2 + f.ph));
+        const glow = (src ? 1 : 0.35 + this.treble.value * 0.35) * (0.7 + 0.3 * Math.sin(this.t * 2 + f.ph)) * (1 + (this.journey?.wake || 0) * 0.5);
         o.fillStyle = this.col(pal.firefly, Math.min(1, glow));
         o.fillRect(sx + sway, gy - h - 1, 1, 1); // the glowing bloom
         if (src) {
@@ -2369,8 +2421,18 @@ export class PixelQuest {
         age: 0, life: 12,
       });
     }
-    // fireflies scale with loudness; a song's FINALE releases a bloom of them
-    const wantFly = Math.round(4 + this.loud.value * 14 + (this.finalePulse || 0) * 18);
+    // gentle rain when the weather turns (plan 3.3): thin slanted streaks that
+    // die on the ground — atmosphere, never a downpour
+    if (this.weather?.state === "rain") {
+      const wantRain = this.cfg.detail === "pi_safe" ? 14 : 24;
+      let nRain = 0;
+      for (const p of this.particles) if (p.kind === "rain") nRain++;
+      if (nRain < wantRain)
+        this.particles.push({ kind: "rain", x: Math.random() * (this.pw + 30) - 15, y: -3, vx: -13, vy: 66 + Math.random() * 22, age: 0, life: 5 });
+    }
+    // fireflies scale with loudness; a song's FINALE releases a bloom of them;
+    // and a WOKEN world (hours of collected music) simply keeps more of them
+    const wantFly = Math.round(4 + this.loud.value * 14 + (this.finalePulse || 0) * 18 + (this.journey?.wake || 0) * 8);
     const flyCount = this.particles.filter((p) => p.kind === "firefly").length;
     if (flyCount < wantFly && Math.random() < 0.15) {
       this.particles.push({
@@ -2404,6 +2466,10 @@ export class PixelQuest {
         if (p.kind === "ember") {
           o.fillStyle = `rgba(255,${140 + Math.round(fade * 80)},60,${fade * 0.9})`;
           o.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+        } else if (p.kind === "rain") {
+          o.fillStyle = `rgba(150,182,222,${0.38 * fade})`;
+          o.fillRect(Math.round(p.x), Math.round(p.y), 1, 3);
+          if (p.y > this.groundY(Math.max(0, Math.min(this.pw - 1, Math.round(p.x))))) p.age = p.life;
         } else if (p.kind === "dust") {
           o.fillStyle = this.col(pal.groundTop, 0.55 * fade);
           o.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
@@ -2530,6 +2596,24 @@ export class PixelQuest {
     // World Resonance rides on the fresh mood (section inference) + this frame's
     // audio + the one-frame kickHit/snareHit flags (path pulse-waves/ripples).
     this.resonance.update(this, this.adventure.mood, dt);
+    this.loadJourney(); // once — server state (waypoint/songs/wake), ls fallback
+    // WEATHER (engagement plan 3.3): a slow state machine — clear, mist, rain,
+    // aurora-storm — turning every 3-8 minutes, biased by how intense the
+    // music has run. Consumers: mist floor, gentle rain, aurora storms.
+    this.weather ??= { state: "clear", t: 0, dur: 180 + Math.random() * 240 };
+    this.weather.t += dt;
+    if (this.weather.t > this.weather.dur) {
+      const hot = (this.intensity || 0) > 0.42;
+      const roll = Math.random();
+      const cur = this.weather.state;
+      this.weather.state =
+        cur === "clear" ? (hot && roll < 0.45 ? "auroraStorm" : "mist")
+        : cur === "mist" ? (hot ? (roll < 0.5 ? "auroraStorm" : "rain") : roll < 0.6 ? "clear" : "rain")
+        : cur === "rain" ? (roll < 0.6 ? "clear" : "mist")
+        : "clear"; // an aurora storm always clears
+      this.weather.t = 0;
+      this.weather.dur = 180 + Math.random() * 300;
+    }
     if (this.dropHit) {
       // THE HIT (engagement plan 2.2): one choreographed beat — the hero leaps,
       // lantern + torches flare, sparkles burst, the orb rings, the held notes

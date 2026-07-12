@@ -26,6 +26,18 @@ const cleanMode = (m) => String(m || "").trim().slice(0, 64).replace(/[^a-z0-9_-
 function readLastMode() { try { return cleanMode(readFileSync(MODE_FILE, "utf8")); } catch { return ""; } }
 function writeLastMode(m) { try { mkdirSync(STATE_DIR, { recursive: true }); writeFileSync(MODE_FILE, cleanMode(m)); return true; } catch { return false; } }
 
+// Pixel Quest JOURNEY persistence (engagement plan 3.2): waypoint progress,
+// songs completed, and the world-wake meter survive kiosk reboots the same way
+// the last mode does. Numbers only — sanitized on write.
+const JOURNEY_FILE = join(STATE_DIR, "journey.json");
+const cleanJourney = (j) => ({
+  waypoint: Math.max(0, Math.min(999, Math.round(Number(j?.waypoint) || 0))),
+  songs: Math.max(0, Math.min(99999, Math.round(Number(j?.songs) || 0))),
+  wake: Math.max(0, Math.min(1, Number(j?.wake) || 0)),
+});
+function readJourney() { try { return cleanJourney(JSON.parse(readFileSync(JOURNEY_FILE, "utf8"))); } catch { return cleanJourney({}); } }
+function writeJourney(j) { try { mkdirSync(STATE_DIR, { recursive: true }); writeFileSync(JOURNEY_FILE, JSON.stringify(cleanJourney(j))); return true; } catch { return false; } }
+
 function appVersion() {
   try {
     return JSON.parse(readFileSync(join(APP_ROOT, "version.json"), "utf8")).version;
@@ -82,6 +94,26 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(200, { "content-type": "application/json" });
     return res.end(JSON.stringify({ mode: readLastMode() }));
+  }
+
+  // Pixel Quest journey state (read on boot, written on song/waypoint changes)
+  if (pathname === "/api/journey") {
+    res.setHeader("access-control-allow-origin", "*");
+    res.setHeader("cache-control", "no-store");
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 512) req.destroy(); });
+      req.on("end", () => {
+        let j = null;
+        try { j = JSON.parse(body); } catch {}
+        if (j && typeof j === "object") writeJourney(j); // bad input never clobbers good state
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(readJourney()));
+      });
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    return res.end(JSON.stringify(readJourney()));
   }
 
   if (pathname === "/" || pathname === "/index.html") return sendIndex(res); // inject saved mode

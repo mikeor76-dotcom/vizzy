@@ -45,7 +45,11 @@ function ensureAudioContext() {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.82;
+    // 0.55 (was 0.82): the old value delayed a beat's energy ~70-130ms before
+    // it fully registered in the FFT — and every mode applies its OWN
+    // smoothers on top, so the heavy analyser smoothing was pure added
+    // latency, not stability
+    analyser.smoothingTimeConstant = 0.55;
   }
   if (audioCtx.state === "suspended") audioCtx.resume();
 }
@@ -67,7 +71,19 @@ function stopMic() {
 
 async function startMic() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // MUSIC mic, not a call mic: Chrome's default constraints enable echo
+    // cancellation, noise suppression and auto-gain — voice-call DSP that adds
+    // ~20-60ms latency, squashes musical dynamics (AGC), and actively removes
+    // sustained tones (noise suppression treats music as noise). All off.
+    // `latency: 0` is a hint for the shortest capture buffering available.
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        latency: 0,
+      },
+    });
     ensureAudioContext();
     // mic is analysed only, never routed to the speakers (no feedback)
     micStream = stream;

@@ -274,6 +274,7 @@ export class PixelQuest {
     this.time = new Uint8Array(2048);
     this.bass = new Smoother(0.5, 0.07);
     this.mids = new Smoother(0.5, 0.09);
+    this.midsFull = new Smoother(0.5, 0.09); // UNCLIPPED mids — melody onsets need real rises even when the clamped band saturates at 1
     this.treble = new Smoother(0.55, 0.1);
     this.loud = new Smoother(0.4, 0.05);
     this.peak = 0.3;
@@ -490,26 +491,66 @@ export class PixelQuest {
     const rawBass = Math.min(1, band(1, 11) * gain);
     this.bass.update(rawBass);
     this.mids.update(Math.min(1, band(11, 92) * gain));
+    this.midsFull.update(band(11, 92) * gain); // unclipped twin for melody rises
     this.treble.update(Math.min(1, band(92, 372) * 1.6 * gain));
     this.loud.update(Math.min(1, rawLoud * gain));
+
+    // SPECTRAL FULLNESS (intensity model, engagement plan 1.1): how much of the
+    // spectrum is actually lit, measured RELATIVE TO THE LOUDEST BAND — so it
+    // is volume-proof AND gain-proof. A ballad lights a few bands no matter how
+    // the adaptive gain normalizes it; a full mix lights most of them.
+    {
+      const NB = 24;
+      let maxB = 0;
+      if (!this._fullBands) this._fullBands = new Float32Array(NB);
+      for (let b = 0; b < NB; b++) {
+        const lo = 2 + Math.round((b / NB) * 360);
+        const hi = 2 + Math.round(((b + 1) / NB) * 360);
+        let s = 0;
+        for (let i = lo; i < hi; i++) s += this.freq[i];
+        const v = s / ((hi - lo) * 255);
+        this._fullBands[b] = v;
+        if (v > maxB) maxB = v;
+      }
+      let lit = 0;
+      if (maxB > 0.02) for (let b = 0; b < NB; b++) if (this._fullBands[b] > maxB * 0.33) lit++;
+      const fullT = maxB > 0.02 ? lit / NB : 0;
+      this.fullness = (this.fullness || 0) + (fullT - (this.fullness || 0)) * Math.min(1, dt / 0.8);
+    }
 
     // drum detection on per-band spectral flux: the kick lives in the bass
     // bins, the snare in the mids/highs. Flux (frame-to-frame change) fires
     // crisply even though the analyser smooths absolute levels.
     let bfl = 0;
     for (let i = 1; i < 12; i++) bfl += Math.abs(this.freq[i] - this.prevFreq[i]);
-    let mfl = 0;
-    for (let i = 24; i < 372; i += 2) mfl += Math.abs(this.freq[i] - this.prevFreq[i]);
+    let bofl = 0; // mid BODY (24-92): a snare's thwack, a guitar's chug
+    for (let i = 24; i < 92; i += 2) bofl += Math.abs(this.freq[i] - this.prevFreq[i]);
+    let tfl = 0; // treble (92-372): a snare's CRACK, a hat's tick
+    for (let i = 92; i < 372; i += 3) tfl += Math.abs(this.freq[i] - this.prevFreq[i]);
     const bassFluxN = Math.min(1.5, (bfl / (11 * 255)) * gain * 9);
-    const midFluxN = Math.min(1.5, (mfl / (174 * 255)) * gain * 9);
+    const bodyFluxN = Math.min(1.5, (bofl / (34 * 255)) * gain * 9);
+    const trebleFluxN = Math.min(2, (tfl / (94 * 255)) * gain * 9);
     const kickHit = analyser && this.kickBeat.update(bassFluxN, dt);
-    const snareHit = analyser && this.snareBeat.update(midFluxN, dt);
+    // HONEST SNARES (engagement plan 1.4): the detector listens to the CRACK
+    // (treble flux — immune to guitar chugs saturating its average), and the
+    // dispatch also demands the THWACK (mid-body flux) — which filters hats,
+    // cymbal washes and build-rolls that crack without a body. String beds and
+    // vocal onsets (body, no crack) never fire it at all.
+    const snareHit = analyser && this.snareBeat.update(trebleFluxN, dt);
     // when both fire at once, the dominant band wins. Each also requires REAL
-    // absolute band energy: the adaptive gain amplifies mic room-noise ×4 in
+    // absolute band energy: the adaptive gain amplifies mic room-noise in
     // silence, enough for random flux to trip the detectors — a real kick has
     // real bass under it, hiss doesn't (no phantom beats before the music).
-    if (kickHit && rawBass > 0.12 && (!snareHit || bassFluxN >= midFluxN * 0.9)) this.onKick();
-    if (snareHit && this.mids.value > 0.1 && (!kickHit || midFluxN > bassFluxN * 0.9)) this.onSnare();
+    // leaky kicks/min estimate (20s time constant) — the tempo tracker
+    // reconciles its onset-derived bps against this to catch double-time reads
+    this._kickRate = (this._kickRate || 0) * Math.exp(-dt / 20);
+    if (kickHit && rawBass > 0.12) {
+      this._kickRate += 3;
+      this._kickIv = this.clock - (this._lastKickClock ?? this.clock); // spacing between real kicks
+      this._lastKickClock = this.clock;
+    }
+    if (kickHit && rawBass > 0.12 && (!snareHit || bassFluxN >= trebleFluxN * 0.7)) this.onKick();
+    if (snareHit && this.mids.value > 0.1 && bodyFluxN > 0.25 && (!kickHit || trebleFluxN > bassFluxN * 0.7)) this.onSnare();
 
     // MELODY onsets: a rising edge in the mid-band LEVEL that HOLDS for ~100ms
     // — the lead line / vocal moving. Sustain is what separates melody from
@@ -518,7 +559,10 @@ export class PixelQuest {
     // the rate at roughly 16th notes so arpeggios don't machine-gun. Drives the
     // Songstream's note births (melody = notes; the orb keeps the bassline).
     this._melodyCd = (this._melodyCd || 0) - dt;
-    const midsLvl = this.mids.value;
+    // read the UNCLIPPED mids: the clamped band saturates at 1.0 on warm mixes
+    // and a saturated level shows no rise — melody onsets vanished exactly in
+    // the songs (ballads) that most needed them
+    const midsLvl = this.midsFull.value;
     const midsRise = midsLvl - (this._prevMidsLvl ?? midsLvl);
     this._prevMidsLvl = midsLvl;
     // melody PITCH proxy: the spectral centroid of the melody band — rises
@@ -530,18 +574,30 @@ export class PixelQuest {
       const c = cw / cs;
       this.midCentroid = (this.midCentroid || c) + (c - (this.midCentroid || c)) * 0.5;
     }
+    // SELF-TUNING sensitivity (engagement plan 1.3): aim for a musical 10-40
+    // notes/min in EVERY genre. A wall of rhythm guitar floods a fixed
+    // threshold (240/min — notes become confetti) and a soft ballad starves it
+    // (6/min) — so the rise threshold adapts to hold the rate in band.
+    // _melRate is a leaky hits/min estimate (20s time constant).
+    this._melRate = (this._melRate ?? 20) * Math.exp(-dt / 20);
+    const melTh = (this._melThresh ??= 0.035);
+    if (this._melRate > 40) this._melThresh = Math.min(0.12, melTh * (1 + dt * 0.1));
+    else if (this._melRate < 8 && midsLvl > 0.15) this._melThresh = Math.max(0.016, melTh * (1 - dt * 0.06));
     this.melodyHit = false; // one-frame flag, consumed by World Resonance
     if (this._melodyPend) {
       this._melodyPend.t -= dt;
-      if (midsLvl < this._melodyPend.base + 0.02) this._melodyPend = null; // fell back — percussive
+      if (midsLvl < this._melodyPend.base + 0.02) { this._melodyPend = null; this._melCancels = (this._melCancels || 0) + 1; } // fell back — percussive
       else if (this._melodyPend.t <= 0) {
         this._melodyPend = null; // held — a real melody onset
         this.melodyHit = true;
         this.melodyPulse = 1;
         this._melodyCd = 0.14;
+        this._melRate += 3; // 60s/20s leak — steady rate r/min reads as ≈ r
+        this._melFires = (this._melFires || 0) + 1;
       }
-    } else if (analyser && midsRise > 0.035 && midsLvl > 0.18 && this._melodyCd <= 0 && (this.gate || 0) > 0.3) {
+    } else if (analyser && midsRise > this._melThresh && midsLvl > 0.16 && this._melodyCd <= 0 && (this.gate || 0) > 0.3) {
       this._melodyPend = { t: 0.1, base: midsLvl - midsRise * 0.5 };
+      this._melPends = (this._melPends || 0) + 1;
     }
     this.melodyPulse = (this.melodyPulse || 0) * Math.exp(-dt * 6);
 
@@ -588,6 +644,16 @@ export class PixelQuest {
           let fiv = iv;
           while (fiv < ref / 1.45) fiv *= 2;
           while (fiv > ref * 1.45) fiv /= 2;
+          // HALF/DOUBLE-TIME disambiguation (engagement plan 1.2): when real
+          // kicks land at ~TWICE the onset spacing, the onsets are
+          // subdivisions (a ballad's eighth-note piano reading 141 while its
+          // brushed kick walks at 70) — prefer the slower octave so the hero
+          // strolls. Instantaneous kick spacing (not a laggy rate) keeps
+          // kick-led genres honest: EDM/rock kicks match their onsets 1:1 and
+          // never trigger this; a fast reading (>105 BPM) is required at all.
+          const kIv = this._kickIv || 0;
+          const kickFresh = this._lastKickClock != null && this.clock - this._lastKickClock < 3;
+          if (fiv < 0.57 && fiv * 2 <= 1.35 && kickFresh && kIv > fiv * 1.6 && kIv < fiv * 2.6) fiv *= 2;
           fiv = Math.max(0.25, Math.min(1.35, fiv)); // ~44..240 BPM sanity
           this._tempoRef = this._tempoRef == null ? fiv : this._tempoRef + (fiv - this._tempoRef) * 0.3;
           this.intervals.push(fiv);
@@ -638,7 +704,27 @@ export class PixelQuest {
     const rawMidHi = band(11, 372); // NO adaptive gain — absolute content above the rumble
     const gateT = rms > Math.max(0.01, this.rmsPeak * 0.05) && rawMidHi > 0.016 ? 1 : 0;
     this.gate = (this.gate || 0) + (gateT - (this.gate || 0)) * Math.min(1, dt * (gateT ? 6 : 0.45));
+
+    // ABSOLUTE INTENSITY (engagement plan 1.1): how intense the music IS,
+    // from volume-proof STRUCTURE — onset density, spectral fullness,
+    // percussiveness (transient-vs-sustained character) and tempo presence.
+    // The adaptive gain erases loudness cues, so without this a lullaby and a
+    // banger read identically and every song saturates into one mood.
+    const perc = clamp01((flux / Math.max(0.18, this.loud.value)) * 3); // measured range: legato ~0.1, kick music 0.4-0.6
+    this._perc = (this._perc || 0) + (perc - (this._perc || 0)) * Math.min(1, dt / 1);
+    // crescendo: the adaptive gain erases loudness ARCS (a swelling orchestra
+    // reads flat), so track RAW loudness against its own 8s baseline — the
+    // ratio is volume-invariant and lights up exactly during a build/swell
+    this._rawLoudSlow = (this._rawLoudSlow ?? rawLoud) + (rawLoud - (this._rawLoudSlow ?? rawLoud)) * Math.min(1, dt / 20);
+    const cresc = clamp01((rawLoud / Math.max(0.02, this._rawLoudSlow) - 1) * 2.2);
+    const intensityT =
+      clamp01(rateN * 0.3 + (this.fullness || 0) * 0.18 + this._perc * 0.27 + tempoNudge * 0.12 + cresc * 0.32) * this.gate;
+    this.intensity = (this.intensity || 0) + (intensityT - (this.intensity || 0)) * Math.min(1, dt / 3);
+    this.intensityFast = (this.intensityFast || 0) + (intensityT - (this.intensityFast || 0)) * Math.min(1, dt / 0.4);
+
     let driveT = clamp01(rateN * 0.4 + flux * 0.3 + this.loud.value * 0.15 + tempoNudge * 0.15) * this.gate;
+    // sparse-spectrum music (ballads, solo piano) can't sustain sprint drive
+    driveT *= 0.55 + (this.fullness || 0) * 0.6;
     // while music is playing he never stops dead — at worst a steady walk
     driveT = Math.max(driveT, this.gate * 0.16);
     this.drive += (driveT - this.drive) * Math.min(1, dt * (driveT > this.drive ? 5 : 0.7));

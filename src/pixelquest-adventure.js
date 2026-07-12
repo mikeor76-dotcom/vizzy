@@ -39,11 +39,14 @@ export const ADVENTURE_TUNING = {
   // floor on the walk-pace signal) — moodCalmMax sits comfortably above
   // that floor so genuinely quiet passages actually reach "calm" instead of
   // asymptotically approaching a threshold they can never cross.
-  moodCalmMax: 0.32,
-  moodEnergeticMin: 0.46,
-  moodPeakMin: 0.7,
-  moodBreakdownBaseline: 0.35, // longEnergy must be at least this high...
-  moodBreakdownDrop: 0.16, // ...and energy must have fallen this far below it
+  // retuned for the ABSOLUTE intensity model (engagement plan 1.1) — measured
+  // genre ranges: orchestral pp ~0.15, ballads ~0.3, hip-hop ~0.4, rock ~0.5,
+  // EDM drop 0.55-0.7 (crescendo term spikes it at section entries)
+  moodCalmMax: 0.27,
+  moodEnergeticMin: 0.44,
+  moodPeakMin: 0.58,
+  moodBreakdownBaseline: 0.32, // longEnergy must be at least this high...
+  moodBreakdownDrop: 0.14, // ...and energy must have fallen this far below it
   // adventure beats
   noteBridgeMaxTiles: 6,
   noteBridgeCooldownSeconds: 150,
@@ -90,7 +93,10 @@ export class AdventureMood {
   }
   update(pq, dt) {
     const T = ADVENTURE_TUNING;
-    const driveFx = pq.driveFx || 0;
+    // the ABSOLUTE intensity model (volume-proof structure: onset density,
+    // spectral fullness, percussiveness, tempo) — not the pace-oriented
+    // driveFx, which normalizes every genre into the same "energetic" band
+    const driveFx = pq.intensity ?? pq.driveFx ?? 0;
     const gate = pq.gate || 0;
     this.energy += (driveFx - this.energy) * Math.min(1, dt / T.moodFastTau);
     this.longEnergy += (driveFx - this.longEnergy) * Math.min(1, dt / T.moodSlowTau);
@@ -276,7 +282,7 @@ export class OrbCompanion {
     // full-resolution canvas, so it moves with sub-pixel smoothness instead of
     // snapping on the low-res buffer. Here we just advance state + record it.
     if (!this.visible || pq.heroScreenX == null) { this._rs = null; return; }
-    const dt = Math.min(0.05, this._lastT ? pq.t - this._lastT : 0.016);
+    const dt = Math.max(0, Math.min(0.05, this._lastT ? pq.t - this._lastT : 0.016)); // clamped ≥0: a clock jump must never explode the followers
     this._lastT = pq.t;
     this.charge = Math.max(0, this.charge - FRAGMENT_TUNING.chargeDecayPerSecond * dt);
     this.absorbFlash = Math.max(0, this.absorbFlash - dt * 5);

@@ -705,6 +705,28 @@ export class PixelQuest {
     const gateT = rms > Math.max(0.01, this.rmsPeak * 0.05) && rawMidHi > 0.016 ? 1 : 0;
     this.gate = (this.gate || 0) + (gateT - (this.gate || 0)) * Math.min(1, dt * (gateT ? 6 : 0.45));
 
+    // SONG BOUNDARIES (engagement plan 2.3): a real gap after a real song is a
+    // FINALE (fireflies bloom, the world settles — peak-end rule); the next
+    // gate-open is a NEW SONG and rerolls a subtle per-song hue identity.
+    if (this.gate > 0.5) {
+      this._songTime = (this._songTime || 0) + dt;
+      if (this._songWasOff !== false) {
+        this._songWasOff = false;
+        this.songSeed = (Math.random() * 1e9) >>> 0;
+        this.songHueShift = (this.songSeed % 17) - 8; // ±8° — every song looks subtly its own
+      }
+    } else if (this.gate < 0.12) {
+      if (this._songWasOff === false && (this._songTime || 0) > 45) {
+        this.finalePulse = 1; // consumed by the firefly population below
+        this.lanternFlash = 1;
+        this.spawnSparkles();
+        this.spawnSparkles();
+      }
+      this._songWasOff = true;
+      this._songTime = 0;
+    }
+    this.finalePulse = (this.finalePulse || 0) * Math.exp(-dt * 0.35);
+
     // ABSOLUTE INTENSITY (engagement plan 1.1): how intense the music IS,
     // from volume-proof STRUCTURE — onset density, spectral fullness,
     // percussiveness (transient-vs-sustained character) and tempo presence.
@@ -1096,7 +1118,12 @@ export class PixelQuest {
       this._aur[i] += (v - this._aur[i]) * Math.min(1, dt * (v > this._aur[i] ? 10 : 2.2));
     }
     const sec = this.resonance?.section;
-    const vis = (sec?.intensity || 0) * (0.5 + (sec?.profile?.bright || 1) * 0.55) * (this.gate || 0);
+    const dir = this.resonance?.direction;
+    // scene direction owns the aurora's presence: a whisper in the intro, a
+    // climbing curtain through the build, full glory at the chorus — and the
+    // DROP flares it beyond full for a couple of seconds
+    const vis =
+      (sec?.intensity || 0) * (0.35 + (dir?.aurora ?? 0.6) * 0.75) * (1 + (this.resonance?.dropPulse || 0) * 1.2) * (this.gate || 0);
     if (vis <= 0.04) return;
     const { pw } = this;
     const y0 = Math.round(19 * this.S); // curtain hem line, upper sky
@@ -1114,11 +1141,48 @@ export class PixelQuest {
       const h = Math.max(2, Math.round(v * rise));
       const yTop = y0 - h;
       // curtain body: teal shifting VIOLET where the band burns hot — then the
-      // classic bright green hem
-      o.fillStyle = `rgba(${110 + Math.round(v * 70)},${200 - Math.round(v * 55)},235,${(0.07 + v * 0.16) * vis})`;
+      // classic bright green hem. songHueShift gives each song its own cast.
+      const hs = (this.songHueShift || 0) * 4;
+      o.fillStyle = `rgba(${110 + Math.round(v * 70) + hs},${200 - Math.round(v * 55)},235,${(0.07 + v * 0.16) * vis})`;
       o.fillRect(x, yTop, step, h);
-      o.fillStyle = `rgba(130,255,190,${(0.16 + v * 0.34) * vis})`;
+      o.fillStyle = `rgba(${130 + hs},255,${190 - hs},${(0.16 + v * 0.34) * vis})`;
       o.fillRect(x, y0 - Math.max(1, h >> 2), step, Math.max(1, h >> 2));
+    }
+  }
+
+  // a soft LIGHT LIFT over the sky (engagement plan 2.1/2.2): the chorus glows,
+  // the drop flashes. Stepped quadratic falloff — never a hard-edged slab.
+  drawSkyLift(o) {
+    const lift = Math.max(0, this.resonance?.direction?.lift || 0) + (this.resonance?.dropPulse || 0) * 0.22;
+    if (lift <= 0.015) return;
+    const H = Math.round(this.ph * 0.6), steps = 12;
+    for (let i = 0; i < steps; i++) {
+      const f = 1 - i / steps;
+      o.fillStyle = `rgba(235,240,255,${lift * 0.5 * f * f})`;
+      o.fillRect(0, Math.round((H * i) / steps), this.pw, Math.ceil(H / steps));
+    }
+  }
+
+  // horizon MIST for breakdowns/outros (engagement plan 2.1): soft bands
+  // drifting slowly above the ground line — the world exhales between choruses
+  drawMist(o, pal) {
+    const f = this.resonance?.direction?.fog || 0;
+    if (f <= 0.04) return;
+    const gb = this.groundBase();
+    for (let k = 0; k < 3; k++) {
+      const h = 3 + k * 2;
+      const y = gb - Math.round((6 + k * 6) * this.S * 0.55) - h;
+      const drift = Math.round(this.t * (3 + k * 2) + Math.sin(this.t * 0.35 + k * 2.1) * 10);
+      const a = f * (0.11 - k * 0.028);
+      const w1 = Math.round(this.pw * 0.62);
+      const x1 = ((drift % this.pw) + this.pw) % this.pw;
+      o.fillStyle = `rgba(188,198,224,${a})`;
+      o.fillRect(x1 - this.pw, y, w1, h);
+      o.fillRect(x1, y, w1, h);
+      const x2 = (x1 + Math.round(this.pw * 0.55)) % this.pw;
+      o.fillStyle = `rgba(188,198,224,${a * 0.6})`;
+      o.fillRect(x2 - this.pw, y + h - 1, Math.round(w1 * 0.5), Math.max(2, h - 2));
+      o.fillRect(x2, y + h - 1, Math.round(w1 * 0.5), Math.max(2, h - 2));
     }
   }
 
@@ -2305,8 +2369,8 @@ export class PixelQuest {
         age: 0, life: 12,
       });
     }
-    // fireflies scale with loudness
-    const wantFly = Math.round(4 + this.loud.value * 14);
+    // fireflies scale with loudness; a song's FINALE releases a bloom of them
+    const wantFly = Math.round(4 + this.loud.value * 14 + (this.finalePulse || 0) * 18);
     const flyCount = this.particles.filter((p) => p.kind === "firefly").length;
     if (flyCount < wantFly && Math.random() < 0.15) {
       this.particles.push({
@@ -2456,7 +2520,7 @@ export class PixelQuest {
     // steady nudge (energetic/peak a touch faster, breakdown a touch slower)
     const ctlMul =
       (this.heroCtl ? (this.heroCtl.scrollMul ?? 1) : 1) * (this.adventureCtl ? (this.adventureCtl.scrollMul ?? 1) : 1);
-    const speed = this.cruise * (1 + this.kickPulse * 0.12) * eggPace * ctlMul * (this.moodPaceMul || 1) * this.S;
+    const speed = this.cruise * (1 + this.kickPulse * 0.12) * eggPace * ctlMul * (this.moodPaceMul || 1) * (this.resonance?.direction?.pace || 1) * this.S;
     this.lastSpeed = speed;
     this.scrollX += speed * dt;
     // Adventure Layer runs first so its mood/beat state is fresh for this
@@ -2466,6 +2530,18 @@ export class PixelQuest {
     // World Resonance rides on the fresh mood (section inference) + this frame's
     // audio + the one-frame kickHit/snareHit flags (path pulse-waves/ripples).
     this.resonance.update(this, this.adventure.mood, dt);
+    if (this.dropHit) {
+      // THE HIT (engagement plan 2.2): one choreographed beat — the hero leaps,
+      // lantern + torches flare, sparkles burst, the orb rings, the held notes
+      // dive (released in resonance), the aurora + sky flash on dropPulse
+      this.lanternFlash = 1;
+      this.torchFlare = 1;
+      this.spawnSparkles();
+      this.spawnSparkles();
+      if (this.heroJumpY === 0) { this.heroJumpV = -58; this.jumpCooldown = 0.4; }
+      const dOrb = this.adventure?.orb;
+      if (dOrb) { dOrb.absorbFlash = 1; dOrb._ring = 1; }
+    }
     if (this.reaction) {
       this.reaction.t += dt;
       if (this.reaction.t >= this.reaction.dur) this.reaction = null;
@@ -2575,10 +2651,12 @@ export class PixelQuest {
     o.fillRect(0, -2, pw, ph + 4);
     this.drawSky(o, pal);
     this.drawAurora(o, pal, dt); // the sky IS the spectrum (World Resonance)
+    this.drawSkyLift(o); // chorus glow / drop flash (scene direction)
     this.adventure.draw(o, pal, "destination"); // far-background silhouette
     this.events.draw(o, pal, "sky");
     this.drawMountains(o, pal);
     this.drawLandmark(o, pal); // biome gateway/landmark (background parallax, behind props+hero)
+    this.drawMist(o, pal); // breakdown/outro horizon mist (scene direction)
     this.events.draw(o, pal, "background");
     this.adventure.draw(o, pal, "midground"); // e.g. the note bridge tiles
     this.adventure.draw(o, pal, "encounter-bg"); // encounters behind props/hero (giant, gate, arcade face)

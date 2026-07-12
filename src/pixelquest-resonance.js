@@ -50,13 +50,17 @@ export function resonanceBudget(pq) {
 // falling one as an "outro" even at the same instantaneous level. Everything
 // else in the file multiplies by `intensity` and the section `profile`.
 // ---------------------------------------------------------------------------
+// Per-section SCENE DIRECTION (engagement plan 2.1) — the states must differ
+// at a glance: aurora presence, horizon mist, a soft sky lift, and a hero pace
+// nudge, alongside the existing stream density/speed/brightness. WorldResonance
+// glides between profiles (~1.5s) so section changes breathe instead of snap.
 const SECTION_PROFILE = {
-  intro: { density: 0.28, speed: 0.72, bright: 0.55 },
-  groove: { density: 0.62, speed: 1.0, bright: 0.85 },
-  build: { density: 0.85, speed: 1.2, bright: 1.0 },
-  chorus: { density: 1.0, speed: 1.38, bright: 1.2 },
-  breakdown: { density: 0.32, speed: 0.6, bright: 0.55 },
-  outro: { density: 0.16, speed: 0.5, bright: 0.36 },
+  intro: { density: 0.28, speed: 0.72, bright: 0.55, aurora: 0.25, fog: 0, lift: 0, pace: 0.9 },
+  groove: { density: 0.62, speed: 1.0, bright: 0.85, aurora: 0.6, fog: 0, lift: 0, pace: 1 },
+  build: { density: 0.85, speed: 1.2, bright: 1.0, aurora: 1.0, fog: 0, lift: 0.05, pace: 1.06 },
+  chorus: { density: 1.0, speed: 1.38, bright: 1.2, aurora: 1.45, fog: 0, lift: 0.1, pace: 1.12 },
+  breakdown: { density: 0.32, speed: 0.6, bright: 0.55, aurora: 0.35, fog: 0.6, lift: 0, pace: 0.85 },
+  outro: { density: 0.16, speed: 0.5, bright: 0.36, aurora: 0.2, fog: 0.3, lift: 0, pace: 0.8 },
 };
 
 export class SongSection {
@@ -151,8 +155,9 @@ export class Songstream {
     const energy = pq.energy || 0;
     const mids = pq.mids?.value || 0;
     const tre = pq.treble?.value || 0;
-    const spd = section.profile.speed;
-    const dens = section.profile.density;
+    const dir = pq.resonance?.direction;
+    const spd = dir?.speed ?? section.profile.speed; // glided — sections breathe
+    const dens = dir?.density ?? section.profile.density;
     const alive = section.intensity; // 0 in silence → no spawns
 
     // ---- spawn ----
@@ -443,10 +448,60 @@ export class WorldResonance {
     this.section = new SongSection();
     this.stream = new Songstream();
     this.path = new ResonancePath();
+    // smoothed scene direction (glides between section profiles)
+    this.direction = { density: 0.3, speed: 0.8, bright: 0.6, aurora: 0.3, fog: 0, lift: 0, pace: 1 };
+    this.dropPulse = 0; // ~2s envelope after a detected drop
+    this._dropCd = 0;
+    this._iHist = new Float32Array(20); // ~0.33s of intensityFast history
+    this._iIdx = 0;
+    this._buildHeld = 0;
   }
   update(pq, mood, dt) {
     this.pq = pq;
     this.section.update(pq, mood, dt);
+    // glide the scene direction toward the current section's profile
+    const p = this.section.profile;
+    const d = this.direction;
+    const k = Math.min(1, dt / 1.5);
+    for (const key of ["density", "speed", "bright", "aurora", "fog", "lift", "pace"])
+      d[key] += (p[key] - d[key]) * k;
+
+    // DROP DETECTION (engagement plan 2.2), two signatures:
+    // (a) THE KICK RETURNS: builds famously pull the kick out, then slam it
+    //     back — a kick landing after a ≥3.5s kickless stretch while the music
+    //     is already hot IS the drop (measured: the cleanest signal there is).
+    // (b) CLIMB THEN CLIFF: energy trend positive ≥2s, then intensityFast
+    //     jumps within ~0.33s (for builds that never drop the kick).
+    // One-frame pq.dropHit + a ~2s dropPulse envelope; ≥20s cooldown.
+    this._buildHeld = this.section.rising > 0.018 ? this._buildHeld + dt : Math.max(0, this._buildHeld - dt * 2);
+    const iF = pq.intensityFast || 0;
+    const oldest = this._iHist[this._iIdx];
+    this._iHist[this._iIdx] = iF;
+    this._iIdx = (this._iIdx + 1) % this._iHist.length;
+    this._dropCd = Math.max(0, this._dropCd - dt);
+    const kickGapPrev = this._kickGapPrev ?? 99;
+    this._kickGapPrev = pq._lastKickClock != null ? pq.clock - pq._lastKickClock : 99;
+    const kickReturned = pq.kickHit && kickGapPrev > 3.5;
+    pq.dropHit = false;
+    if (
+      ((kickReturned && iF > 0.42) ||
+        // the cliff must bring BASS — build entrances jump intensity with
+        // rolls/risers but no low end, and they must not claim the drop
+        (this._buildHeld > 2 && iF - oldest > 0.13 && (pq.bass?.value || 0) > 0.45)) &&
+      this._dropCd <= 0 && (pq.gate || 0) > 0.5
+    ) {
+      pq.dropHit = true;
+      this.dropPulse = 1;
+      this._dropCd = 20;
+      this._buildHeld = 0;
+      // release every held phrase-note at once — the sky's notes DIVE on the drop
+      for (const part of this.stream.parts) if (part.holdUntil && part.age < part.holdUntil) part.age = part.holdUntil;
+      // a double shockwave races the ground
+      const hx = pq.heroScreenX ?? pq.pw * 0.27;
+      this.path.waves.push({ x: hx, age: 0 }, { x: hx, age: -0.12 });
+    }
+    this.dropPulse *= Math.exp(-dt / 0.8);
+
     const orb = pq.adventure?.orb;
     const target =
       orb?.visible && pq.heroScreenX != null ? orb.targetPos(pq) : { x: pq.pw * 0.3, y: pq.ph * 0.45 };

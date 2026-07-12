@@ -316,7 +316,7 @@ export class OrbCompanion {
     );
     this.bright += (target - this.bright) * Math.min(1, dt * 5);
     const baseHue = BIOME_ORB_HUE[pq.currentBiome?.()?.name] ?? 42;
-    const hue = baseHue + mood.energy * 30;
+    const hue = baseHue + mood.energy * 30 + (pq.songHueShift || 0); // per-song cast
     // Orb Meter audio taps: bass→halo, mids→inner swirl, highs→sparkles,
     // energy→trail length, transient→ring burst.
     const bass = pq.bass?.value || 0, mids = pq.mids?.value || 0;

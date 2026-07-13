@@ -41,6 +41,33 @@ const PACKS = [
     names: ["neonDragonfly"] },
   { file: "pixelquest_extra_marcher.png", key: "magenta", refH: 44, colors: 32, rows: [1],
     names: ["boomboxMarcher"] },
+  // ---- world-enrichment drop (biome HEARTS + foliage2 + decor + starfall) ----
+  // `hs` = per-sprite authored height (mixed sizes within one pack); falls back
+  // to refH. Heart slot names match HEART_RECIPES ids so they upgrade in place.
+  { file: "pixelquest_heart_meadow.png", key: "magenta", refH: 92, colors: 48, rows: [3, 3],
+    names: ["heart_meadow_anchor", "heart_meadow_sideA", "heart_meadow_sideB", "heart_meadow_cart", "heart_meadow_laundry", "heart_meadow_hive"],
+    hs: [118, 96, 112, 74, 72, 62] },
+  { file: "pixelquest_heart_neon.png", key: "green", refH: 92, colors: 48, rows: [3, 3],
+    names: ["heart_neon_anchor", "heart_neon_sideA", "heart_neon_pool", "heart_neon_sideB", "heart_neon_stone", "heart_neon_bush"],
+    hs: [136, 118, 58, 92, 96, 64] },
+  { file: "pixelquest_heart_town.png", key: "magenta", refH: 92, colors: 48, rows: [3, 3],
+    names: ["heart_town_anchor", "heart_town_sideA", "heart_town_sideB", "heart_town_stall", "heart_town_board", "heart_town_arch"],
+    hs: [126, 132, 86, 90, 76, 104] },
+  { file: "pixelquest_heart_arcade.png", key: "green", refH: 92, colors: 48, rows: [3, 3],
+    names: ["heart_arcade_anchor", "heart_arcade_sideB", "heart_arcade_sideA", "heart_arcade_booth", "heart_arcade_claw", "heart_arcade_palm"],
+    hs: [128, 100, 104, 82, 92, 96] },
+  { file: "pixelquest_heart_castle.png", key: "magenta", refH: 92, colors: 48, rows: [3, 3],
+    names: ["heart_castle_anchor", "heart_castle_banners", "heart_castle_sideA", "heart_castle_sideB", "heart_castle_wagon", "heart_castle_kennel"],
+    hs: [136, 108, 116, 96, 88, 74] },
+  // rows sliced WHOLE (rows:[1×5]) so each biome's trio stays one strip that
+  // import-art segments into a 3-frame sheet (same shape as the foliage v1 strips)
+  { file: "pixelquest_foliage2.png", key: "magenta", refH: 84, colors: 40, rows: [1, 1, 1, 1, 1],
+    names: ["meadow_foliage2_strip", "neon_foliage2_strip", "moonlit_foliage2_strip", "arcade_foliage2_strip", "castle_foliage2_strip"] },
+  { file: "pixelquest_decor.png", key: "magenta", refH: 34, colors: 32, rows: [1, 1, 1, 1, 1],
+    names: ["meadow_decor_strip", "neon_decor_strip", "moonlit_decor_strip", "arcade_decor_strip", "castle_decor_strip"] },
+  { file: "pixelquest_starfall_pack.png", key: "magenta", refH: 92, colors: 48, rows: [4, 4],
+    names: ["heart_starfall_anchor", "starfallGate", "starfall_grass_strip", "heart_starfall_sideA", "heart_starfall_sideB", "starfall_pool", "starfall_shells", "starfall_lighthouse"],
+    hs: [88, 112, 40, 104, 62, 40, 52, 108] },
 ];
 
 // optional CLI filter: `bun slice-packs.mjs sky cast` runs only packs whose
@@ -131,7 +158,7 @@ for (const pack of SELECTED) {
     const name = pack.names[i];
     await sharp(src).extract({ left: ex, top: ey, width: cw, height: ch }).toFile(path.join(RAW, `${name}.png`));
     const aspect = cw / ch;
-    const specH = pack.refH, specW = Math.max(8, Math.round(specH * aspect));
+    const specH = pack.hs?.[i] ?? pack.refH, specW = Math.max(8, Math.round(specH * aspect));
     console.log(`   ${name.padEnd(20)} ${cw}x${ch}  -> spec ${specW}x${specH}`);
     specLines.push(`  ${name}: { mode: "sheet", w: ${specW}, h: ${specH}, frames: 1, anchor: "bottom", colors: ${pack.colors} },`);
     manifestLines.push(`  ${name}: { src: "${name}.png", frameW: ${specW}, frameH: ${specH}, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },`);

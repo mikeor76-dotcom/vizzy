@@ -162,6 +162,60 @@ export const ASSET_MANIFEST = {
   neonGate: { src: "gateNeon.png", frameW: 112, frameH: 104, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   moonlitGate: { src: "gateMoonlit.png", frameW: 112, frameH: 104, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   castleGate: { src: "gateCastle.png", frameW: 132, frameH: 108, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  starfallGate: { src: "starfallGate.png", frameW: 100, frameH: 112, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  // -------- biome HEART set-pieces (world plan): anchor/sideA/sideB feed
+  // HEART_RECIPES slots; the extras furnish the heart's decor spots.
+  heart_meadow_anchor: { src: "heart_meadow_anchor.png", frameW: 153, frameH: 118, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_meadow_sideA: { src: "heart_meadow_sideA.png", frameW: 84, frameH: 96, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_meadow_sideB: { src: "heart_meadow_sideB.png", frameW: 143, frameH: 112, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_meadow_cart: { src: "heart_meadow_cart.png", frameW: 102, frameH: 74, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_meadow_laundry: { src: "heart_meadow_laundry.png", frameW: 99, frameH: 72, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_meadow_hive: { src: "heart_meadow_hive.png", frameW: 72, frameH: 62, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_neon_anchor: { src: "heart_neon_anchor.png", frameW: 137, frameH: 136, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_neon_sideA: { src: "heart_neon_sideA.png", frameW: 92, frameH: 118, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_neon_sideB: { src: "heart_neon_sideB.png", frameW: 107, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_neon_pool: { src: "heart_neon_pool.png", frameW: 96, frameH: 58, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_neon_stone: { src: "heart_neon_stone.png", frameW: 80, frameH: 96, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_neon_bush: { src: "heart_neon_bush.png", frameW: 78, frameH: 64, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_town_anchor: { src: "heart_town_anchor.png", frameW: 137, frameH: 126, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_town_sideA: { src: "heart_town_sideA.png", frameW: 73, frameH: 132, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_town_sideB: { src: "heart_town_sideB.png", frameW: 107, frameH: 86, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_town_stall: { src: "heart_town_stall.png", frameW: 99, frameH: 90, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_town_board: { src: "heart_town_board.png", frameW: 80, frameH: 76, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_town_arch: { src: "heart_town_arch.png", frameW: 120, frameH: 104, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_arcade_anchor: { src: "heart_arcade_anchor.png", frameW: 130, frameH: 128, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_arcade_sideA: { src: "heart_arcade_sideA.png", frameW: 91, frameH: 104, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_arcade_sideB: { src: "heart_arcade_sideB.png", frameW: 153, frameH: 100, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_arcade_booth: { src: "heart_arcade_booth.png", frameW: 81, frameH: 82, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_arcade_claw: { src: "heart_arcade_claw.png", frameW: 88, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_arcade_palm: { src: "heart_arcade_palm.png", frameW: 75, frameH: 96, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_castle_anchor: { src: "heart_castle_anchor.png", frameW: 190, frameH: 136, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_castle_sideA: { src: "heart_castle_sideA.png", frameW: 73, frameH: 116, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_castle_sideB: { src: "heart_castle_sideB.png", frameW: 61, frameH: 96, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_castle_banners: { src: "heart_castle_banners.png", frameW: 77, frameH: 108, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_castle_wagon: { src: "heart_castle_wagon.png", frameW: 120, frameH: 88, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_castle_kennel: { src: "heart_castle_kennel.png", frameW: 85, frameH: 74, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_starfall_anchor: { src: "heart_starfall_anchor.png", frameW: 95, frameH: 88, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_starfall_sideA: { src: "heart_starfall_sideA.png", frameW: 102, frameH: 104, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  heart_starfall_sideB: { src: "heart_starfall_sideB.png", frameW: 72, frameH: 62, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  starfall_pool: { src: "starfall_pool.png", frameW: 56, frameH: 40, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  starfall_shells: { src: "starfall_shells.png", frameW: 52, frameH: 52, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  starfall_lighthouse: { src: "starfall_lighthouse.png", frameW: 97, frameH: 108, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  // -------- foliage EXPANSION (world plan): each biome's second trio. Placed
+  // trees carry variants 0-5 now — 0-2 from the v1 sheet, 3-5 from these.
+  meadowFoliage2: { src: "meadow_foliage2_strip.png", frameW: 96, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  neonFoliage2: { src: "neon_foliage2_strip.png", frameW: 100, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  moonlitFoliage2: { src: "moonlit_foliage2_strip.png", frameW: 98, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  arcadeFoliage2: { src: "arcade_foliage2_strip.png", frameW: 102, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  castleFoliage2: { src: "castle_foliage2_strip.png", frameW: 104, frameH: 84, anims: { v: { frames: [0, 1, 2] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  starfallFoliage: { src: "starfall_grass_strip.png", frameW: 37, frameH: 40, anims: { v: { frames: [0, 0, 0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  // -------- path decor scatter (world plan): 4 tiny props per biome, placed
+  // by PROP_RECIPES/PropField with a per-prop variant frame.
+  meadowDecor: { src: "meadow_decor_strip.png", frameW: 44, frameH: 34, anims: { v: { frames: [0, 1, 2, 3] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  neonDecor: { src: "neon_decor_strip.png", frameW: 38, frameH: 34, anims: { v: { frames: [0, 1, 2, 3] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  moonlitDecor: { src: "moonlit_decor_strip.png", frameW: 44, frameH: 34, anims: { v: { frames: [0, 1, 2, 3] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  arcadeDecor: { src: "arcade_decor_strip.png", frameW: 55, frameH: 34, anims: { v: { frames: [0, 1, 2, 3] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  castleDecor: { src: "castle_decor_strip.png", frameW: 42, frameH: 34, anims: { v: { frames: [0, 1, 2, 3] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   // cameo / easter-egg pack sprites (sliced from pixelquest_pack_* grids).
   // Registered here so they load + show in the debug panel; wired into the
   // event/attraction draw code separately.
@@ -243,6 +297,9 @@ export const PARALLAX_MANIFEST = {
   "castle-approach": [
     { id: "castle-backdrop", layer: "sky", src: "castle-approach_backdrop.png", backdrop: true, width: 1440, height: 480, factor: 0.08, piSafe: false },
   ],
+  "starfall-shore": [
+    { id: "starfall-backdrop", layer: "sky", src: "starfall-shore_backdrop.png", backdrop: true, width: 1440, height: 480, factor: 0.08, piSafe: false },
+  ],
 };
 
 // Baked full-moon position inside each biome's sky backdrop (plate pixels,
@@ -258,19 +315,39 @@ const BAKED_MOON = {
   "moonlit-town": { x: 492, y: 82, r: 33 },
   "arcade-ruins": { x: 492, y: 82, r: 27 },
   "castle-approach": { x: 492, y: 82, r: 31 },
+  // starfall's moon sits over the sea, tied to its reflection column — NOT
+  // relocated to the canonical 492 (moving it would orphan the reflection)
+  "starfall-shore": { x: 462, y: 76, r: 34 },
 };
 
 // Per-biome prop placement recipes for the PropField (world-anchored spans;
 // only activates for props whose sheets are READY, so today with only the
 // baked lantern demo it stays quiet unless renderMode uses it).
 export const PROP_RECIPES = {
+  // path decor scatter (world plan): tiny biome props sprinkled along the
+  // road so the ground stops repeating. `variants: 4` picks a random frame
+  // per placed prop (milestone / fence / mushrooms / crate, etc.).
   "meadow-road": [
-    // e.g. { asset: "flower", every: [26, 44], layer: "ground", canRelease: true },
+    { asset: "meadowDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
   ],
-  "neon-forest": [],
-  "moonlit-town": [],
-  "arcade-ruins": [],
-  "castle-approach": [],
+  "neon-forest": [
+    { asset: "neonDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+  ],
+  "moonlit-town": [
+    { asset: "moonlitDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+  ],
+  "arcade-ruins": [
+    { asset: "arcadeDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+  ],
+  "castle-approach": [
+    { asset: "castleDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+  ],
+  "starfall-shore": [
+    { asset: "starfall_shells", every: [110, 190], layer: "ground", variants: 1, scale: 0.7, avoid: [880, 1280] },
+    { asset: "starfall_pool", every: [170, 300], layer: "ground", variants: 1, scale: 0.8, avoid: [880, 1280] },
+    // one far lighthouse per lap, never inside the heart's span
+    { asset: "starfall_lighthouse", every: [900, 1500], layer: "ground", variants: 1, scale: 0.85, avoid: [820, 1340] },
+  ],
 };
 
 // ------------------------------------------------------------ baked demos
@@ -802,9 +879,11 @@ export class AssetStore {
       // opts.frame selects a frame INDEX directly (caller drives cadence — e.g.
       // the hero's walk steps with his stride, not a fixed fps); otherwise the
       // animation clock `t` advances at the anim's fps.
+      // anim.fps defaults to 1 — a missing fps on a single-frame anim used to
+      // produce NaN indexing and a silently invisible sprite
       const fi = opts.frame != null
         ? anim.frames[((opts.frame % anim.frames.length) + anim.frames.length) % anim.frames.length]
-        : anim.frames[Math.floor(t * anim.fps) % anim.frames.length];
+        : anim.frames[Math.floor(t * (anim.fps || 1)) % anim.frames.length];
       sw = def.frameW;
       sh = def.frameH;
       sx = fi * def.frameW;
@@ -874,6 +953,16 @@ export class PropField {
     this.props = [];
     this.biome = null;
   }
+  // cheap per-frame guard: rebuild when the biome changed OR when recipe
+  // assets finished loading after the last build (first boot, hot reload) —
+  // without this the field stays empty until the first biome crossfade ends
+  sync(biomeName, worldLen) {
+    const sig = biomeName + "|" + (PROP_RECIPES[biomeName] || []).map((r) => (this.assets.ready(r.asset) ? 1 : 0)).join("");
+    if (sig !== this._sig) {
+      this._sig = sig;
+      this.rebuild(biomeName, worldLen);
+    }
+  }
   rebuild(biomeName, worldLen, rnd = Math.random) {
     this.biome = biomeName;
     this.props.length = 0;
@@ -881,12 +970,16 @@ export class PropField {
       if (!this.assets.ready(recipe.asset)) continue;
       const [lo, hi] = recipe.every;
       for (let x = 20 + rnd() * hi; x < worldLen - 20; x += lo + rnd() * (hi - lo)) {
+        // `avoid: [lo, hi]` keeps big props out of a reserved span (the heart)
+        if (recipe.avoid && x > recipe.avoid[0] && x < recipe.avoid[1]) continue;
         this.props.push({
           x,
           asset: recipe.asset,
           layer: recipe.layer || "ground",
           scale: recipe.scale || 1,
           anim: recipe.anim || Object.keys(ASSET_MANIFEST[recipe.asset].anims)[0],
+          // variants > 1 = the anim's frames are a variant set; pin one per prop
+          frame: recipe.variants > 1 ? (rnd() * recipe.variants) | 0 : undefined,
           canRelease: !!recipe.canRelease,
           brightness: 1,
           _srcGlow: 0,
@@ -904,7 +997,7 @@ export class PropField {
       const sx = Math.round((((p.x - off) % L) + L) % L);
       if (sx < -30 || sx > pq.pw + 30) continue;
       const gy = pq.groundY(Math.max(0, Math.min(pq.pw - 1, sx))) + 1;
-      this.assets.drawSprite(o, p.asset, p.anim, pq.t, sx, gy, { scale: p.scale });
+      this.assets.drawSprite(o, p.asset, p.anim, pq.t, sx, gy, { scale: p.scale, frame: p.frame });
     }
   }
   // fragment-source candidates near the hero (mirrors #worldSource contract)

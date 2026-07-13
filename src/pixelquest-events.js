@@ -457,6 +457,7 @@ const DOOR_SKINS = {
   "moonlit-town": { frame: "40,42,52", rim: "255,214,150", interior: "200,210,255", panel: "50,52,64", handle: "220,225,240" },
   "arcade-ruins": { frame: "40,20,48", rim: "255,90,200", interior: "80,230,255", panel: "54,26,64", handle: "255,220,90" },
   "castle-approach": { frame: "46,42,50", rim: "255,180,90", interior: "255,210,140", panel: "58,52,62", handle: "214,178,94" },
+  "starfall-shore": { frame: "44,40,34", rim: "255,225,150", interior: "170,220,255", panel: "56,50,42", handle: "222,230,244" },
 };
 
 function trailSparkle(pq, x, y) {

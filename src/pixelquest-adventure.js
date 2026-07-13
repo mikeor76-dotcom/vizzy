@@ -138,6 +138,7 @@ const BIOME_ORB_HUE = {
   "moonlit-town": 210,
   "arcade-ruins": 305,
   "castle-approach": 36,
+  "starfall-shore": 48, // fallen-star gold
 };
 
 // Music Note Bridge (Biome System v1): tile skins per biome. `shape(o,x,y)`
@@ -184,6 +185,14 @@ const BRIDGE_SKINS = {
       o.fillRect(x - 1, y - 1, 3, 3); // a stone block underfoot
     },
   },
+  "starfall-shore": {
+    glow: "170,220,255",
+    core: "240,248,255",
+    shape(o, x, y) {
+      o.fillRect(x, y - 1, 1, 3); // a tiny four-point star glint
+      o.fillRect(x - 1, y, 3, 1);
+    },
+  },
 };
 
 // Sound Fragments (Quest/Collectible System v1): tiny drifting motes of
@@ -198,6 +207,7 @@ const FRAGMENT_HALO = {
   "moonlit-town": "200,215,255", // moonlight silver-blue
   "arcade-ruins": "90,230,255", // neon cyan
   "castle-approach": "255,210,150", // torch-warm
+  "starfall-shore": "180,225,255", // sea-star silver-blue
 };
 function drawFragment(o, pal, x, y, a, size) {
   const halo = FRAGMENT_HALO[pal?.biome] || FRAGMENT_HALO["meadow-road"];
@@ -482,6 +492,7 @@ const BIOME_DESTINATION = {
   "moonlit-town": "tower", // a distant tower, window aglow
   "arcade-ruins": "arcade", // a neon gate beyond the ruins
   "castle-approach": "castle", // the destination itself, at last
+  "starfall-shore": "hilltop", // a far coastal light (reads as the lighthouse)
 };
 
 export class DistantDestination {
@@ -631,6 +642,7 @@ const TRANSITION_TYPES = {
   "moonlit-town": "horizon-fade",
   "arcade-ruins": "pixel-wipe",
   "castle-approach": "bridge",
+  "starfall-shore": "horizon-fade", // the sea horizon does the work
 };
 const ALL_TRANSITION_TYPES = ["light-trail", "doorway", "horizon-fade", "pixel-wipe", "bridge"];
 
@@ -685,6 +697,17 @@ const ARRIVAL_FLOURISH = {
       o.fillStyle = `rgba(255,225,170,${(s - 0.7) * 1.5})`;
       o.fillRect(x + 3, y - 8, 1, 12);
     }
+  },
+  "starfall-shore"(o, pq, x, y, s) {
+    // star-glints settling out of the air toward the shore light
+    const n = Math.round(2 + s * 4);
+    for (let i = 0; i < n; i++) {
+      const a = (0.3 + 0.5 * Math.sin(pq.t * 2.4 + i * 1.9)) * s;
+      o.fillStyle = `rgba(190,230,255,${a})`;
+      o.fillRect(x + Math.round(Math.sin(pq.t * 1.1 + i * 2.3) * (6 + i)), y - 4 - ((pq.t * 3 + i * 5) % 9 | 0), 1, 1);
+    }
+    o.fillStyle = `rgba(255,230,160,${0.3 + s * 0.5})`;
+    o.fillRect(x, y - 2, 2, 2); // the warm beached-star glow
   },
 };
 

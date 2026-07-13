@@ -73,9 +73,11 @@ World loop grows 1280 → 1920 and gets STRUCTURE:
 
 1. ✅ engine: zones + hearts + heart moment + gate-at-threshold (this commit)
 2. ✅ engine: per-biome ground tiles (this commit)
-3. art drop → wire heart set-pieces + foliage expansions + decor (same
-   slice-packs/import pipeline as all previous drops)
-4. starfall-shore: BIOMES entry + manifest + parallax rows when its pack lands
+3. ✅ art drop → heart set-pieces + foliage 3→6 + decor scatter all wired
+   (2026-07-13: all 8 packs landed and imported; 48 sprites + backdrop)
+4. ✅ starfall-shore: BIOMES + gate + heart + foliage + decor + parallax +
+   baked moon + every per-biome flavor map (orb hue, bridge, halo, titles,
+   door, encounter accents, arrival flourish)
 5. wall pass: tune heart pacing (ease amount, light pools) by ear
 
 **Acceptance:** a 90s watch of any biome shows a legible journey — lonely road

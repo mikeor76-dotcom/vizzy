@@ -36,7 +36,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ASSET_DIR = path.resolve(HERE, "../public/assets/pixelquest");
 const RAW_DIR = path.join(ASSET_DIR, "raw");
 
-const BIOMES = ["meadow-road", "neon-forest", "moonlit-town", "arcade-ruins", "castle-approach"];
+const BIOMES = ["meadow-road", "neon-forest", "moonlit-town", "arcade-ruins", "castle-approach", "starfall-shore"];
 const SHEET_SPECS = {
   // sized for the 2x internal resolution (pixelHeight 320): 48x60 hero, 48px orb, etc.
   hero_traveler_sheet: { mode: "sheet", w: 384, h: 60, frames: 8, anchor: "bottom", colors: 32 },
@@ -120,6 +120,58 @@ const SHEET_SPECS = {
   powerGlove: { mode: "sheet", w: 35, h: 40, frames: 1, anchor: "bottom", colors: 32 },
   whip: { mode: "sheet", w: 48, h: 40, frames: 1, anchor: "bottom", colors: 32 },
   hoverboard: { mode: "sheet", w: 52, h: 40, frames: 1, anchor: "bottom", colors: 32 },
+  // ---- world-enrichment drop: biome HEART set-pieces (slice-packs grids) ----
+  heart_meadow_anchor: { mode: "sheet", w: 153, h: 118, frames: 1, anchor: "bottom", colors: 48 },
+  heart_meadow_sideA: { mode: "sheet", w: 84, h: 96, frames: 1, anchor: "bottom", colors: 48 },
+  heart_meadow_sideB: { mode: "sheet", w: 143, h: 112, frames: 1, anchor: "bottom", colors: 48 },
+  heart_meadow_cart: { mode: "sheet", w: 102, h: 74, frames: 1, anchor: "bottom", colors: 48 },
+  heart_meadow_laundry: { mode: "sheet", w: 99, h: 72, frames: 1, anchor: "bottom", colors: 48 },
+  heart_meadow_hive: { mode: "sheet", w: 72, h: 62, frames: 1, anchor: "bottom", colors: 48 },
+  heart_neon_anchor: { mode: "sheet", w: 137, h: 136, frames: 1, anchor: "bottom", colors: 48 },
+  heart_neon_sideA: { mode: "sheet", w: 92, h: 118, frames: 1, anchor: "bottom", colors: 48 },
+  heart_neon_pool: { mode: "sheet", w: 96, h: 58, frames: 1, anchor: "bottom", colors: 48 },
+  heart_neon_sideB: { mode: "sheet", w: 107, h: 92, frames: 1, anchor: "bottom", colors: 48 },
+  heart_neon_stone: { mode: "sheet", w: 80, h: 96, frames: 1, anchor: "bottom", colors: 48 },
+  heart_neon_bush: { mode: "sheet", w: 78, h: 64, frames: 1, anchor: "bottom", colors: 48 },
+  heart_town_anchor: { mode: "sheet", w: 137, h: 126, frames: 1, anchor: "bottom", colors: 48 },
+  heart_town_sideA: { mode: "sheet", w: 73, h: 132, frames: 1, anchor: "bottom", colors: 48 },
+  heart_town_sideB: { mode: "sheet", w: 107, h: 86, frames: 1, anchor: "bottom", colors: 48 },
+  heart_town_stall: { mode: "sheet", w: 99, h: 90, frames: 1, anchor: "bottom", colors: 48 },
+  heart_town_board: { mode: "sheet", w: 80, h: 76, frames: 1, anchor: "bottom", colors: 48 },
+  heart_town_arch: { mode: "sheet", w: 120, h: 104, frames: 1, anchor: "bottom", colors: 48 },
+  heart_arcade_anchor: { mode: "sheet", w: 130, h: 128, frames: 1, anchor: "bottom", colors: 48 },
+  heart_arcade_sideB: { mode: "sheet", w: 153, h: 100, frames: 1, anchor: "bottom", colors: 48 },
+  heart_arcade_sideA: { mode: "sheet", w: 91, h: 104, frames: 1, anchor: "bottom", colors: 48 },
+  heart_arcade_booth: { mode: "sheet", w: 81, h: 82, frames: 1, anchor: "bottom", colors: 48 },
+  heart_arcade_claw: { mode: "sheet", w: 88, h: 92, frames: 1, anchor: "bottom", colors: 48 },
+  heart_arcade_palm: { mode: "sheet", w: 75, h: 96, frames: 1, anchor: "bottom", colors: 48 },
+  heart_castle_anchor: { mode: "sheet", w: 190, h: 136, frames: 1, anchor: "bottom", colors: 48 },
+  heart_castle_banners: { mode: "sheet", w: 77, h: 108, frames: 1, anchor: "bottom", colors: 48 },
+  heart_castle_sideA: { mode: "sheet", w: 73, h: 116, frames: 1, anchor: "bottom", colors: 48 },
+  heart_castle_sideB: { mode: "sheet", w: 61, h: 96, frames: 1, anchor: "bottom", colors: 48 },
+  heart_castle_wagon: { mode: "sheet", w: 120, h: 88, frames: 1, anchor: "bottom", colors: 48 },
+  heart_castle_kennel: { mode: "sheet", w: 85, h: 74, frames: 1, anchor: "bottom", colors: 48 },
+  // foliage expansion: each biome's NEW trio, one strip -> 3-frame sheet
+  meadow_foliage2_strip: { mode: "sheet", w: 288, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  neon_foliage2_strip: { mode: "sheet", w: 300, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  moonlit_foliage2_strip: { mode: "sheet", w: 294, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  arcade_foliage2_strip: { mode: "sheet", w: 306, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  castle_foliage2_strip: { mode: "sheet", w: 312, h: 84, frames: 3, anchor: "bottom", colors: 40 },
+  // path decor scatter: 4 tiny props per biome, one strip -> 4-frame sheet
+  meadow_decor_strip: { mode: "sheet", w: 176, h: 34, frames: 4, anchor: "bottom", colors: 32 },
+  neon_decor_strip: { mode: "sheet", w: 152, h: 34, frames: 4, anchor: "bottom", colors: 32 },
+  moonlit_decor_strip: { mode: "sheet", w: 176, h: 34, frames: 4, anchor: "bottom", colors: 32 },
+  arcade_decor_strip: { mode: "sheet", w: 220, h: 34, frames: 4, anchor: "bottom", colors: 32 },
+  castle_decor_strip: { mode: "sheet", w: 168, h: 34, frames: 4, anchor: "bottom", colors: 32 },
+  // Starfall Shore (new biome): heart pieces, gate, foliage cluster, shore props
+  heart_starfall_anchor: { mode: "sheet", w: 95, h: 88, frames: 1, anchor: "bottom", colors: 48 },
+  starfallGate: { mode: "sheet", w: 100, h: 112, frames: 1, anchor: "bottom", colors: 48 },
+  starfall_grass_strip: { mode: "sheet", w: 37, h: 40, frames: 1, anchor: "bottom", colors: 40 },
+  heart_starfall_sideA: { mode: "sheet", w: 102, h: 104, frames: 1, anchor: "bottom", colors: 48 },
+  heart_starfall_sideB: { mode: "sheet", w: 72, h: 62, frames: 1, anchor: "bottom", colors: 48 },
+  starfall_pool: { mode: "sheet", w: 56, h: 40, frames: 1, anchor: "bottom", colors: 48 },
+  starfall_shells: { mode: "sheet", w: 52, h: 52, frames: 1, anchor: "bottom", colors: 48 },
+  starfall_lighthouse: { mode: "sheet", w: 97, h: 108, frames: 1, anchor: "bottom", colors: 48 },
   // extra single-sprite cameos (their own drop files, sliced by slice-packs).
   neonDragonfly: { mode: "sheet", w: 47, h: 40, frames: 1, anchor: "center", colors: 24 },
   boomboxMarcher: { mode: "sheet", w: 32, h: 44, frames: 1, anchor: "bottom", colors: 32 },

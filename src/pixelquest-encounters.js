@@ -25,6 +25,7 @@ const ENCOUNTER_ACCENT = {
   "moonlit-town": { glow: "210,220,255", dark: "18,20,32", eye: "235,240,255" },
   "arcade-ruins": { glow: "255,90,200", dark: "12,10,20", eye: "80,230,255" },
   "castle-approach": { glow: "255,190,110", dark: "24,20,28", eye: "255,222,164" },
+  "starfall-shore": { glow: "255,225,150", dark: "10,14,22", eye: "220,240,255" },
 };
 const accent = (pal) => ENCOUNTER_ACCENT[pal?.biome] || ENCOUNTER_ACCENT["meadow-road"];
 

@@ -32,6 +32,7 @@ const STREAM_HALO = {
   "moonlit-town": "202,216,255", // moonlight silver-blue
   "arcade-ruins": "112,236,255", // neon cyan
   "castle-approach": "255,206,150", // torch warm
+  "starfall-shore": "190,225,255", // starlit sea-silver
 };
 const haloFor = (pal) => STREAM_HALO[pal?.biome] || STREAM_HALO["meadow-road"];
 

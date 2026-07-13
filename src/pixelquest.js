@@ -139,6 +139,20 @@ const BIOMES = [
     preferredMoods: ["energetic", "peak"],
     minDuration: 50, maxDuration: 85,
   },
+  {
+    name: "starfall-shore", // a night coast where fallen stars wash up — wonder, stillness
+    skyTop: [6, 10, 24], skyMid: [14, 24, 46], skyLow: [28, 44, 66],
+    mtFar: [26, 38, 54], mtMid: [18, 28, 44], cap: [0, 0, 0],
+    capA: 0,
+    ground: [42, 36, 28], groundTop: [98, 84, 58], groundDark: [16, 14, 12],
+    prop: [34, 30, 26], propDark: [20, 18, 16], trunk: [64, 54, 40],
+    torch: [255, 205, 130],
+    moon: [225, 230, 240], star: [220, 230, 250], firefly: [255, 225, 150],
+    ambient: "spore", ambientCol: [170, 220, 255], // drifting star-dust off the sea
+    landmark: "shrine", mtAmp: 5, mtJag: 1, // low dunes; shrine = procedural gate fallback only
+    preferredMoods: ["calm", "breakdown"],
+    minDuration: 60, maxDuration: 95,
+  },
 ];
 
 // ------------------------------------------------------------ hero sprite
@@ -153,6 +167,17 @@ const BIOME_FOLIAGE = {
   "moonlit-town": "moonlitFoliage",
   "arcade-ruins": "arcadeFoliage",
   "castle-approach": "castleFoliage",
+  "starfall-shore": "starfallFoliage",
+};
+// the EXPANSION trios (world plan): placed trees carry variants 0-5; 3-5 draw
+// from these second sheets (frame = variant-3) when the art is ready, else
+// they fold back onto the first sheet
+const BIOME_FOLIAGE2 = {
+  "meadow-road": "meadowFoliage2",
+  "neon-forest": "neonFoliage2",
+  "moonlit-town": "moonlitFoliage2",
+  "arcade-ruins": "arcadeFoliage2",
+  "castle-approach": "castleFoliage2",
 };
 
 // biome → imported gateway landmark asset (drawn where the procedural landmark
@@ -163,6 +188,7 @@ const BIOME_GATE = {
   "neon-forest": "neonGate",
   "moonlit-town": "moonlitGate",
   "castle-approach": "castleGate",
+  "starfall-shore": "starfallGate", // the driftwood arch
 };
 
 // Each biome's HEART recipe (world plan): how the generic heart spots are
@@ -170,11 +196,21 @@ const BIOME_GATE = {
 // (heart_<biome>_anchor etc. — see PIXELQUEST-WORLD-ART-PROMPT.md); until
 // then the heart is furnished from the existing catalog.
 const HEART_RECIPES = {
-  "meadow-road": { anchor: ["heart_meadow_anchor", "windmill", 1.05], sideA: ["heart_meadow_sideA", "house", 1], sideB: ["heart_meadow_sideB", "campfire", 1], decor: "flowers" },
-  "neon-forest": { anchorFol: [1.7, 1], sideAFol: [1.2, 0], sideBFol: [0.9, 2], anchor: ["heart_neon_anchor", null, 1], sideA: ["heart_neon_sideA", null, 1], sideB: ["heart_neon_sideB", null, 1], decor: "spores" },
-  "moonlit-town": { anchor: ["heart_town_anchor", "house", 1.1], sideA: ["heart_town_sideA", "house", 0.9], sideB: ["heart_town_sideB", "jukebox", 0.8], decor: "sign" },
-  "arcade-ruins": { anchor: ["heart_arcade_anchor", "arcadeCabinet", 1.15], sideA: ["heart_arcade_sideA", "blueTimeBooth", 0.85], sideB: ["heart_arcade_sideB", "jukebox", 0.8], decor: "rubble" },
-  "castle-approach": { anchor: ["heart_castle_anchor", "statue", 1.1], sideA: ["heart_castle_sideA", "swordInStone", 0.85], sideB: ["heart_castle_sideB", "brazier", 1], decor: "brazier" },
+  // `extras` (dedicated art, one per decor spot, left→right) dress the heart's
+  // in-between ground: the hamlet's cart/laundry/hive, the town's stall/board/
+  // arch… each falls back to the old `decor` kind until its art is ready.
+  "meadow-road": { anchor: ["heart_meadow_anchor", "windmill", 1.05], sideA: ["heart_meadow_sideA", "house", 1], sideB: ["heart_meadow_sideB", "campfire", 1], decor: "flowers",
+    extras: ["heart_meadow_cart", "heart_meadow_laundry", "heart_meadow_hive"] },
+  "neon-forest": { anchorFol: [1.7, 1], sideAFol: [1.2, 0], sideBFol: [0.9, 2], anchor: ["heart_neon_anchor", null, 1], sideA: ["heart_neon_sideA", null, 1], sideB: ["heart_neon_sideB", null, 1], decor: "spores",
+    extras: ["heart_neon_pool", "heart_neon_stone", "heart_neon_bush"] },
+  "moonlit-town": { anchor: ["heart_town_anchor", "house", 1.1], sideA: ["heart_town_sideA", "house", 0.9], sideB: ["heart_town_sideB", "jukebox", 0.8], decor: "sign",
+    extras: ["heart_town_stall", "heart_town_board", "heart_town_arch"] },
+  "arcade-ruins": { anchor: ["heart_arcade_anchor", "arcadeCabinet", 1.15], sideA: ["heart_arcade_sideA", "blueTimeBooth", 0.85], sideB: ["heart_arcade_sideB", "jukebox", 0.8], decor: "rubble",
+    extras: ["heart_arcade_booth", "heart_arcade_claw", "heart_arcade_palm"] },
+  "castle-approach": { anchor: ["heart_castle_anchor", "statue", 1.1], sideA: ["heart_castle_sideA", "swordInStone", 0.85], sideB: ["heart_castle_sideB", "brazier", 1], decor: "brazier",
+    extras: ["heart_castle_banners", "heart_castle_wagon", "heart_castle_kennel"] },
+  "starfall-shore": { anchor: ["heart_starfall_anchor", "campfire", 1.2], sideA: ["heart_starfall_sideA", "house", 0.95], sideB: ["heart_starfall_sideB", null, 0.9], decor: "flowers",
+    extras: ["starfall_pool", "starfall_shells", "starfall_lighthouse"] },
 };
 
 // STORYBOOK PROPORTIONS: a bigger hood/head (7 of 17 torso rows) with a
@@ -397,8 +433,10 @@ export class PixelQuest {
       { x: 1180, kind: "sideB" },
       { x: 945, kind: "light" },
       { x: 1235, kind: "light" },
-      { x: 1035, kind: "decor" },
-      { x: 1135, kind: "decor" },
+      // three decor slots, one per recipe `extras` entry (left→right)
+      { x: 962, kind: "decor", slot: 0 },
+      { x: 1035, kind: "decor", slot: 1 },
+      { x: 1135, kind: "decor", slot: 2 },
     ];
     this.trees = [];
     this.torches = [];
@@ -414,13 +452,13 @@ export class PixelQuest {
         const d = density(tx);
         if (d === 0) { tx = this.zones.heart[1] + 50 + rnd() * 40; continue; } // skip the heart
         if (rnd() < 0.24) {
-          this.trees.push({ x: tx, s: 0.8 + rnd() * 0.7, variant: (rnd() * 3) | 0 });
+          this.trees.push({ x: tx, s: 0.8 + rnd() * 0.7, variant: (rnd() * 6) | 0 });
           tx += (100 + rnd() * 140) / d; // a lone tree, then open ground
           continue;
         }
         const grove = Math.max(2, Math.round((2 + rnd() * 4) * Math.min(1.2, d)));
         for (let i = 0; i < grove && tx < this.worldLen - 30; i++) {
-          this.trees.push({ x: tx + (rnd() - 0.5) * 6, s: 0.55 + rnd() * 0.95, variant: (rnd() * 3) | 0 });
+          this.trees.push({ x: tx + (rnd() - 0.5) * 6, s: 0.55 + rnd() * 0.95, variant: (rnd() * 6) | 0 });
           tx += 9 + rnd() * 20; // tight, overlapping inside the grove
         }
         tx += (120 + rnd() * 160) / d; // clearings shrink as the heart nears
@@ -431,7 +469,7 @@ export class PixelQuest {
     // deeper parallax — the depth layer that keeps the mid-row from reading flat
     this.backTrees = [];
     for (let x = 40 + rnd() * 80; x < this.worldLen; x += 55 + rnd() * 110)
-      this.backTrees.push({ x, s: 0.34 + rnd() * 0.22, variant: (rnd() * 3) | 0 });
+      this.backTrees.push({ x, s: 0.34 + rnd() * 0.22, variant: (rnd() * 6) | 0 });
     // lamps line the APPROACH densely (civilization nearing) and thin elsewhere
     for (let x = 70; x < this.worldLen - 40; ) {
       const inApproach = x > this.zones.approach[0] - 60 && x < this.zones.approach[1];
@@ -1480,6 +1518,10 @@ export class PixelQuest {
     // present; each placed tree/rock carries a `variant` picking one of 3 sprites
     const foliage = BIOME_FOLIAGE[pal.biome];
     const foliageReady = this.useAssets() && foliage && this.assets.ready(foliage);
+    const foliage2 = BIOME_FOLIAGE2[pal.biome];
+    const foliage2Ready = this.useAssets() && foliage2 && this.assets.ready(foliage2);
+    // variants 0-2 → first sheet, 3-5 → expansion sheet (folds back when absent)
+    const folFor = (v) => (v >= 3 && foliage2Ready ? [foliage2, v - 3] : [foliage, v % 3]);
     const rocksReady = this.useAssets() && this.assets.ready("rocks");
     // distant tree line first: deeper parallax (0.45), small, drawn hazy so it
     // fades into the night — pure depth, never competing with the near groves
@@ -1489,7 +1531,8 @@ export class PixelQuest {
       for (const bt of this.backTrees) {
         const sx = Math.round((((bt.x - boff) % L) + L) % L);
         if (sx < -30 || sx > this.pw + 30) continue;
-        this.assets.drawSprite(o, foliage, "v", 0, sx, this.groundY(sx) - 1, { anchor: "bottom-center", frame: bt.variant, scale: bt.s });
+        const [fol, fr] = folFor(bt.variant);
+        this.assets.drawSprite(o, fol, "v", 0, sx, this.groundY(sx) - 1, { anchor: "bottom-center", frame: fr, scale: bt.s });
       }
       o.globalAlpha = 1;
     }
@@ -1501,8 +1544,10 @@ export class PixelQuest {
       // gently amplified in the chorus by the song section
       const swayAmt = (this.bass.value * 1.6 + this.mids.value * 0.7) * ((this.resonance?.section?.profile?.bright) || 1);
       const sway = Math.round(Math.sin(this.t * (1 + this.bass.value * 1.5) + tr.x) * swayAmt);
-      if (foliageReady) this.assets.drawSprite(o, foliage, "v", 0, sx + sway, gy, { anchor: "bottom-center", frame: tr.variant, scale: tr.s });
-      else this.drawTree(o, pal, sx + sway, gy, tr.s * this.S);
+      if (foliageReady) {
+        const [fol, fr] = folFor(tr.variant);
+        this.assets.drawSprite(o, fol, "v", 0, sx + sway, gy, { anchor: "bottom-center", frame: fr, scale: tr.s });
+      } else this.drawTree(o, pal, sx + sway, gy, tr.s * this.S);
     }
     for (const rk of this.rocks) {
       const sx = Math.round((((rk.x - off) % L) + L) % L);
@@ -1543,7 +1588,7 @@ export class PixelQuest {
       const sx = Math.round((((spot.x - off) % L) + L) % L);
       if (sx < -70 || sx > this.pw + 70) continue;
       const gy = this.groundY(Math.max(0, Math.min(this.pw - 1, sx))) + 1;
-      this.#drawHeartSpot(o, pal, recipe, spot.kind, sx, gy);
+      this.#drawHeartSpot(o, pal, recipe, spot.kind, sx, gy, spot.slot);
     }
     // the heart's warm communal light, swelling as the hero walks through it
     if (glow > 0.05) {
@@ -1555,7 +1600,7 @@ export class PixelQuest {
     }
   }
 
-  #drawHeartSpot(o, pal, recipe, kind, sx, gy) {
+  #drawHeartSpot(o, pal, recipe, kind, sx, gy, slot) {
     const A = this.assets;
     const spr = (id, scale) => {
       if (!id || !this.useAssets() || !A.ready(id)) return false;
@@ -1574,6 +1619,9 @@ export class PixelQuest {
       return;
     }
     if (kind === "decor") {
+      // dedicated extras art first (the market cart, the stall, the claw
+      // machine…), then the biome's old procedural decor kind
+      if (recipe.extras && spr(recipe.extras[slot ?? 0], 0.8)) return;
       if (recipe.decor === "flowers" || recipe.decor === "spores") {
         for (let k = 0; k < 3; k++) {
           const fx = sx + (k - 1) * 3;
@@ -1594,11 +1642,11 @@ export class PixelQuest {
     }
     // anchor / sideA / sideB: dedicated heart art first, catalog sprite next,
     // then a procedural stand-in so the heart NEVER reads empty
-    const slot = recipe[kind] || [];
+    const def = recipe[kind] || [];
     const folSlot = recipe[kind + "Fol"];
-    if (spr(slot[0], slot[2] ?? 1)) return; // dedicated heart art
+    if (spr(def[0], def[2] ?? 1)) return; // dedicated heart art
     if (folSlot && fol(folSlot)) return; // neon's mother-grove mushrooms
-    if (spr(slot[1], slot[2] ?? 1)) return; // catalog sprite
+    if (spr(def[1], def[2] ?? 1)) return; // catalog sprite
     if (kind === "anchor") this.drawCottage(o, pal, sx - 8, gy);
     else this.drawCampfire(o, pal, sx, gy);
   }
@@ -2091,6 +2139,8 @@ export class PixelQuest {
       "moonlit-town": { n: 120, w: 5, dark: "6,7,14", light: "212,220,250", rows: 8, glow: null },
       "arcade-ruins": { n: 120, w: 5, dark: "10,4,18", light: "96,225,250", rows: 6, glow: "255,90,190" },
       "castle-approach": { n: 100, w: 7, dark: "9,7,5", light: "255,228,190", rows: 9, glow: null },
+      // wet sand: loose fine speckle with rare star-glints in the tide line
+      "starfall-shore": { n: 200, w: 2, dark: "10,9,7", light: "255,240,205", rows: 0, glow: "170,220,255" },
     }[biome] || { n: 170, w: 3, dark: "6,8,16", light: "255,250,235", rows: 0, glow: null };
     const t = document.createElement("canvas");
     t.width = 64; t.height = 64;
@@ -2920,7 +2970,10 @@ export class PixelQuest {
     this.adventure.draw(o, pal, "encounter-bg"); // encounters behind props/hero (giant, gate, arcade face)
     this.drawProps(o, pal);
     this.drawHeart(o, pal); // the biome's heart set-piece (world plan)
-    if (this.useAssets()) this.propField.draw(o, "ground"); // asset props (dormant until recipes+art)
+    if (this.useAssets()) {
+      this.propField.sync(pal.biome, this.worldLen); // catches first boot + late asset loads
+      this.propField.draw(o, "ground");
+    }
     this.drawTerrain(o, pal);
     this.resonance.drawGround(o, pal); // Resonance Path: bass glow travelling along the surface
     this.drawFlora(o, pal); // path-edge grass + glowing flowers (fragment sources)

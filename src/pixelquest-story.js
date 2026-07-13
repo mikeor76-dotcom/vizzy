@@ -49,6 +49,7 @@ const BIOME_TITLES = {
   "moonlit-town": "Moonlit Town",
   "arcade-ruins": "Arcade Ruins",
   "castle-approach": "Castle Approach",
+  "starfall-shore": "Starfall Shore",
 };
 // moment cards keyed by the strongest tag a beat carries
 const MOMENT_LINES = {

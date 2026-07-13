@@ -4,6 +4,8 @@ import { Spectrum } from "./spectrum.js";
 import { Classical } from "./classical.js";
 import { PixelQuest } from "./pixelquest.js";
 import { Synthwave } from "./synthwave.js";
+import { Milkdrop } from "./milkdrop.js";
+import { TubeAmp } from "./hifi/tubeamp.js";
 import { AnalogVU } from "./hifi/analogvu.js";
 import { BlueMeters } from "./hifi/bluemeters.js";
 import { Oscilloscope } from "./hifi/oscilloscope.js";
@@ -119,6 +121,8 @@ const spectrum = new Spectrum();
 const classical = new Classical();
 const pixelquest = new PixelQuest();
 const synthwave = new Synthwave();
+const milkdrop = new Milkdrop();
+const tubeAmp = new TubeAmp();
 const analogVU = new AnalogVU();
 const blueMeters = new BlueMeters();
 const oscilloscope = new Oscilloscope();
@@ -131,6 +135,8 @@ const INSTANCES = {
   blackhole,
   pixelquest,
   synthwave,
+  milkdrop,
+  "tube-amp": tubeAmp,
   "analog-vu": analogVU,
   "blue-power-meters": blueMeters,
   oscilloscope,
@@ -238,8 +244,11 @@ const BINDINGS = {
   galaxy: { render: (c, a, w, h, now) => galaxy.render(c, a, w, h, now), fade: "rgba(5, 9, 20, 0.28)" },
   blackhole: { render: (c, a, w, h, now) => blackhole.render(c, a, w, h, now), fade: "rgb(2, 2, 4)" },
   pixelquest: { render: (c, a, w, h, now) => pixelquest.render(c, a, w, h, now), fade: "rgb(4, 4, 8)" },
+  // milkdrop blits an opaque WebGL frame over the whole canvas every frame
+  milkdrop: { render: (c, a, w, h, now) => milkdrop.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },
   // hi-fi modes: scope + soundstage keep translucent fades for phosphor
   // persistence / decay trails; the rest repaint fully each frame
+  "tube-amp": { render: (c, a, w, h, now) => tubeAmp.render(c, a, w, h, now), fade: "rgb(8, 7, 6)" },
   "analog-vu": { render: (c, a, w, h, now) => analogVU.render(c, a, w, h, now), fade: "rgb(10, 9, 8)" },
   "blue-power-meters": { render: (c, a, w, h, now) => blueMeters.render(c, a, w, h, now), fade: "rgb(2, 3, 6)" },
   oscilloscope: { render: (c, a, w, h, now) => oscilloscope.render(c, a, w, h, now), fade: "rgba(4, 7, 6, 0.3)" },
@@ -297,6 +306,20 @@ window.vizzy = { controller, hardware: createHardwareInput(controller, { toggleM
 // Keyboard, while Pixel Quest is active: B / Shift+B = next/previous biome,
 // 1-5 = force a specific biome, J = force the current biome's arrival now.
 window.pqAdventure = pixelquest.adventure;
+
+// MilkDrop QA: milkdrop.next() hard-cuts to the next preset immediately;
+// milkdrop.status() reports health (failed flag, preset, internal res, ms)
+window.milkdrop = {
+  next: () => milkdrop.next(),
+  status: () => ({
+    failed: milkdrop.failed,
+    built: !!milkdrop.viz,
+    preset: milkdrop._name,
+    presets: milkdrop._names.length,
+    internal: [milkdrop.canvas.width, milkdrop.canvas.height],
+    ms: +milkdrop._ms.toFixed(2),
+  }),
+};
 
 // Dev controls for the Pixel Quest cinematic opening:
 //   pixelQuestOpening.replay()   play it again now (ignores play-mode / seen)

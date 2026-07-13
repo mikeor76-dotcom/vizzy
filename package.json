@@ -20,5 +20,9 @@
   "devDependencies": {
     "sharp": "^0.35.3",
     "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "butterchurn": "^2.6.7",
+    "butterchurn-presets": "^2.4.7"
   }
 }

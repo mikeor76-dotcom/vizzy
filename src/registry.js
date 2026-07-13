@@ -82,7 +82,25 @@ export const REGISTRY = [
     idle: true,
     controls: { sensitivity: false }, // fixed internal gain (FIXED_SENSITIVITY); dial does nothing here
   },
+  {
+    id: "milkdrop",
+    name: "MilkDrop",
+    category: "classic",
+    stable: false, // butterchurn/WebGL2 — needs a perf pass on the Pi
+    presets: ["Auto Cycle", "Hard Cuts", "Hold"],
+    idle: true, // presets keep flowing before audio arrives
+    controls: { sensitivity: false }, // butterchurn normalizes levels internally
+  },
   // --------------------------------------------------------------- hi-fi
+  {
+    id: "tube-amp",
+    name: "Tube Amp",
+    category: "hifi",
+    stable: true,
+    presets: ["Walnut", "Midnight Blue", "Champagne", "Black Silver"],
+    idle: true, // tubes idle warm, power lamp breathes
+    controls: { sensitivity: true },
+  },
   {
     id: "analog-vu",
     name: "Analog VU",

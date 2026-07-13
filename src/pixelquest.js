@@ -205,6 +205,10 @@ const BIOME_ATTRACTIONS = {
   "castle-approach": ["campfire"],
   "starfall-shore": [],
 };
+// landmark-scale / novelty props that a single village realistically has ONE
+// of — capped at one per world so we don't get a row of windmills. Everything
+// else (cottages, campfires) may repeat as ordinary roadside scenery.
+const ATTRACTION_SINGULAR = new Set(["windmill", "snail"]);
 
 // Each biome's HEART recipe (world plan): how the generic heart spots are
 // skinned. Sprite ids upgrade automatically when dedicated heart art lands
@@ -1577,17 +1581,42 @@ export class PixelQuest {
       const gy = this.groundY(sx) + 1;
       this.drawTorch(o, pal, sx, gy, to.ph);
     }
-    const atTypes = BIOME_ATTRACTIONS[pal.biome] || [];
-    if (atTypes.length) for (const at of this.attractions) {
+    const atTypes = this._attractionTypesFor(pal.biome);
+    for (let i = 0; i < this.attractions.length; i++) {
+      const type = atTypes[i];
+      if (!type) continue;
+      const at = this.attractions[i];
       const sx = Math.round((((at.x - off) % L) + L) % L);
       if (sx < -34 || sx > this.pw + 34) continue;
       const gy = this.groundY(sx) + 1;
-      const type = atTypes[at.seed % atTypes.length];
       if (type === "cottage") this.drawCottage(o, pal, sx, gy);
       else if (type === "windmill") this.drawWindmill(o, pal, sx, gy);
       else if (type === "campfire") this.drawCampfire(o, pal, sx, gy);
       else if (type === "snail") this.drawSnail(o, pal, sx, gy);
     }
+  }
+
+  // Resolve each roadside spot's prop for a biome, ONCE (cached per biome):
+  // walk the spots in order, pick from the biome's pool by the spot's stable
+  // seed, but demote a SINGULAR prop (windmill/snail) to a common one once its
+  // one-per-world slot is taken — so a hamlet has a single windmill, not a row.
+  _attractionTypesFor(biome) {
+    this._atMap ??= {};
+    if (this._atMap[biome]) return this._atMap[biome];
+    const pool = BIOME_ATTRACTIONS[biome] || [];
+    const commons = pool.filter((t) => !ATTRACTION_SINGULAR.has(t));
+    const used = new Set();
+    const out = this.attractions.map((at) => {
+      if (!pool.length) return null;
+      let type = pool[at.seed % pool.length];
+      if (ATTRACTION_SINGULAR.has(type) && used.has(type)) {
+        type = commons.length ? commons[at.seed % commons.length] : null;
+      }
+      if (type) used.add(type);
+      return type;
+    });
+    this._atMap[biome] = out;
+    return out;
   }
 
   // ------------------------------------------------- the biome's HEART

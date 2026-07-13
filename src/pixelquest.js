@@ -191,6 +191,21 @@ const BIOME_GATE = {
   "starfall-shore": "starfallGate", // the driftwood arch
 };
 
+// Roadside ambient attractions, now BIOME-SPECIFIC (they used to be one flat
+// list scattered into every biome — that's why a fedora snail and a windmill
+// turned up in the neon forest and the castle road). Each biome draws only
+// props that belong to it; the wilder biomes (neon, arcade, shore) intentionally
+// have none — their dense foliage + decor scatter already fill the outskirts.
+// The whimsical snail lives ONLY on the meadow road now.
+const BIOME_ATTRACTIONS = {
+  "meadow-road": ["cottage", "campfire", "windmill", "snail"],
+  "neon-forest": [],
+  "moonlit-town": ["cottage"],
+  "arcade-ruins": [],
+  "castle-approach": ["campfire"],
+  "starfall-shore": [],
+};
+
 // Each biome's HEART recipe (world plan): how the generic heart spots are
 // skinned. Sprite ids upgrade automatically when dedicated heart art lands
 // (heart_<biome>_anchor etc. — see PIXELQUEST-WORLD-ART-PROMPT.md); until
@@ -503,15 +518,15 @@ export class PixelQuest {
     // roadside attractions: a lonely cottage or campfire out in the OUTSKIRTS
     // and DEPARTURE only — the heart owns the dense settlement, so the lands
     // between actually read as between
+    // positions are fixed roadside spots; WHICH prop shows is resolved per
+    // biome at draw time (BIOME_ATTRACTIONS) from a stable per-spot seed, so a
+    // spot is a cottage on the meadow road and simply empty in the neon forest
     this.attractions = [];
     {
-      const types = ["campfire", "snail", "cottage", "windmill"];
-      let ti = (rnd() * types.length) | 0;
       for (const [lo, hi] of [[120, 460], [1330, 1840]]) {
         let ax = lo + rnd() * 120;
         while (ax < hi) {
-          this.attractions.push({ x: ax, type: types[ti % types.length] });
-          ti++;
+          this.attractions.push({ x: ax, seed: (rnd() * 997) | 0 });
           ax += 300 + rnd() * 300;
         }
       }
@@ -1562,14 +1577,16 @@ export class PixelQuest {
       const gy = this.groundY(sx) + 1;
       this.drawTorch(o, pal, sx, gy, to.ph);
     }
-    for (const at of this.attractions) {
+    const atTypes = BIOME_ATTRACTIONS[pal.biome] || [];
+    if (atTypes.length) for (const at of this.attractions) {
       const sx = Math.round((((at.x - off) % L) + L) % L);
       if (sx < -34 || sx > this.pw + 34) continue;
       const gy = this.groundY(sx) + 1;
-      if (at.type === "cottage") this.drawCottage(o, pal, sx, gy);
-      else if (at.type === "windmill") this.drawWindmill(o, pal, sx, gy);
-      else if (at.type === "campfire") this.drawCampfire(o, pal, sx, gy);
-      else this.drawSnail(o, pal, sx, gy);
+      const type = atTypes[at.seed % atTypes.length];
+      if (type === "cottage") this.drawCottage(o, pal, sx, gy);
+      else if (type === "windmill") this.drawWindmill(o, pal, sx, gy);
+      else if (type === "campfire") this.drawCampfire(o, pal, sx, gy);
+      else if (type === "snail") this.drawSnail(o, pal, sx, gy);
     }
   }
 

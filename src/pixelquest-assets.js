@@ -225,7 +225,7 @@ export const ASSET_MANIFEST = {
   windmill: { src: "windmill.png", frameW: 87, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   campfire: { src: "campfire.png", frameW: 104, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   brazier: { src: "brazier.png", frameW: 67, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
-  snail: { src: "snail.png", frameW: 148, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
+  snail: { src: "snail.png", frameW: 148, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 0.4, piSafe: true, fallback: "procedural" }, // it was 3x the hero; a snail should be small
   jukebox: { src: "jukebox.png", frameW: 81, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   phoneBooth: { src: "phoneBooth.png", frameW: 79, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },
   swordInStone: { src: "swordInStone.png", frameW: 110, frameH: 92, anims: { idle: { frames: [0] } }, anchor: "bottom-center", scale: 1, piSafe: true, fallback: "procedural" },

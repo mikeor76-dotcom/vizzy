@@ -1,5 +1,7 @@
 import { Galaxy } from "./galaxy.js";
 import { BlackHole } from "./blackhole.js";
+import { Aurora } from "./aurora.js";
+import { Terrain } from "./terrain.js";
 import { Spectrum } from "./spectrum.js";
 import { Classical } from "./classical.js";
 import { PixelQuest } from "./pixelquest.js";
@@ -117,6 +119,8 @@ micBtn.addEventListener("click", toggleMic);
 
 const galaxy = new Galaxy();
 const blackhole = new BlackHole();
+const aurora = new Aurora();
+const terrain = new Terrain();
 const spectrum = new Spectrum();
 const classical = new Classical();
 const pixelquest = new PixelQuest();
@@ -133,6 +137,8 @@ const studioMonitor = new StudioMonitor();
 const INSTANCES = {
   galaxy,
   blackhole,
+  aurora,
+  terrain,
   pixelquest,
   synthwave,
   milkdrop,
@@ -243,6 +249,8 @@ const BINDINGS = {
   synthwave: { render: (c, a, w, h, now) => synthwave.render(c, a, w, h, now), fade: "rgb(10, 5, 20)" },
   galaxy: { render: (c, a, w, h, now) => galaxy.render(c, a, w, h, now), fade: "rgba(5, 9, 20, 0.28)" },
   blackhole: { render: (c, a, w, h, now) => blackhole.render(c, a, w, h, now), fade: "rgb(2, 2, 4)" },
+  aurora: { render: (c, a, w, h, now) => aurora.render(c, a, w, h, now), fade: "rgb(1, 3, 12)" },
+  terrain: { render: (c, a, w, h, now) => terrain.render(c, a, w, h, now), fade: "rgb(2, 3, 12)" },
   pixelquest: { render: (c, a, w, h, now) => pixelquest.render(c, a, w, h, now), fade: "rgb(4, 4, 8)" },
   // milkdrop blits an opaque WebGL frame over the whole canvas every frame
   milkdrop: { render: (c, a, w, h, now) => milkdrop.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },

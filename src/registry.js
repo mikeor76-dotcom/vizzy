@@ -165,6 +165,24 @@ export const REGISTRY = [
     idle: true,
     controls: { sensitivity: true },
   },
+  {
+    id: "aurora",
+    name: "Aurora",
+    category: "cinematic",
+    stable: true,
+    presets: ["Aurora Green", "Solar Violet", "Ice Blue", "Ember"],
+    idle: true, // curtains breathe gently before any audio
+    controls: { sensitivity: true },
+  },
+  {
+    id: "terrain",
+    name: "Audio Terrain",
+    category: "cinematic",
+    stable: true,
+    presets: ["Midnight", "Dusk", "Ember", "Boreal"],
+    idle: true, // rolling hills drift before audio
+    controls: { sensitivity: true },
+  },
   // -------------------------------------------------------------- worlds
   {
     id: "pixelquest",

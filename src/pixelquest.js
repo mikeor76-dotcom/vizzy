@@ -180,16 +180,9 @@ const BIOME_FOLIAGE2 = {
   "castle-approach": "castleFoliage2",
 };
 
-// biome → imported gateway landmark asset (drawn where the procedural landmark
-// used to be). arcade-ruins has no entry (its gate art was damaged by the key),
-// so it keeps the procedural landmark.
-const BIOME_GATE = {
-  "meadow-road": "meadowGate",
-  "neon-forest": "neonGate",
-  "moonlit-town": "moonlitGate",
-  "castle-approach": "castleGate",
-  "starfall-shore": "starfallGate", // the driftwood arch
-};
+// (The per-biome gateway-landmark system was removed 2026-07-13: it dropped a
+// gate/arch structure at every heart threshold that read as redundant clutter
+// beside the heart's own centerpiece. The heart IS the destination now.)
 
 // Roadside ambient attractions, now BIOME-SPECIFIC (they used to be one flat
 // list scattered into every biome — that's why a fedora snail and a windmill
@@ -222,12 +215,15 @@ const HEART_RECIPES = {
     extras: ["heart_meadow_cart", "heart_meadow_laundry", "heart_meadow_hive"] },
   "neon-forest": { anchorFol: [1.7, 1], sideAFol: [1.2, 0], sideBFol: [0.9, 2], anchor: ["heart_neon_anchor", null, 1], sideA: ["heart_neon_sideA", null, 1], sideB: ["heart_neon_sideB", null, 1], decor: "spores",
     extras: ["heart_neon_pool", "heart_neon_stone", "heart_neon_bush"] },
+  // town's stone ARCHWAY (heart_town_arch) dropped — slot 2 falls back to a sign
   "moonlit-town": { anchor: ["heart_town_anchor", "house", 1.1], sideA: ["heart_town_sideA", "house", 0.9], sideB: ["heart_town_sideB", "jukebox", 0.8], decor: "sign",
-    extras: ["heart_town_stall", "heart_town_board", "heart_town_arch"] },
-  "arcade-ruins": { anchor: ["heart_arcade_anchor", "arcadeCabinet", 1.15], sideA: ["heart_arcade_sideA", "blueTimeBooth", 0.85], sideB: ["heart_arcade_sideB", "jukebox", 0.8], decor: "rubble",
-    extras: ["heart_arcade_booth", "heart_arcade_claw", "heart_arcade_palm"] },
-  "castle-approach": { anchor: ["heart_castle_anchor", "statue", 1.1], sideA: ["heart_castle_sideA", "swordInStone", 0.85], sideB: ["heart_castle_sideB", "brazier", 1], decor: "brazier",
-    extras: ["heart_castle_banners", "heart_castle_wagon", "heart_castle_kennel"] },
+    extras: ["heart_town_stall", "heart_town_board"] },
+  // marquee ARCH dropped — the one living cabinet is the centerpiece instead
+  "arcade-ruins": { anchor: ["heart_arcade_sideA", "arcadeCabinet", 1.2], sideA: ["heart_arcade_sideB", null, 1], sideB: ["heart_arcade_palm", null, 0.9], decor: "rubble",
+    extras: ["heart_arcade_booth", "heart_arcade_claw", "heart_arcade_sideB"] },
+  // great DOORS dropped — the knight statue is the gatecourt's centerpiece now
+  "castle-approach": { anchor: ["heart_castle_sideA", "statue", 1.15], sideA: ["heart_castle_banners", null, 1], sideB: ["heart_castle_sideB", "brazier", 1], decor: "brazier",
+    extras: ["heart_castle_wagon", "heart_castle_kennel", "heart_castle_banners"] },
   "starfall-shore": { anchor: ["heart_starfall_anchor", "campfire", 1.2], sideA: ["heart_starfall_sideA", "house", 0.95], sideB: ["heart_starfall_sideB", null, 0.9], decor: "flowers",
     extras: ["starfall_pool", "starfall_shells", "starfall_lighthouse"] },
 };
@@ -1454,82 +1450,24 @@ export class PixelQuest {
   }
 
   drawLandmark(o, pal) {
-    // imported gateway landmark: a prominent gate at the hero's level (parallax
-    // 0.7) scrolling past once per world loop — the biome's destination.
-    const gate = BIOME_GATE[pal.biome];
-    if (this.useAssets() && gate && this.assets.ready(gate)) {
-      const goff = this.scrollX * 0.7;
-      const gsx = Math.round((((this.landmarkX - goff) % this.worldLen) + this.worldLen) % this.worldLen);
-      // the DistantDestination aims arrival effects here when backdrops are on
-      this.landmarkScreenX = gsx;
-      this.landmarkScreenY = this.groundY(Math.max(0, Math.min(this.pw - 1, gsx))) - Math.round(18 * this.S * 0.7);
-      if (gsx < -90 || gsx > this.pw + 90) return;
-      this.assets.drawSprite(o, gate, "idle", 0, gsx, this.groundY(gsx) + 1, { anchor: "bottom-center", scale: 1.3 });
-      // JOURNEY PIPS (engagement plan 3.2): tiny lanterns by the gate — one
-      // goes dark per completed song; when the last goes out, the road moves
-      // on to the next waypoint. The Slow-TV "next station" pull, in 6 pixels.
-      const need = 3 - ((this.journey?.songs || 0) % 3);
-      const py = this.groundY(Math.max(0, Math.min(this.pw - 1, gsx))) - Math.round(26 * this.S * 0.7);
-      for (let i = 0; i < 3; i++) {
-        const lit = i < need;
-        o.fillStyle = lit ? this.col(pal.torch, 0.7 + this.kickPulse * 0.2) : this.col(pal.groundDark, 0.55);
-        o.fillRect(gsx - 5 + i * 4, py, 2, 2);
-      }
-      return;
-    }
-    const off = this.scrollX * 0.3;
-    const sx = Math.round(((this.landmarkX - off) % this.worldLen + this.worldLen) % this.worldLen);
-    if (sx < -40 || sx > this.pw + 40) return;
-    const base = this.groundBase() - 6;
-    const c = this.col(pal.mtMid.map((v) => Math.max(0, v - 14)));
-    o.fillStyle = c;
-    const lm = pal.landmark;
-    if (lm === "castle") {
-      o.fillRect(sx, base - 14, 22, 14);
-      o.fillRect(sx + 2, base - 20, 4, 6);
-      o.fillRect(sx + 16, base - 20, 4, 6);
-      o.fillRect(sx + 9, base - 24, 4, 10);
-      for (let i = 0; i < 6; i++) o.fillRect(sx + i * 4, base - 16, 2, 2); // crenellation
-      o.fillStyle = this.col(pal.torch, 0.8 + this.torchFlare * 0.2);
-      o.fillRect(sx + 10, base - 21, 1, 1); // lit window
-      o.fillRect(sx + 4, base - 11, 1, 1);
-      // a small banner on the keep, stirring gently — Castle Approach only
-      // (the only biome using this landmark now, so always drawn)
-      const wave = Math.sin(this.t * 2) * 1;
-      o.fillStyle = this.col(pal.torch, 0.55);
-      o.fillRect(sx + 11 + Math.round(wave), base - 30, 2, 4);
-    } else if (lm === "ruins") {
-      for (let i = 0; i < 5; i++) o.fillRect(sx + i * 6, base - 8 - (i % 3) * 3, 3, 8 + (i % 3) * 3);
-      o.fillRect(sx, base - 12, 27, 2); // broken lintel
-    } else if (lm === "tower") {
-      o.fillRect(sx + 4, base - 26, 7, 26);
-      o.fillRect(sx + 2, base - 26, 11, 3);
-      o.fillStyle = this.col(pal.torch, 0.7 + this.torchFlare * 0.3);
-      o.fillRect(sx + 7, base - 23, 2, 2); // beacon
-    } else if (lm === "mushroom") {
-      o.fillRect(sx + 8, base - 16, 6, 16);
-      o.fillStyle = this.col(pal.prop, 0.85);
-      o.fillRect(sx, base - 22, 22, 7);
-      o.fillRect(sx + 3, base - 24, 16, 2);
-      o.fillStyle = this.col(pal.firefly, 0.7);
-      o.fillRect(sx + 5, base - 20, 2, 2);
-      o.fillRect(sx + 15, base - 19, 2, 2);
-    } else if (lm === "arcade") {
-      // a row of broken cabinet husks, neon outlines instead of a warm glow
-      for (let i = 0; i < 4; i++) o.fillRect(sx + i * 6, base - 10 - (i % 2) * 3, 4, 10 + (i % 2) * 3);
-      const flick = 0.5 + 0.5 * Math.sin(this.t * 9 + sx) + this.kickPulse * 0.4;
-      o.fillStyle = this.col(pal.prop, 0.55 * flick);
-      o.fillRect(sx + 1, base - 9, 2, 3);
-      o.fillRect(sx + 13, base - 12, 2, 3);
-      o.fillStyle = this.col(pal.propDark, 0.5 + this.treble.value * 0.3);
-      o.fillRect(sx + 7, base - 11, 2, 3);
-    } else {
-      // shrine
-      o.fillRect(sx + 2, base - 4, 16, 4);
-      o.fillRect(sx + 4, base - 12, 2, 8);
-      o.fillRect(sx + 14, base - 12, 2, 8);
-      o.fillRect(sx, base - 14, 20, 2);
-      o.fillRect(sx + 2, base - 17, 16, 2);
+    // The biome's HEART is the destination now — no separate gateway/landmark
+    // structure. (Those stacked up as redundant gate/arch clutter beside each
+    // heart.) We still track the threshold point so arrival effects can aim
+    // there, and mark it with the journey pips.
+    const goff = this.scrollX * 0.7;
+    const gsx = Math.round((((this.landmarkX - goff) % this.worldLen) + this.worldLen) % this.worldLen);
+    this.landmarkScreenX = gsx;
+    this.landmarkScreenY = this.groundY(Math.max(0, Math.min(this.pw - 1, gsx))) - Math.round(18 * this.S * 0.7);
+    if (gsx < -20 || gsx > this.pw + 20) return;
+    // JOURNEY PIPS: three tiny lanterns at the heart's threshold — one goes
+    // dark per completed song; when the last goes out the road advances to the
+    // next waypoint. The Slow-TV "next station" pull, in 6 pixels.
+    const need = 3 - ((this.journey?.songs || 0) % 3);
+    const py = this.groundY(Math.max(0, Math.min(this.pw - 1, gsx))) - Math.round(5 * this.S);
+    for (let i = 0; i < 3; i++) {
+      const lit = i < need;
+      o.fillStyle = lit ? this.col(pal.torch, 0.7 + this.kickPulse * 0.2) : this.col(pal.groundDark, 0.55);
+      o.fillRect(gsx - 5 + i * 4, py, 2, 2);
     }
   }
 

@@ -7,6 +7,11 @@
 // startup (the renderer instances live there); everything else is static
 // metadata, so this module stays import-safe for the controller.
 //
+// `auto` is the mode's AutoGain profile (src/autogain.js): model "linear"
+// (sensitivity scales the raw signal) or "agc" (the mode has its own internal
+// peak-tracking gain; sensitivity is a trim), target drive on peaks, optional
+// clamp. `auto: null` = self-governing/fixed — AutoGain leaves it alone.
+//
 // Two content categories: METERS (analytical readouts that show you the
 // signal) and SCENES (immersive artistic visuals). `favorites` is the special
 // starred-modes view.
@@ -26,7 +31,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: false, // draws only while the mic is live (raw analyser view)
-    controls: { sensitivity: false },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
     id: "colorbars",
@@ -35,7 +40,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: false,
-    controls: { sensitivity: false },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
     id: "spectrum",
@@ -44,7 +49,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: false,
-    controls: { sensitivity: false },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
     id: "wave",
@@ -53,7 +58,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: false,
-    controls: { sensitivity: false },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
     id: "radial",
@@ -62,7 +67,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: false,
-    controls: { sensitivity: false },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
     id: "blue-power-meters",
@@ -71,7 +76,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Classic Blue", "Dark Glass", "Minimal", "Night Mode"],
     idle: true,
-    controls: { sensitivity: true },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
     id: "oscilloscope",
@@ -80,7 +85,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Green Phosphor", "Amber Trace", "Blue Trace", "White Studio"],
     idle: true, // flat trace with a faint hum
-    controls: { sensitivity: true },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
     id: "waterfall",
@@ -89,7 +94,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Studio Blue", "Amber Heat", "Monochrome", "Deep Space"],
     idle: true,
-    controls: { sensitivity: true },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
     id: "studio-monitor",
@@ -98,7 +103,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Mastering", "Minimal", "Blue Studio", "Amber Studio"],
     idle: true,
-    controls: { sensitivity: true },
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   // ------------------------------------------------------------- scenes
   {
@@ -108,7 +113,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: true, // sways gently before any audio plays
-    controls: { sensitivity: false },
+    auto: null,
   },
   {
     id: "synthwave",
@@ -117,7 +122,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: true,
-    controls: { sensitivity: false }, // fixed internal gain (FIXED_SENSITIVITY); dial does nothing here
+    auto: null,
   },
   {
     id: "milkdrop",
@@ -126,7 +131,7 @@ export const REGISTRY = [
     stable: false, // butterchurn/WebGL2 — needs a perf pass on the Pi
     presets: ["Auto Cycle", "Hard Cuts", "Hold"],
     idle: true, // presets keep flowing before audio arrives
-    controls: { sensitivity: false }, // butterchurn normalizes levels internally
+    auto: null,
   },
   {
     id: "galaxy",
@@ -135,7 +140,7 @@ export const REGISTRY = [
     stable: false, // still evolving
     presets: ["Default"],
     idle: true,
-    controls: { sensitivity: true },
+    auto: { model: "agc", target: 0.62 },
   },
   {
     id: "aurora",
@@ -144,7 +149,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Aurora Green", "Solar Violet", "Ice Blue", "Ember"],
     idle: true, // curtains breathe gently before any audio
-    controls: { sensitivity: true },
+    auto: { model: "agc", target: 0.62 },
   },
   {
     id: "ferrofluid",
@@ -153,7 +158,7 @@ export const REGISTRY = [
     stable: true,
     presets: ["Chrome Cyan", "Magma", "Violet", "Mercury"],
     idle: true, // the mass breathes softly before any audio
-    controls: { sensitivity: true },
+    auto: { model: "agc", target: 0.62 },
   },
   {
     id: "pixelquest",
@@ -162,7 +167,7 @@ export const REGISTRY = [
     stable: false,
     presets: ["Default"],
     idle: true,
-    controls: { sensitivity: true },
+    auto: { model: "agc", target: 0.62, clamp: [1.0, 1.6] },
   },
 ];
 

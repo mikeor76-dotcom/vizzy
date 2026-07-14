@@ -9,7 +9,6 @@ import { CATEGORIES, REGISTRY, byId } from "./registry.js";
 const STORE = {
   mode: "vizzy-mode",
   category: "vizzy-category",
-  sensitivity: "vizzy-sensitivity", // shared with the legacy slider key
   favorites: "vizzy-favorites",
   controls: "vizzy-controls-visible",
 };
@@ -28,8 +27,6 @@ export class VisualizerController {
     // hardcoded id that might not exist either
     if (!CATEGORIES.some((c) => c.id === this.currentCategory)) this.currentCategory = byId(this.currentModeId).category;
     this.currentPreset = byId(this.currentModeId).presets[0];
-    this.sensitivity = parseFloat(localStorage.getItem(STORE.sensitivity));
-    if (Number.isNaN(this.sensitivity)) this.sensitivity = 1.25;
     this.controlsVisible = localStorage.getItem(STORE.controls) !== "false";
     this.locked = false; // never persisted: a fresh boot is always unlocked
     this.overlayData = null;
@@ -55,7 +52,6 @@ export class VisualizerController {
   #persist() {
     localStorage.setItem(STORE.mode, this.currentModeId);
     localStorage.setItem(STORE.category, this.currentCategory);
-    localStorage.setItem(STORE.sensitivity, this.sensitivity);
     localStorage.setItem(STORE.favorites, JSON.stringify(this.favorites));
     localStorage.setItem(STORE.controls, this.controlsVisible);
   }
@@ -141,18 +137,6 @@ export class VisualizerController {
   }
 
   // --------------------------------------------------------- adjustments
-  setSensitivity(v, { announce = true } = {}) {
-    this.sensitivity = Math.min(2.5, Math.max(0.5, Math.round(v * 100) / 100));
-    this.#persist();
-    if (announce) this.#announce();
-    this.#emit("sensitivity");
-  }
-  increaseSensitivity() {
-    this.setSensitivity(this.sensitivity + 0.05);
-  }
-  decreaseSensitivity() {
-    this.setSensitivity(this.sensitivity - 0.05);
-  }
   cyclePreset() {
     const presets = this.currentEntry.presets;
     const ix = presets.indexOf(this.currentPreset);
@@ -192,7 +176,6 @@ export class VisualizerController {
       line1: this.categoryName().toUpperCase(),
       line2: this.currentEntry.name + (this.isFavorite() ? " ★" : ""),
       line3: `Preset: ${this.currentPreset}`,
-      line4: `Sensitivity: ${this.sensitivity.toFixed(2)}`,
     });
   }
   showTemporaryOverlay(data, seconds = 2.4) {

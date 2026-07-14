@@ -257,53 +257,6 @@ body.controls-off #controls {
   color: #fff;
 }
 
-.sens-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sens-label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-#sens-value {
-  font-size: 12px;
-  color: var(--fg);
-  width: 30px;
-  font-variant-numeric: tabular-nums;
-}
-
-#sens-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 110px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.15);
-  outline: none;
-  cursor: pointer;
-}
-
-#sens-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-}
-
-#sens-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-}
-
 #now-playing {
   max-width: 200px;
   overflow: hidden;

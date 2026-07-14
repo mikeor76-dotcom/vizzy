@@ -11,6 +11,7 @@ import { Oscilloscope } from "./hifi/oscilloscope.js";
 import { Waterfall } from "./hifi/waterfall.js";
 import { StudioMonitor } from "./hifi/studiomonitor.js";
 import { CATEGORIES, REGISTRY, byId } from "./registry.js";
+import { AutoGain } from "./autogain.js";
 import { VisualizerController } from "./controller.js";
 import { initKeyboardControls } from "./keyboard.js";
 import { createHardwareInput } from "./hardware.js";
@@ -127,7 +128,15 @@ const oscilloscope = new Oscilloscope();
 const waterfall = new Waterfall();
 const studioMonitor = new StudioMonitor();
 
-// renderers whose cfg the controller state (sensitivity, preset) applies to
+// the raw-analyser views (plain draw functions below) get tiny cfg holders so
+// AutoGain can drive their sensitivity exactly like the class-based modes
+const rawBars = { cfg: { sensitivity: 1.25 } };
+const rawColorbars = { cfg: { sensitivity: 1.25 } };
+const rawWave = { cfg: { sensitivity: 1.25 } };
+const rawRadial = { cfg: { sensitivity: 1.25 } };
+
+// renderers whose cfg the controller state (preset) and AutoGain (sensitivity)
+// apply to
 const INSTANCES = {
   galaxy,
   aurora,
@@ -135,6 +144,11 @@ const INSTANCES = {
   pixelquest,
   synthwave,
   milkdrop,
+  spectrum,
+  bars: rawBars,
+  colorbars: rawColorbars,
+  wave: rawWave,
+  radial: rawRadial,
   "blue-power-meters": blueMeters,
   oscilloscope,
   waterfall,
@@ -146,13 +160,14 @@ const timeData = new Uint8Array(2048);
 
 function drawBars(w, h) {
   analyser.getByteFrequencyData(freqData);
+  const sens = rawBars.cfg.sensitivity;
   const barCount = 96;
   const step = Math.floor((freqData.length * 0.7) / barCount);
   const gap = 2;
   const barWidth = w / barCount - gap;
 
   for (let i = 0; i < barCount; i++) {
-    const v = freqData[i * step] / 255;
+    const v = Math.min(1, (freqData[i * step] / 255) * sens);
     const barHeight = Math.max(2, v * h * 0.75);
     const x = i * (barWidth + gap) + gap / 2;
     const hue = 260 - (i / barCount) * 100 - v * 40;
@@ -164,13 +179,14 @@ function drawBars(w, h) {
 // bars layout with the radial mode's palette: violet -> magenta -> pink
 function drawColorBars(w, h) {
   analyser.getByteFrequencyData(freqData);
+  const sens = rawColorbars.cfg.sensitivity;
   const barCount = 96;
   const step = Math.floor((freqData.length * 0.7) / barCount);
   const gap = 2;
   const barWidth = w / barCount - gap;
 
   for (let i = 0; i < barCount; i++) {
-    const v = freqData[i * step] / 255;
+    const v = Math.min(1, (freqData[i * step] / 255) * sens);
     const barHeight = Math.max(2, v * h * 0.75);
     const x = i * (barWidth + gap) + gap / 2;
     const hue = 260 + (i / barCount) * 120 + v * 30;
@@ -190,8 +206,10 @@ function drawWave(w, h) {
 
   ctx.beginPath();
   const slice = w / timeData.length;
+  const sens = rawWave.cfg.sensitivity;
   for (let i = 0; i < timeData.length; i++) {
-    const y = (timeData[i] / 255) * h;
+    // scale the excursion around the midline so quiet songs still draw a wave
+    const y = ((128 + (timeData[i] - 128) * sens) / 255) * h;
     if (i === 0) ctx.moveTo(0, y);
     else ctx.lineTo(i * slice, y);
   }
@@ -208,8 +226,9 @@ function drawRadial(w, h) {
   const maxLen = Math.min(w, h) * 0.3;
 
   const t = performance.now() / 8000;
+  const sens = rawRadial.cfg.sensitivity;
   for (let i = 0; i < spokes; i++) {
-    const v = freqData[i * step] / 255;
+    const v = Math.min(1, (freqData[i * step] / 255) * sens);
     const angle = (i / spokes) * Math.PI * 2 + t;
     const len = baseRadius + v * maxLen;
     const hue = 260 + (i / spokes) * 120 + v * 30;
@@ -259,6 +278,7 @@ for (const entry of REGISTRY) Object.assign(entry, BINDINGS[entry.id]);
 
 const controller = new VisualizerController();
 window.vizzy = { controller, hardware: createHardwareInput(controller, { toggleMic }) };
+// wired up after autogain is constructed below (QA: vizzy.autogain.status())
 
 // Console-only test hooks for Pixel Quest's Adventure Layer v1 + Biome
 // System v1 + Journey/Arrival (Step 3) + Quest/Collectible System v1
@@ -329,23 +349,20 @@ window.pixelQuestOpening = {
   setEnabled: (on) => pixelquest.opening.setEnabled(on),
 };
 
-const sensSlider = document.getElementById("sens-slider");
-const sensValue = document.getElementById("sens-value");
-const sensGroup = document.querySelector(".sens-group");
 let overlayTimer;
 
-function applySensitivity() {
-  const s = controller.sensitivity;
+// --- AutoGain: the hand on the sensitivity dial, automated ------------------
+// The slider is gone. AutoGain listens to the music and drives every mode's
+// cfg.sensitivity per its registry `auto` profile — instant learned default on
+// mode switch, a fast listen window on song changes, glacial drift once locked.
+// QA: vizzy.autogain.status() in the console; ?sens=1.6 pins a manual value.
+const autogain = new AutoGain();
+window.vizzy.autogain = autogain;
+let appliedSens = 0;
+function applyAutoSens(s) {
+  if (Math.abs(s - appliedSens) < 0.005) return;
+  appliedSens = s;
   for (const id in INSTANCES) INSTANCES[id].cfg.sensitivity = s;
-  sensSlider.value = s;
-  sensValue.textContent = s.toFixed(2);
-}
-
-// hide the sensitivity dial for modes that ignore it (registry
-// `controls.sensitivity: false`) — e.g. Synthwave runs on a fixed internal gain
-function applyModeControls() {
-  const showSens = controller.currentEntry.controls?.sensitivity !== false;
-  if (sensGroup) sensGroup.style.display = showSens ? "" : "none";
 }
 
 function applyPreset() {
@@ -416,11 +433,10 @@ function buildPanel() {
 
 let prevModeId = controller.currentModeId;
 controller.onChange((what) => {
-  if (what === "sensitivity") applySensitivity();
   if (what === "overlay") applyOverlay();
   if (what === "controls") applyControlsVisible();
   if (what === "mode" || what === "preset") applyPreset();
-  if (what === "mode") applyModeControls();
+  if (what === "mode") autogain.setMode(controller.currentModeId, controller.currentEntry.auto);
   if (what === "mode") saveLastMode(controller.currentModeId);
   if (what === "mode") {
     // leaving Pixel Quest cancels the intro cleanly; it only STARTS when the mic
@@ -437,10 +453,6 @@ function saveLastMode(mode) {
   try { fetch("/api/last-mode", { method: "POST", body: mode, keepalive: true }).catch(() => {}); } catch {}
 }
 
-sensSlider.addEventListener("input", () =>
-  controller.setSensitivity(parseFloat(sensSlider.value), { announce: false })
-);
-
 initKeyboardControls(controller, { toggleMic, pixelquest });
 
 // Kiosk support (e.g. Raspberry Pi driving an LED wall):
@@ -448,7 +460,8 @@ initKeyboardControls(controller, { toggleMic, pixelquest });
 //                     remembers your last choice and that wins over this param
 //   ?input=mic        grab the microphone on load (needs pre-granted
 //                     permission, e.g. chromium --use-fake-ui-for-media-stream)
-//   ?sens=1.6         music sensitivity (0.5–2.5; overrides the saved value)
+//   ?sens=1.6         PIN a manual sensitivity and disable AutoGain (escape
+//                     hatch — sensitivity is otherwise fully automatic)
 // Kiosk persistence: the SERVER is the source of truth (it's updated on every
 // change and injected into the page). Let it WIN over the browser's localStorage
 // — a stale/undead value there (Chromium on the Pi can read a value it never
@@ -467,12 +480,12 @@ const modeParam = params.get("mode");
 if (modeParam && byId(modeParam) && !controller.hadSavedMode) controller.setMode(modeParam);
 if (params.get("input") === "mic") startMic();
 const sensParam = parseFloat(params.get("sens"));
-if (!Number.isNaN(sensParam)) controller.setSensitivity(sensParam, { announce: false });
+if (!Number.isNaN(sensParam)) autogain.pin(sensParam);
 
-applySensitivity();
+autogain.setMode(controller.currentModeId, controller.currentEntry.auto);
+applyAutoSens(autogain.sens);
 applyPreset();
 applyControlsVisible();
-applyModeControls();
 buildPanel();
 
 prevModeId = controller.currentModeId; // the intro starts on mic-listen, not here
@@ -506,6 +519,7 @@ function draw(now = performance.now()) {
     if (entry.idle) entry.render(ctx, null, w, h, now);
     return;
   }
+  applyAutoSens(autogain.update(analyser, now)); // the automated sensitivity hand
   entry.render(ctx, analyser, w, h, now);
 }
 

@@ -38,6 +38,24 @@ const cleanJourney = (j) => ({
 function readJourney() { try { return cleanJourney(JSON.parse(readFileSync(JOURNEY_FILE, "utf8"))); } catch { return cleanJourney({}); } }
 function writeJourney(j) { try { mkdirSync(STATE_DIR, { recursive: true }); writeFileSync(JOURNEY_FILE, JSON.stringify(cleanJourney(j))); return true; } catch { return false; } }
 
+// AutoGain learned baselines (src/autogain.js): per-mode converged sensitivity,
+// so a kiosk reboot starts at yesterday's values. { modeId: number } — sanitized.
+const AUTOGAIN_FILE = join(STATE_DIR, "autogain.json");
+const cleanAutogain = (j) => {
+  const out = {};
+  if (j && typeof j === "object") {
+    for (const [k, v] of Object.entries(j)) {
+      if (Object.keys(out).length >= 40) break;
+      const key = cleanMode(k);
+      const num = Number(v);
+      if (key && Number.isFinite(num) && num >= 0.4 && num <= 3) out[key] = Math.round(num * 100) / 100;
+    }
+  }
+  return out;
+};
+function readAutogain() { try { return cleanAutogain(JSON.parse(readFileSync(AUTOGAIN_FILE, "utf8"))); } catch { return {}; } }
+function writeAutogain(j) { try { mkdirSync(STATE_DIR, { recursive: true }); writeFileSync(AUTOGAIN_FILE, JSON.stringify(cleanAutogain(j))); return true; } catch { return false; } }
+
 function appVersion() {
   try {
     return JSON.parse(readFileSync(join(APP_ROOT, "version.json"), "utf8")).version;
@@ -94,6 +112,26 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(200, { "content-type": "application/json" });
     return res.end(JSON.stringify({ mode: readLastMode() }));
+  }
+
+  // AutoGain baselines (read on boot, written when a listen window locks)
+  if (pathname === "/api/autogain") {
+    res.setHeader("access-control-allow-origin", "*");
+    res.setHeader("cache-control", "no-store");
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 4096) req.destroy(); });
+      req.on("end", () => {
+        let j = null;
+        try { j = JSON.parse(body); } catch {}
+        if (j && typeof j === "object") writeAutogain(j); // bad input never clobbers good state
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(readAutogain()));
+      });
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    return res.end(JSON.stringify(readAutogain()));
   }
 
   // Pixel Quest journey state (read on boot, written on song/waypoint changes)

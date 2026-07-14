@@ -4,7 +4,6 @@
 //
 //   ← / →     previous / next visualization within the current category
 //   ↑ / ↓     previous / next category
-//   [ / ]     sensitivity down / up
 //   P         cycle preset
 //   F         toggle favorite
 //   L         lock/unlock the current visualization
@@ -19,7 +18,7 @@
 
 export function initKeyboardControls(controller, { toggleMic, pixelquest }) {
   window.addEventListener("keydown", (e) => {
-    // never steal keys from form fields (e.g. the sensitivity slider)
+    // never steal keys from form fields
     if (e.target && /^(input|textarea|select)$/i.test(e.target.tagName) && e.key !== "Escape") {
       if (e.key === " ") return; // space on a focused button/slider stays native
     }
@@ -48,12 +47,6 @@ export function initKeyboardControls(controller, { toggleMic, pixelquest }) {
       case "ArrowUp":
         e.preventDefault();
         controller.previousCategory();
-        break;
-      case "]":
-        controller.increaseSensitivity();
-        break;
-      case "[":
-        controller.decreaseSensitivity();
         break;
       case "p":
       case "P":

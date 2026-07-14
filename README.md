@@ -84,8 +84,10 @@ unattended boot possible:
 
 - `?mode=galaxy` — start in a given mode
 - `?input=mic` — grab the microphone on load (no click needed)
-- `?sens=1.6` — music sensitivity (0.5–2.5, default 1.25); without the param, the
-  last value set on the control-bar slider is remembered
+- `?sens=1.6` — PIN a manual sensitivity and disable AutoGain. Sensitivity is
+  otherwise fully automatic: AutoGain (src/autogain.js) listens to the music
+  and re-tunes each mode per song, learning per-mode baselines that persist
+  across reboots
 
 On the Pi:
 

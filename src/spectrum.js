@@ -3,6 +3,7 @@
 
 export class Spectrum {
   constructor() {
+    this.cfg = { sensitivity: 1.25, preset: "Default" }; // driven by AutoGain
     this.freq = new Uint8Array(1024);
     this.smooth = new Float32Array(200);
     this.peaks = new Float32Array(200);
@@ -27,7 +28,7 @@ export class Spectrum {
     for (let i = 0; i < count; i++) {
       // log-ish bin mapping spreads the highs out
       const bin = Math.floor(Math.pow(i / count, 1.55) * 0.7 * this.freq.length);
-      const v = this.freq[bin] / 255;
+      const v = Math.min(1, (this.freq[bin] / 255) * this.cfg.sensitivity);
       // fast attack, slow decay keeps motion lively but not jittery
       this.smooth[i] = v > this.smooth[i] ? v : Math.max(0, this.smooth[i] - dt * 1.6);
       const sv = this.smooth[i];

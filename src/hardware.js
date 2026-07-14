@@ -12,8 +12,8 @@
 //   Encoder A press   → controller.toggleLock()
 //   Encoder B rotate  → controller.previousMode() / nextMode()
 //   Encoder B press   → controller.toggleFavorite()
-//   Encoder C rotate  → controller.decreaseSensitivity() / increaseSensitivity()
 //   Encoder C press   → controller.cyclePreset()
+//   (sensitivity is automatic now — see src/autogain.js — no knob needed)
 //   Switch 1          → toggleMic()
 //   Switch 2 (hold)   → controller.toggleControlsVisible()
 //
@@ -27,8 +27,6 @@ const ACTION_MAP = {
   "mode:next": (c) => c.nextMode(),
   "mode:prev": (c) => c.previousMode(),
   "mode:set": (c, arg) => c.setMode(arg),
-  "sensitivity:up": (c) => c.increaseSensitivity(),
-  "sensitivity:down": (c) => c.decreaseSensitivity(),
   "preset:cycle": (c) => c.cyclePreset(),
   "favorite:toggle": (c) => c.toggleFavorite(),
   "lock:toggle": (c) => c.toggleLock(),

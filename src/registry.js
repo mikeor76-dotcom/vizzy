@@ -147,6 +147,15 @@ export const REGISTRY = [
     controls: { sensitivity: true },
   },
   {
+    id: "ferrofluid",
+    name: "Ferrofluid",
+    category: "scenes",
+    stable: true,
+    presets: ["Chrome Cyan", "Magma", "Violet", "Mercury"],
+    idle: true, // the mass breathes softly before any audio
+    controls: { sensitivity: true },
+  },
+  {
     id: "pixelquest",
     name: "Pixel Quest",
     category: "scenes",

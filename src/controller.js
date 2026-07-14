@@ -117,17 +117,13 @@ export class VisualizerController {
     this.#announce();
     this.#emit("mode");
   }
+  // ←/→ (and the future hardware encoder) traverse the FULL lineup, wrapping
+  // across categories like a single knob — the panel follows each mode into
+  // its home category via setMode. ↑/↓ still jump by category.
   #stepMode(dir) {
     if (this.locked) return this.#deny();
-    const modes = this.modesInCategory();
-    if (!modes.length) return;
-    const ix = Math.max(0, modes.findIndex((m) => m.id === this.currentModeId));
-    const next = modes[(ix + dir + modes.length) % modes.length];
-    this.currentModeId = next.id;
-    this.currentPreset = next.presets[0];
-    this.#persist();
-    this.#announce();
-    this.#emit("mode");
+    const ix = Math.max(0, REGISTRY.findIndex((m) => m.id === this.currentModeId));
+    this.setMode(REGISTRY[(ix + dir + REGISTRY.length) % REGISTRY.length].id);
   }
   nextMode() {
     this.#stepMode(1);

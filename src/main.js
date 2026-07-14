@@ -71,7 +71,10 @@ function stopMic() {
   nowPlaying.textContent = "";
 }
 
+let micStarting = false; // guards the auto-start racing ?input=mic
 async function startMic() {
+  if (micActive || micStarting) return;
+  micStarting = true;
   try {
     // MUSIC mic, not a call mic: Chrome's default constraints enable echo
     // cancellation, noise suppression and auto-gain — voice-call DSP that adds
@@ -102,6 +105,8 @@ async function startMic() {
       err.name === "NotAllowedError"
         ? "Mic blocked (check browser + macOS system permissions)"
         : `Mic error: ${err.name}`;
+  } finally {
+    micStarting = false;
   }
 }
 
@@ -481,6 +486,24 @@ if (modeParam && byId(modeParam) && !controller.hadSavedMode) controller.setMode
 if (params.get("input") === "mic") startMic();
 const sensParam = parseFloat(params.get("sens"));
 if (!Number.isNaN(sensParam)) autogain.pin(sensParam);
+
+// AUTO-START the mic whenever permission is already granted — the hardware
+// device should light up on boot with no click (kiosk Chromium pre-grants via
+// --use-fake-ui-for-media-stream; a desktop browser auto-starts on every visit
+// after the first grant). First-run browsers still need the button: a
+// no-gesture prompt gets quietly demoted (Chrome) or refused (Safari), so we
+// only prompt from a click. Query failures (older Safari) keep the button.
+(async () => {
+  if (micActive || micStarting) return; // ?input=mic already on it
+  try {
+    const perm = await navigator.permissions.query({ name: "microphone" });
+    if (perm.state === "granted") startMic();
+    // if the user grants later via the button, future boots auto-start
+    perm.onchange = () => { if (perm.state === "granted") startMic(); };
+  } catch {
+    /* Permissions API unavailable: the Start Mic button remains the path */
+  }
+})();
 
 autogain.setMode(controller.currentModeId, controller.currentEntry.auto);
 applyAutoSens(autogain.sens);

@@ -2,7 +2,8 @@
 // panel, keyboard, future hardware knobs). Everything routes through the
 // controller; nothing here touches visualizers or the DOM directly.
 //
-//   ← / →     previous / next visualization within the current category
+//   ← / →     previous / next visualization (the FULL lineup, wrapping
+//             across categories — one knob, every mode)
 //   ↑ / ↓     previous / next category
 //   P         cycle preset
 //   F         toggle favorite

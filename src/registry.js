@@ -6,23 +6,23 @@
 // `render(ctx, analyser, w, h, now)` and `fade` are attached by main.js at
 // startup (the renderer instances live there); everything else is static
 // metadata, so this module stays import-safe for the controller.
+//
+// Two content categories: METERS (analytical readouts that show you the
+// signal) and SCENES (immersive artistic visuals). `favorites` is the special
+// starred-modes view.
 
 export const CATEGORIES = [
-  { id: "classic", name: "Classic" },
-  { id: "hifi", name: "Hi-Fi" },
-  // Future cinematic modes: Nebula, Starfield, Deep Space.
-  { id: "cinematic", name: "Cinematic" },
-  // Future worlds: Castle Journey, Boss Battle, Space Flight.
-  { id: "worlds", name: "Worlds" },
+  { id: "meters", name: "Meters" },
+  { id: "scenes", name: "Scenes" },
   { id: "favorites", name: "Favorites" },
 ];
 
 export const REGISTRY = [
-  // ------------------------------------------------------------- classic
+  // ------------------------------------------------------------- meters
   {
     id: "bars",
     name: "Bars",
-    category: "classic",
+    category: "meters",
     stable: true,
     presets: ["Default"],
     idle: false, // draws only while the mic is live (raw analyser view)
@@ -31,7 +31,7 @@ export const REGISTRY = [
   {
     id: "colorbars",
     name: "Color Bars",
-    category: "classic",
+    category: "meters",
     stable: true,
     presets: ["Default"],
     idle: false,
@@ -40,25 +40,16 @@ export const REGISTRY = [
   {
     id: "spectrum",
     name: "Spectrum",
-    category: "classic",
+    category: "meters",
     stable: true,
     presets: ["Default"],
     idle: false,
     controls: { sensitivity: false },
   },
   {
-    id: "classical",
-    name: "Classical",
-    category: "classic",
-    stable: true,
-    presets: ["Default"],
-    idle: true, // sways gently before any audio plays
-    controls: { sensitivity: false },
-  },
-  {
     id: "wave",
     name: "Wave",
-    category: "classic",
+    category: "meters",
     stable: true,
     presets: ["Default"],
     idle: false,
@@ -67,53 +58,16 @@ export const REGISTRY = [
   {
     id: "radial",
     name: "Radial",
-    category: "classic",
+    category: "meters",
     stable: true,
     presets: ["Default"],
     idle: false,
     controls: { sensitivity: false },
   },
   {
-    id: "synthwave",
-    name: "Synthwave",
-    category: "classic",
-    stable: true,
-    presets: ["Default"],
-    idle: true,
-    controls: { sensitivity: false }, // fixed internal gain (FIXED_SENSITIVITY); dial does nothing here
-  },
-  {
-    id: "milkdrop",
-    name: "MilkDrop",
-    category: "classic",
-    stable: false, // butterchurn/WebGL2 — needs a perf pass on the Pi
-    presets: ["Auto Cycle", "Hard Cuts", "Hold"],
-    idle: true, // presets keep flowing before audio arrives
-    controls: { sensitivity: false }, // butterchurn normalizes levels internally
-  },
-  // --------------------------------------------------------------- hi-fi
-  {
-    id: "tube-amp",
-    name: "Tube Amp",
-    category: "hifi",
-    stable: true,
-    presets: ["Walnut", "Midnight Blue", "Champagne", "Black Silver"],
-    idle: true, // tubes idle warm, power lamp breathes
-    controls: { sensitivity: true },
-  },
-  {
-    id: "analog-vu",
-    name: "Analog VU",
-    category: "hifi",
-    stable: true,
-    presets: ["Warm", "Studio", "Vintage", "Minimal"],
-    idle: true, // needles rest at zero, backlight stays warm
-    controls: { sensitivity: true },
-  },
-  {
     id: "blue-power-meters",
     name: "Blue Meters",
-    category: "hifi",
+    category: "meters",
     stable: true,
     presets: ["Classic Blue", "Dark Glass", "Minimal", "Night Mode"],
     idle: true,
@@ -122,7 +76,7 @@ export const REGISTRY = [
   {
     id: "oscilloscope",
     name: "Oscilloscope",
-    category: "hifi",
+    category: "meters",
     stable: true,
     presets: ["Green Phosphor", "Amber Trace", "Blue Trace", "White Studio"],
     idle: true, // flat trace with a faint hum
@@ -131,7 +85,7 @@ export const REGISTRY = [
   {
     id: "waterfall",
     name: "Waterfall",
-    category: "hifi",
+    category: "meters",
     stable: true,
     presets: ["Studio Blue", "Amber Heat", "Monochrome", "Deep Space"],
     idle: true,
@@ -140,27 +94,45 @@ export const REGISTRY = [
   {
     id: "studio-monitor",
     name: "Studio Monitor",
-    category: "hifi",
+    category: "meters",
     stable: true,
     presets: ["Mastering", "Minimal", "Blue Studio", "Amber Studio"],
     idle: true,
     controls: { sensitivity: true },
   },
-  // ----------------------------------------------------------- cinematic
+  // ------------------------------------------------------------- scenes
+  {
+    id: "classical",
+    name: "Classical",
+    category: "scenes",
+    stable: true,
+    presets: ["Default"],
+    idle: true, // sways gently before any audio plays
+    controls: { sensitivity: false },
+  },
+  {
+    id: "synthwave",
+    name: "Synthwave",
+    category: "scenes",
+    stable: true,
+    presets: ["Default"],
+    idle: true,
+    controls: { sensitivity: false }, // fixed internal gain (FIXED_SENSITIVITY); dial does nothing here
+  },
+  {
+    id: "milkdrop",
+    name: "MilkDrop",
+    category: "scenes",
+    stable: false, // butterchurn/WebGL2 — needs a perf pass on the Pi
+    presets: ["Auto Cycle", "Hard Cuts", "Hold"],
+    idle: true, // presets keep flowing before audio arrives
+    controls: { sensitivity: false }, // butterchurn normalizes levels internally
+  },
   {
     id: "galaxy",
     name: "Galaxy",
-    category: "cinematic",
+    category: "scenes",
     stable: false, // still evolving
-    presets: ["Default"],
-    idle: true,
-    controls: { sensitivity: true },
-  },
-  {
-    id: "blackhole",
-    name: "Event Horizon",
-    category: "cinematic",
-    stable: false,
     presets: ["Default"],
     idle: true,
     controls: { sensitivity: true },
@@ -168,26 +140,16 @@ export const REGISTRY = [
   {
     id: "aurora",
     name: "Aurora",
-    category: "cinematic",
+    category: "scenes",
     stable: true,
     presets: ["Aurora Green", "Solar Violet", "Ice Blue", "Ember"],
     idle: true, // curtains breathe gently before any audio
     controls: { sensitivity: true },
   },
   {
-    id: "terrain",
-    name: "Audio Terrain",
-    category: "cinematic",
-    stable: true,
-    presets: ["Midnight", "Dusk", "Ember", "Boreal"],
-    idle: true, // rolling hills drift before audio
-    controls: { sensitivity: true },
-  },
-  // -------------------------------------------------------------- worlds
-  {
     id: "pixelquest",
     name: "Pixel Quest",
-    category: "worlds",
+    category: "scenes",
     stable: false,
     presets: ["Default"],
     idle: true,

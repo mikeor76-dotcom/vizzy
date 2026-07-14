@@ -23,7 +23,10 @@ export class VisualizerController {
     this.currentModeId = localStorage.getItem(STORE.mode) || "bars";
     if (!byId(this.currentModeId)) this.currentModeId = "bars";
     this.currentCategory = localStorage.getItem(STORE.category) || byId(this.currentModeId).category;
-    if (!CATEGORIES.some((c) => c.id === this.currentCategory)) this.currentCategory = "classic";
+    // a persisted category can be stale (a category we've since renamed or
+    // removed) — fall back to the current mode's own home category, never a
+    // hardcoded id that might not exist either
+    if (!CATEGORIES.some((c) => c.id === this.currentCategory)) this.currentCategory = byId(this.currentModeId).category;
     this.currentPreset = byId(this.currentModeId).presets[0];
     this.sensitivity = parseFloat(localStorage.getItem(STORE.sensitivity));
     if (Number.isNaN(this.sensitivity)) this.sensitivity = 1.25;

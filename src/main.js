@@ -1,14 +1,10 @@
 import { Galaxy } from "./galaxy.js";
-import { BlackHole } from "./blackhole.js";
 import { Aurora } from "./aurora.js";
-import { Terrain } from "./terrain.js";
 import { Spectrum } from "./spectrum.js";
 import { Classical } from "./classical.js";
 import { PixelQuest } from "./pixelquest.js";
 import { Synthwave } from "./synthwave.js";
 import { Milkdrop } from "./milkdrop.js";
-import { TubeAmp } from "./hifi/tubeamp.js";
-import { AnalogVU } from "./hifi/analogvu.js";
 import { BlueMeters } from "./hifi/bluemeters.js";
 import { Oscilloscope } from "./hifi/oscilloscope.js";
 import { Waterfall } from "./hifi/waterfall.js";
@@ -118,16 +114,12 @@ micBtn.addEventListener("click", toggleMic);
 // styles are attached here, where the instances live.
 
 const galaxy = new Galaxy();
-const blackhole = new BlackHole();
 const aurora = new Aurora();
-const terrain = new Terrain();
 const spectrum = new Spectrum();
 const classical = new Classical();
 const pixelquest = new PixelQuest();
 const synthwave = new Synthwave();
 const milkdrop = new Milkdrop();
-const tubeAmp = new TubeAmp();
-const analogVU = new AnalogVU();
 const blueMeters = new BlueMeters();
 const oscilloscope = new Oscilloscope();
 const waterfall = new Waterfall();
@@ -136,14 +128,10 @@ const studioMonitor = new StudioMonitor();
 // renderers whose cfg the controller state (sensitivity, preset) applies to
 const INSTANCES = {
   galaxy,
-  blackhole,
   aurora,
-  terrain,
   pixelquest,
   synthwave,
   milkdrop,
-  "tube-amp": tubeAmp,
-  "analog-vu": analogVU,
   "blue-power-meters": blueMeters,
   oscilloscope,
   waterfall,
@@ -248,16 +236,12 @@ const BINDINGS = {
   classical: { render: (c, a, w, h, now) => classical.render(c, a, w, h, now), fade: "rgba(5, 4, 2, 0.4)" },
   synthwave: { render: (c, a, w, h, now) => synthwave.render(c, a, w, h, now), fade: "rgb(10, 5, 20)" },
   galaxy: { render: (c, a, w, h, now) => galaxy.render(c, a, w, h, now), fade: "rgba(5, 9, 20, 0.28)" },
-  blackhole: { render: (c, a, w, h, now) => blackhole.render(c, a, w, h, now), fade: "rgb(2, 2, 4)" },
   aurora: { render: (c, a, w, h, now) => aurora.render(c, a, w, h, now), fade: "rgb(1, 3, 12)" },
-  terrain: { render: (c, a, w, h, now) => terrain.render(c, a, w, h, now), fade: "rgb(2, 3, 12)" },
   pixelquest: { render: (c, a, w, h, now) => pixelquest.render(c, a, w, h, now), fade: "rgb(4, 4, 8)" },
   // milkdrop blits an opaque WebGL frame over the whole canvas every frame
   milkdrop: { render: (c, a, w, h, now) => milkdrop.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },
-  // hi-fi modes: scope + soundstage keep translucent fades for phosphor
+  // hi-fi meters: scope + soundstage keep translucent fades for phosphor
   // persistence / decay trails; the rest repaint fully each frame
-  "tube-amp": { render: (c, a, w, h, now) => tubeAmp.render(c, a, w, h, now), fade: "rgb(8, 7, 6)" },
-  "analog-vu": { render: (c, a, w, h, now) => analogVU.render(c, a, w, h, now), fade: "rgb(10, 9, 8)" },
   "blue-power-meters": { render: (c, a, w, h, now) => blueMeters.render(c, a, w, h, now), fade: "rgb(2, 3, 6)" },
   oscilloscope: { render: (c, a, w, h, now) => oscilloscope.render(c, a, w, h, now), fade: "rgba(4, 7, 6, 0.3)" },
   waterfall: { render: (c, a, w, h, now) => waterfall.render(c, a, w, h, now), fade: "rgb(5, 6, 10)" },

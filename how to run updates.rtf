@@ -1,0 +1,274 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\froman\fcharset0 Times-Roman;\f1\froman\fcharset0 Times-Bold;\f2\fmodern\fcharset0 Courier;
+\f3\fmodern\fcharset0 Courier-Bold;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid1}
+{\list\listtemplateid2\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid101\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid2}
+{\list\listtemplateid3\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid201\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid3}
+{\list\listtemplateid4\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid301\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid4}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}{\listoverride\listid2\listoverridecount0\ls2}{\listoverride\listid3\listoverridecount0\ls3}{\listoverride\listid4\listoverridecount0\ls4}}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f0\fs24 \cf0 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 The self-update system is implemented, tested (24/24 assertions passing), and documented. Here's the report.\
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f1\b\fs36 \cf0 1. Files changed / added\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs24 \cf0 App runtime (new):
+\f0\b0 \
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls1\ilvl0
+\f2\fs26 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 version.json
+\f0\fs24  \'97 release version, source of truth for the updater/server\
+\ls1\ilvl0
+\f2\fs26 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 scripts/serve.mjs
+\f0\fs24  \'97 dependency-free production server; serves 
+\f2\fs26 dist/
+\f0\fs24  + exposes 
+\f2\fs26 /health
+\f0\fs24  (this is 
+\f2\fs26 bun run start
+\f0\fs24 )\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b \cf0 Updater (new, dependency-free, 
+\f3\fs26 scripts/updater/
+\f1\fs24 ):
+\f0\b0 \
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls2\ilvl0
+\f2\fs26 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 lib.mjs
+\f0\fs24  \'97 config, paths, logging, lock, semver, state, atomic fs, http, extract, validation, shared rollback\
+\ls2\ilvl0
+\f2\fs26 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 check.mjs
+\f0\fs24  (
+\f2\fs26 update:check
+\f0\fs24 ) \'b7 
+\f2\fs26 stage.mjs
+\f0\fs24  (
+\f2\fs26 update:stage
+\f0\fs24 ) \'b7 
+\f2\fs26 apply.mjs
+\f0\fs24  (
+\f2\fs26 update:apply
+\f0\fs24 ) \'b7 
+\f2\fs26 confirm.mjs
+\f0\fs24  (
+\f2\fs26 update:confirm
+\f0\fs24 , smoke test) \'b7 
+\f2\fs26 rollback.mjs
+\f0\fs24  (
+\f2\fs26 update:rollback
+\f0\fs24 ) \'b7 
+\f2\fs26 status.mjs
+\f0\fs24  (
+\f2\fs26 update:status
+\f0\fs24 )\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b \cf0 Deploy (new, 
+\f3\fs26 deploy/
+\f1\fs24 ):
+\f0\b0 \
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls3\ilvl0
+\f2\fs26 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 install.sh
+\f0\fs24  \'97 one-shot Pi installer \'b7 
+\f2\fs26 make-release.sh
+\f0\fs24  \'97 builds+packages a release + manifest\
+\ls3\ilvl0
+\f2\fs26 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 systemd/vizzy.service
+\f0\fs24 , 
+\f2\fs26 vizzy-apply-update.service
+\f0\fs24 , 
+\f2\fs26 vizzy-update-check.service
+\f0\fs24 , 
+\f2\fs26 vizzy-update-check.timer
+\f0\fs24 , 
+\f2\fs26 vizzy-rollback.service
+\f0\fs24 \
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f1\b \cf0 Changed:
+\f0\b0  
+\f2\fs26 package.json
+\f0\fs24  (added 
+\f2\fs26 start
+\f0\fs24 /
+\f2\fs26 serve
+\f0\fs24  + six 
+\f2\fs26 update:*
+\f0\fs24  scripts), 
+\f2\fs26 README.md
+\f0\fs24  (added a full "Self-updating appliance" section).\
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f1\b\fs36 \cf0 2. Exact commands on the Raspberry Pi\
+\pard\pardeftab720\partightenfactor0
+
+\f2\b0\fs26 \cf0 git clone <your-repo> ~/vizzy && cd ~/vizzy\
+curl -fsSL https://bun.sh/install | bash            # if bun isn't installed\
+sudo bash deploy/install.sh                          # builds \uc0\u8594  /opt/vizzy, installs+enables units\
+sudo nano /opt/vizzy/state/vizzy.env                 # set VIZZY_UPDATE_MANIFEST_URL=...  to enable updates\
+sudo systemctl restart vizzy.service\
+# point the kiosk at the app server:\
+#   chromium-browser --kiosk ... "http://localhost:3000/?mode=galaxy&input=mic"\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f0\fs24 \cf0 Watch it: 
+\f2\fs26 journalctl -u vizzy.service -f
+\f0\fs24  and 
+\f2\fs26 tail -f /opt/vizzy/logs/updater.log
+\f0\fs24 .\
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f1\b\fs36 \cf0 3. How to publish a new update release\
+\pard\pardeftab720\partightenfactor0
+
+\f2\b0\fs26 \cf0 # 1. bump version.json (e.g. "1.0.1"), then:\
+bash deploy/make-release.sh https://cdn.example.com/vizzy\
+#    \uc0\u8594  release/vizzy-1.0.1.zip  +  release/manifest.json (with real sha256)\
+# 2. upload the zip to the releaseUrl in the manifest\
+# 3. publish manifest.json at your VIZZY_UPDATE_MANIFEST_URL\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f0\fs24 \cf0 Devices pick it up on their next check (~2 min after boot, then every 6 h), stage it, and apply it on their next restart.\
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f1\b\fs36 \cf0 4. How to verify staging worked\
+\pard\pardeftab720\partightenfactor0
+
+\f2\b0\fs26 \cf0 cd /opt/vizzy/current && VIZZY_ROOT=/opt/vizzy bun run update:check   # force a check now\
+VIZZY_ROOT=/opt/vizzy bun run update:status                          # look at the slots\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f0\fs24 \cf0 You want to see 
+\f2\fs26 slots.staged_next
+\f0\fs24  = the new version, 
+\f2\fs26 status: "staged"
+\f0\fs24 , and 
+\f2\fs26 slots.current
+\f0\fs24  
+\f1\b unchanged
+\f0\b0  (still running the old one). 
+\f2\fs26 ls /opt/vizzy/next
+\f0\fs24  will exist. After the next 
+\f2\fs26 sudo systemctl restart vizzy.service
+\f0\fs24 , 
+\f2\fs26 current
+\f0\fs24  becomes the new version and 
+\f2\fs26 backup
+\f0\fs24  holds the old one.\
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f1\b\fs36 \cf0 5. How to force rollback manually\
+\pard\pardeftab720\partightenfactor0
+
+\f2\b0\fs26 \cf0 sudo -u pi bash -lc 'cd /opt/vizzy/current && VIZZY_ROOT=/opt/vizzy bun run update:rollback'\
+sudo systemctl restart vizzy.service\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\f0\fs24 \cf0 This restores 
+\f2\fs26 backup/
+\f0\fs24  (last known good) \uc0\u8594  
+\f2\fs26 current/
+\f0\fs24 , sets the failed version aside in 
+\f2\fs26 /opt/vizzy/failed-*
+\f0\fs24 , and marks status 
+\f2\fs26 rolled_back
+\f0\fs24 .\
+\pard\pardeftab720\sa298\partightenfactor0
+
+\f1\b\fs36 \cf0 6. Assumptions I made\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls4\ilvl0
+\fs24 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 App architecture:
+\f0\b0  it's a static Vite SPA with no server, so I added a tiny dependency-free static server that also provides 
+\f2\fs26 /health
+\f0\fs24 . Releases are shipped 
+\f1\b prebuilt
+\f0\b0  (
+\f2\fs26 dist/
+\f0\fs24  included, no 
+\f2\fs26 node_modules
+\f0\fs24  needed at runtime) \'97 this makes staging/apply fast and avoids ever building on the Pi.\
+\ls4\ilvl0
+\f1\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Runtime:
+\f0\b0  
+\f2\fs26 bun
+\f0\fs24  is the runner (matches the repo). The updater uses only node builtins + system 
+\f2\fs26 tar
+\f0\fs24 /
+\f2\fs26 unzip
+\f0\fs24 /
+\f2\fs26 cp
+\f0\fs24 , so it also runs under node. 
+\f3\b\fs26 unzip
+\f1\fs24  must be installed
+\f0\b0  for 
+\f2\fs26 .zip
+\f0\fs24  releases (
+\f2\fs26 sudo apt install unzip
+\f0\fs24 ); tarballs use 
+\f2\fs26 tar
+\f0\fs24  (always present).\
+\ls4\ilvl0
+\f1\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 systemd units
+\f0\b0  assume user 
+\f2\fs26 pi
+\f0\fs24  and 
+\f2\fs26 /opt/vizzy
+\f0\fs24 ; 
+\f2\fs26 install.sh
+\f0\fs24  substitutes your actual user and symlinks 
+\f2\fs26 bun
+\f0\fs24  to 
+\f2\fs26 /usr/local/bin
+\f0\fs24  so systemd finds it. They're samples \'97 not auto-installed unless you run 
+\f2\fs26 install.sh
+\f0\fs24 .\
+\ls4\ilvl0
+\f1\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Rollback model:
+\f0\b0  live rollback happens two ways \'97 the smoke test (
+\f2\fs26 ExecStartPost
+\f0\fs24 ) rolls back and restarts if 
+\f2\fs26 /health
+\f0\fs24  never responds, and as a backstop, a boot that finds a prior update still in 
+\f2\fs26 applying
+\f0\fs24  state rolls it back. A known-bad version is recorded so it isn't re-applied in a loop.\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls4\ilvl0
+\f3\b\fs26 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 git pull
+\f1\fs24  is never used
+\f0\b0  \'97 updates are downloaded release artifacts, extracted to a separate 
+\f2\fs26 next/
+\f0\fs24  dir, and only ever swapped by atomic 
+\f2\fs26 rename()
+\f0\fs24 ; the live 
+\f2\fs26 current/
+\f0\fs24  is never mutated in place.\
+\pard\pardeftab720\sa240\partightenfactor0
+\cf0 One thing to note: I created a 
+\f2\fs26 release/
+\f0\fs24  folder during testing and removed it \'97 it's build output, so you may want to add 
+\f2\fs26 release/
+\f0\fs24  to 
+\f2\fs26 .gitignore
+\f0\fs24  when you commit.\
+}

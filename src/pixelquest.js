@@ -464,30 +464,33 @@ export class PixelQuest {
     // clearings), a thickening approach, NOTHING inside the heart (its recipe
     // owns that ground), medium departure. Sorted small→large for depth.
     {
+      // DENSITY PASS (2026-07-13): thinned for breathing room — the world had
+      // become a continuous busy strip. Lower zone density, smaller groves,
+      // much wider clearings, more lone trees + open ground between them.
       const density = (x) =>
-        x < this.zones.outskirts[1] ? 0.55 : x < this.zones.approach[1] ? 1.2 : x < this.zones.heart[1] + 40 ? 0 : 0.85;
-      let tx = 20 + rnd() * 60;
+        x < this.zones.outskirts[1] ? 0.55 : x < this.zones.approach[1] ? 1.05 : x < this.zones.heart[1] + 40 ? 0 : 0.78;
+      let tx = 40 + rnd() * 70;
       while (tx < this.worldLen - 30) {
         const d = density(tx);
-        if (d === 0) { tx = this.zones.heart[1] + 50 + rnd() * 40; continue; } // skip the heart
-        if (rnd() < 0.24) {
+        if (d === 0) { tx = this.zones.heart[1] + 55 + rnd() * 45; continue; } // skip the heart
+        if (rnd() < 0.32) {
           this.trees.push({ x: tx, s: 0.8 + rnd() * 0.7, variant: (rnd() * 6) | 0 });
-          tx += (100 + rnd() * 140) / d; // a lone tree, then open ground
+          tx += (120 + rnd() * 150) / d; // a lone tree, then open ground
           continue;
         }
-        const grove = Math.max(2, Math.round((2 + rnd() * 4) * Math.min(1.2, d)));
+        const grove = Math.max(2, Math.round((1.5 + rnd() * 2.5) * Math.min(1.1, d)));
         for (let i = 0; i < grove && tx < this.worldLen - 30; i++) {
           this.trees.push({ x: tx + (rnd() - 0.5) * 6, s: 0.55 + rnd() * 0.95, variant: (rnd() * 6) | 0 });
-          tx += 9 + rnd() * 20; // tight, overlapping inside the grove
+          tx += 10 + rnd() * 20; // a small cluster
         }
-        tx += (120 + rnd() * 160) / d; // clearings shrink as the heart nears
+        tx += (150 + rnd() * 180) / d; // roomy clearings between groves
       }
       this.trees.sort((a, b) => a.s - b.s);
     }
     // a distant tree line: sparse, small, hazy silhouettes behind the groves at
     // deeper parallax — the depth layer that keeps the mid-row from reading flat
     this.backTrees = [];
-    for (let x = 40 + rnd() * 80; x < this.worldLen; x += 55 + rnd() * 110)
+    for (let x = 40 + rnd() * 100; x < this.worldLen; x += 90 + rnd() * 140)
       this.backTrees.push({ x, s: 0.34 + rnd() * 0.22, variant: (rnd() * 6) | 0 });
     // lamps line the APPROACH densely (civilization nearing) and thin elsewhere
     for (let x = 70; x < this.worldLen - 40; ) {
@@ -496,20 +499,20 @@ export class PixelQuest {
       if (!inHeart) this.torches.push({ x, ph: rnd() * TAU });
       x += inApproach ? 95 + rnd() * 60 : 220 + rnd() * 140;
     }
-    for (let x = 10; x < this.worldLen; x += 55 + rnd() * 70) this.rocks.push({ x, w: 2 + ((rnd() * 3) | 0), variant: (rnd() * 3) | 0 });
+    for (let x = 10; x < this.worldLen; x += 120 + rnd() * 150) this.rocks.push({ x, w: 2 + ((rnd() * 3) | 0), variant: (rnd() * 3) | 0 });
     // foreground silhouettes: dark grass tufts sweeping past FASTER than the
     // path (1.25x parallax) at the bottom edge — the classic depth trick that
     // makes the whole scene read as a deep, layered, cinematic world
     this.fgPlants = [];
-    for (let x = 8; x < this.worldLen; x += 70 + rnd() * 90)
+    for (let x = 8; x < this.worldLen; x += 110 + rnd() * 120)
       this.fgPlants.push({ x, blades: 3 + ((rnd() * 3) | 0), s: 0.7 + rnd() * 0.7, ph: rnd() * TAU });
     // path-edge flora at TRUE ground parallax (1.0): grass tufts swaying in
     // the wind and small flowers whose tips glow — the flowers are living
     // fragment SOURCES (music blooms out of them; see #worldSource)
     this.flora = [];
     {
-      const step = this.cfg.detail === "pi_safe" ? 34 : this.cfg.detail === "showcase" ? 14 : 20;
-      for (let x = 6; x < this.worldLen; x += step + rnd() * 18) {
+      const step = this.cfg.detail === "pi_safe" ? 42 : this.cfg.detail === "showcase" ? 22 : 30;
+      for (let x = 6; x < this.worldLen; x += step + rnd() * 22) {
         this.flora.push({
           x,
           type: rnd() < 0.3 ? "flower" : "grass",

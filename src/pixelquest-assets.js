@@ -327,24 +327,26 @@ export const PROP_RECIPES = {
   // path decor scatter (world plan): tiny biome props sprinkled along the
   // road so the ground stops repeating. `variants: 4` picks a random frame
   // per placed prop (milestone / fence / mushrooms / crate, etc.).
+  // DENSITY PASS (2026-07-13): decor spacing widened ~[70,130] -> [200,360] so
+  // the road has open stretches instead of a continuous strip of props.
   "meadow-road": [
-    { asset: "meadowDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+    { asset: "meadowDecor", every: [200, 360], layer: "ground", variants: 4, scale: 0.85 },
   ],
   "neon-forest": [
-    { asset: "neonDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+    { asset: "neonDecor", every: [200, 360], layer: "ground", variants: 4, scale: 0.85 },
   ],
   "moonlit-town": [
-    { asset: "moonlitDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+    { asset: "moonlitDecor", every: [200, 360], layer: "ground", variants: 4, scale: 0.85 },
   ],
   "arcade-ruins": [
-    { asset: "arcadeDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+    { asset: "arcadeDecor", every: [200, 360], layer: "ground", variants: 4, scale: 0.85 },
   ],
   "castle-approach": [
-    { asset: "castleDecor", every: [70, 130], layer: "ground", variants: 4, scale: 0.85 },
+    { asset: "castleDecor", every: [200, 360], layer: "ground", variants: 4, scale: 0.85 },
   ],
   "starfall-shore": [
-    { asset: "starfall_shells", every: [110, 190], layer: "ground", variants: 1, scale: 0.7, avoid: [880, 1280] },
-    { asset: "starfall_pool", every: [170, 300], layer: "ground", variants: 1, scale: 0.8, avoid: [880, 1280] },
+    { asset: "starfall_shells", every: [230, 400], layer: "ground", variants: 1, scale: 0.7, avoid: [880, 1280] },
+    { asset: "starfall_pool", every: [320, 520], layer: "ground", variants: 1, scale: 0.8, avoid: [880, 1280] },
     // one far lighthouse per lap, never inside the heart's span
     { asset: "starfall_lighthouse", every: [900, 1500], layer: "ground", variants: 1, scale: 0.85, avoid: [820, 1340] },
   ],

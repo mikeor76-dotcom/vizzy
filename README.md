@@ -112,6 +112,42 @@ Pi 5 notes:
 - The Pi 5 has **no 3.5mm audio jack**: mic/line-in requires a USB microphone or USB audio interface.
 - On Raspberry Pi OS Bookworm the browser command may be `chromium` instead of `chromium-browser`.
 
+## Physical controls (EC11 rotary encoder)
+
+One knob runs the whole device: **rotate** = previous / next visualization
+(the full lineup, wrapping across categories), **press** = favorite it.
+
+Wiring — bare EC11, common pin to GND so the Pi's internal pull-ups do the
+work (no `+` wire, no resistors):
+
+| EC11 | Pi (BCM) | header pin |
+|---|---|---|
+| CLK (A) | GPIO17 | 11 |
+| DT (B) | GPIO27 | 13 |
+| SW | GPIO22 | 15 |
+| GND / C | GND | 9 |
+
+```bash
+sudo bash deploy/encoder-setup.sh     # installs deps, group, unit; starts it
+journalctl -u vizzy-encoder -f        # watch the knob live
+```
+
+Pins and behavior are env in `/opt/vizzy/state/vizzy.env` (`VIZZY_ENCODER_CLK`
+/ `_DT` / `_SW` / `_DIVIDER` / `_PULLUP` / `_REVERSE`); edit and
+`sudo systemctl restart vizzy-encoder`. **If one click jumps several
+visualizations, set `VIZZY_ENCODER_DIVIDER=2` (or `4`)** — EC11s differ in how
+many quadrature pulses they emit per detent. If it turns the wrong way, set
+`VIZZY_ENCODER_REVERSE=true`.
+
+How it fits together: `deploy/vizzy-encoder.py` (gpiozero) POSTs an action to
+`/api/input` (loopback only, allowlisted actions), `scripts/serve.mjs` fans it
+out over Server-Sent Events, and `src/hardware.js` dispatches it into the same
+controller methods the keyboard and debug panel use. No extra port, no extra
+dependency on either end, and `EventSource` reconnects itself if the app or the
+daemon restarts. Adding a second encoder or a switch only needs the daemon to
+name another action — `category:next`/`prev`, `preset:cycle`, `lock:toggle`,
+`controls:toggle`, `mic:toggle` are all already wired.
+
 ## Self-updating appliance (staged updates + auto-rollback)
 
 For a physical Pi appliance, Vizzy can update itself safely: it keeps running the

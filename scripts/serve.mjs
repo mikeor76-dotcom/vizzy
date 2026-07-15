@@ -56,6 +56,25 @@ const cleanAutogain = (j) => {
 function readAutogain() { try { return cleanAutogain(JSON.parse(readFileSync(AUTOGAIN_FILE, "utf8"))); } catch { return {}; } }
 function writeAutogain(j) { try { mkdirSync(STATE_DIR, { recursive: true }); writeFileSync(AUTOGAIN_FILE, JSON.stringify(cleanAutogain(j))); return true; } catch { return false; } }
 
+// PHYSICAL CONTROLS relay (deploy/vizzy-encoder.py): the GPIO daemon POSTs an
+// action here and we fan it out to the browser over Server-Sent Events. SSE
+// (not a WebSocket) keeps this dependency-free on both ends — node's http +
+// the browser's EventSource, which also auto-reconnects — and needs no extra
+// port. Only loopback may POST: this is an input injection endpoint.
+const inputClients = new Set();
+const INPUT_ACTIONS = new Set([
+  "mode:next", "mode:prev", "mode:set", "category:next", "category:prev",
+  "favorite:toggle", "preset:cycle", "lock:toggle", "controls:toggle", "mic:toggle",
+]);
+const isLoopback = (req) => /^(::1|::ffff:127\.|127\.)/.test(req.socket.remoteAddress || "");
+function broadcastInput(action, arg) {
+  const line = `data: ${JSON.stringify(arg === undefined ? { action } : { action, arg })}\n\n`;
+  for (const c of inputClients) {
+    try { c.write(line); } catch { inputClients.delete(c); }
+  }
+  return inputClients.size;
+}
+
 function appVersion() {
   try {
     return JSON.parse(readFileSync(join(APP_ROOT, "version.json"), "utf8")).version;
@@ -112,6 +131,41 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(200, { "content-type": "application/json" });
     return res.end(JSON.stringify({ mode: readLastMode() }));
+  }
+
+  // physical-control event stream the browser subscribes to (EventSource)
+  if (pathname === "/api/input/stream") {
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-store",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    });
+    res.write("retry: 2000\n\n");
+    inputClients.add(res);
+    // keep-alive comment so idle proxies/NICs don't drop the stream
+    const ka = setInterval(() => { try { res.write(": ka\n\n"); } catch {} }, 20000);
+    const drop = () => { clearInterval(ka); inputClients.delete(res); };
+    req.on("close", drop);
+    req.on("error", drop);
+    return;
+  }
+
+  // the GPIO daemon posts encoder actions here (loopback only)
+  if (pathname === "/api/input" && req.method === "POST") {
+    if (!isLoopback(req)) { res.writeHead(403); return res.end("forbidden"); }
+    let body = "";
+    req.on("data", (c) => { body += c; if (body.length > 256) req.destroy(); });
+    req.on("end", () => {
+      let msg = null;
+      try { msg = JSON.parse(body); } catch {}
+      const action = INPUT_ACTIONS.has(msg?.action) ? msg.action : null;
+      const arg = typeof msg?.arg === "string" ? cleanMode(msg.arg) : undefined;
+      const clients = action ? broadcastInput(action, arg) : inputClients.size;
+      res.writeHead(action ? 200 : 400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: !!action, action, clients }));
+    });
+    return;
   }
 
   // AutoGain baselines (read on boot, written when a listen window locks)

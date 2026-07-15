@@ -468,6 +468,15 @@ if (params.get("input") === "mic") startMic();
 const sensParam = parseFloat(params.get("sens"));
 if (!Number.isNaN(sensParam)) autogain.pin(sensParam);
 
+// PHYSICAL CONTROLS (EC11 encoder → deploy/vizzy-encoder.py → /api/input →
+// SSE). Only the appliance server serves that endpoint, and it's also the only
+// thing that injects __vizzyLastMode — so use that as the "am I running on the
+// device?" signal and skip the subscription in dev, where EventSource would
+// retry against a 404 forever. ?hw=1 forces it on for testing.
+if (typeof window.__vizzyLastMode === "string" || params.get("hw") === "1") {
+  window.vizzy.hardware.connect();
+}
+
 // AUTO-START the mic whenever permission is already granted — the hardware
 // device should light up on boot with no click (kiosk Chromium pre-grants via
 // --use-fake-ui-for-media-stream; a desktop browser auto-starts on every visit

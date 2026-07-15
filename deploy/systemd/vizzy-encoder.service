@@ -1,0 +1,23 @@
+[Unit]
+Description=Vizzy EC11 rotary encoder input daemon
+Documentation=https://github.com/mikeor76-dotcom/vizzy
+# the daemon POSTs to the app server, but it must survive the app restarting,
+# so this is a Wants (not a Requires) and it retries on its own
+Wants=vizzy.service
+After=vizzy.service network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+# GPIO character-device access on the Pi 5 comes from the gpio group
+SupplementaryGroups=gpio
+EnvironmentFile=-/opt/vizzy/state/vizzy.env
+ExecStart=/usr/bin/python3 /opt/vizzy/current/deploy/vizzy-encoder.py
+Restart=always
+RestartSec=3
+# unbuffered so journalctl shows every turn of the knob live
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,25 +1,21 @@
-// Hardware input abstraction for the future physical Vizzy device.
+// Hardware input for the physical Vizzy device — the browser end.
 //
-// The plan: a Raspberry Pi with rotary encoders and switches. A small
-// daemon (Python/Node reading GPIO) will forward input events to the
-// browser — via a local WebSocket, keyboard-emulation (uinput), or GPIO →
-// keypress mapping. Whatever the transport, every event lands on the SAME
-// controller methods the keyboard and debug panel use, so the app never
-// knows or cares where input came from.
+// LIVE as of 2026-07: an EC11 rotary encoder on the Pi's GPIO. The chain is
+//   deploy/vizzy-encoder.py  (gpiozero reads the encoder)
+//     → POST /api/input      (loopback only)
+//     → scripts/serve.mjs    (fans out over Server-Sent Events)
+//     → connect() below      (EventSource → dispatch)
+//     → controller methods   (the SAME ones the keyboard + panel call)
+// SSE rather than a WebSocket: no dependency on either end, no extra port,
+// and EventSource reconnects on its own if the daemon or server restarts.
 //
-// Proposed physical mapping:
-//   Encoder A rotate  → controller.previousCategory() / nextCategory()
-//   Encoder A press   → controller.toggleLock()
-//   Encoder B rotate  → controller.previousMode() / nextMode()
-//   Encoder B press   → controller.toggleFavorite()
-//   Encoder C press   → controller.cyclePreset()
-//   (sensitivity is automatic now — see src/autogain.js — no knob needed)
-//   Switch 1          → toggleMic()
-//   Switch 2 (hold)   → controller.toggleControlsVisible()
-//
-// This module implements the browser side: a tiny event API plus an
-// optional WebSocket listener that a GPIO daemon can connect to later.
-// It is inert unless explicitly started.
+// Physical mapping (deploy/encoder-setup.sh):
+//   Encoder rotate → mode:prev / mode:next   (the whole lineup, wrapping)
+//   Encoder press  → favorite:toggle         (star the one you like)
+// Room to grow — every action below is already dispatchable, so a second
+// encoder or a switch only needs the daemon to name it:
+//   category:next/prev · preset:cycle · lock:toggle · controls:toggle · mic:toggle
+// (sensitivity is automatic now — see src/autogain.js — no knob needed)
 
 const ACTION_MAP = {
   "category:next": (c) => c.nextCategory(),
@@ -44,12 +40,12 @@ export function createHardwareInput(controller, { toggleMic } = {}) {
   return {
     dispatch, // programmatic entry point: dispatch("mode:next")
 
-    // Future: the Pi GPIO daemon connects here and sends JSON lines like
-    // {"action": "mode:next"} or {"action": "mode:set", "arg": "galaxy"}.
-    // Call connect() with the daemon's address when the hardware exists.
-    connect(url = "ws://localhost:8765") {
-      const ws = new WebSocket(url);
-      ws.onmessage = (ev) => {
+    // Subscribe to physical-control events relayed by the appliance server.
+    // Each SSE message is {"action":"mode:next"} / {"action":"mode:set","arg":"galaxy"}.
+    // EventSource retries on its own, so a daemon or server restart heals.
+    connect(url = "/api/input/stream") {
+      const es = new EventSource(url);
+      es.onmessage = (ev) => {
         try {
           const { action, arg } = JSON.parse(ev.data);
           dispatch(action, arg);
@@ -57,8 +53,8 @@ export function createHardwareInput(controller, { toggleMic } = {}) {
           /* ignore malformed frames */
         }
       };
-      ws.onerror = () => console.warn("[vizzy-hardware] daemon not reachable");
-      return ws;
+      es.onopen = () => console.info("[vizzy-hardware] physical controls connected");
+      return es;
     },
   };
 }

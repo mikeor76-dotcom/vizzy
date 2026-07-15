@@ -58,20 +58,35 @@ def scan():
         print("  in use / unavailable, skipped: " + ", ".join(busy))
         print("  (if your pins are in that list, run: sudo systemctl stop vizzy-encoder)\n")
 
+    # NOTE on gpiozero semantics: with pull_up=True the device is ACTIVE when
+    # the pin is pulled LOW, so d.value == 1 means the line is LOW. Report the
+    # real logic level instead — reading "value" here is how the first version
+    # of this tool ended up claiming healthy pull-ups looked like a fault.
+    level = lambda p: "LOW " if devices[p].value else "HIGH"
+
+    # let the inputs settle BEFORE arming callbacks: freshly-created pins emit a
+    # spurious edge, which previously got counted as real input and made the
+    # summary name a pin the user never touched
+    time.sleep(0.5)
+    low_at_rest = [p for p in devices if devices[p].value]
+    if low_at_rest:
+        print(f"  !! resting LOW (something is holding these down): {low_at_rest}")
+        print("     A rotation pin resting LOW is normal at some detents; every")
+        print("     pin LOW means the pull-ups aren't doing their job.\n")
+    else:
+        print(f"  {len(devices)} pins armed, all resting HIGH — pull-ups are working.\n")
+
     def watch(pin):
         def cb():
             edges[pin] += 1
-            print(f"  [{ts()}] GPIO{pin:<2} -> {devices[pin].value}   (edges: {edges[pin]})")
+            print(f"  [{ts()}] GPIO{pin:<2} -> {level(pin)}  (edges: {edges[pin]})")
         return cb
 
     for p, d in devices.items():
         d.when_activated = watch(p)
         d.when_deactivated = watch(p)
 
-    resting = {p: d.value for p, d in devices.items()}
-    print(f"  {len(devices)} pins armed. Resting HIGH: "
-          f"{[p for p, v in resting.items() if v]}\n")
-    print("=> TURN THE KNOB a few clicks, then PRESS the button.")
+    print("=> TURN THE KNOB several clicks, then PRESS the button a few times.")
     print("   (Ctrl-C when done — I'll summarize.)\n")
     try:
         while True:
@@ -80,33 +95,51 @@ def scan():
         pass
 
     print("\n" + "=" * 58)
-    if not edges:
-        print("NO PIN MOVED AT ALL.")
-        print("  The Pi never saw the encoder. Most likely:")
-        print("   * the common/GND pin isn't actually connected to a Pi GND")
-        print("   * CLK/DT/SW aren't seated in the header (or a solder joint is cold)")
-        print("   * the encoder itself is dead — check continuity: turning the")
-        print("     shaft should make/break CLK->GND and DT->GND")
+    total = sum(edges.values())
+    # a real turn produces MANY edges; demand more than noise before naming pins
+    real = {p: n for p, n in edges.items() if n >= 2}
+    if total == 0 or not real:
+        print(f"NOTHING MOVED.  (stray edges seen: {total})")
+        print()
+        print("  The Pi is listening on all 26 pins and the encoder pulled NONE of")
+        print("  them down — so no signal is reaching the header at all. In order of")
+        print("  likelihood:")
+        print()
+        print("   1. GROUND. The encoder's common (C) pin must reach a REAL Pi GND:")
+        print("      physical pins 6, 9, 14, 20, 25, 30, 34, 39. Pin 12 is NOT ground")
+        print("      (it's GPIO18) — a very common miscount. Without ground, turning")
+        print("      the shaft connects A/B to nothing and no pin ever goes LOW.")
+        print("   2. Seating — a lead not fully in the header, or a cold solder joint.")
+        print("   3. A dead encoder. Check with a multimeter in continuity mode:")
+        print("      probe C against A (then C against B) and turn the shaft slowly —")
+        print("      it should beep/open repeatedly. No change = the encoder is bad.")
+        print()
+        print("  Tip: with everything else unplugged, touch a jumper from GPIO17")
+        print("  (pin 11) directly to a GND pin — you should see an edge print here.")
+        print("  That proves the Pi + this tool work, isolating the fault to the knob.")
         return
-    ranked = edges.most_common()
+
+    ranked = Counter(real).most_common()
     print("PINS THAT MOVED (most active first):")
     for p, n in ranked:
         print(f"   GPIO{p:<3} {n:>5} edges")
+    print()
     rot = [p for p, n in ranked if n >= 4][:2]
     btn = [p for p, n in ranked if p not in rot]
-    print()
     if len(rot) >= 2:
-        print(f"=> Rotation is on GPIO{rot[0]} and GPIO{rot[1]}  (CLK/DT — order decides direction)")
+        print(f"=> Rotation (CLK/DT) is on GPIO{rot[0]} and GPIO{rot[1]} — the two busiest.")
     elif len(rot) == 1:
-        print(f"=> Only GPIO{rot[0]} moved while turning — the other rotation pin isn't connected.")
+        print(f"=> Only GPIO{rot[0]} moved much — the other rotation leg isn't connected.")
+    else:
+        print("=> Not enough edges to identify the rotation pins. Turn the knob more.")
     if btn:
-        print(f"=> Button is most likely GPIO{btn[0]}")
+        print(f"=> The button is most likely GPIO{btn[0]} (moved, but far less than the rotation pins).")
     print()
-    print("Put these in /opt/vizzy/state/vizzy.env, then restart the daemon:")
+    print("Only apply these if they match what you actually turned/pressed:")
     print(f"   VIZZY_ENCODER_CLK={rot[0] if rot else '?'}")
     print(f"   VIZZY_ENCODER_DT={rot[1] if len(rot) > 1 else '?'}")
     print(f"   VIZZY_ENCODER_SW={btn[0] if btn else '?'}")
-    print("   sudo systemctl restart vizzy-encoder")
+    print("   (edit /opt/vizzy/state/vizzy.env, then: sudo systemctl restart vizzy-encoder)")
     print("(If rotation ends up backwards, set VIZZY_ENCODER_REVERSE=true.)")
 
 

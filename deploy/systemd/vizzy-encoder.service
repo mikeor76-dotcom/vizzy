@@ -13,7 +13,12 @@ Group=pi
 # GPIO character-device access on the Pi 5 comes from the gpio group
 SupplementaryGroups=gpio
 EnvironmentFile=-/opt/vizzy/state/vizzy.env
-ExecStart=/usr/bin/python3 /opt/vizzy/current/deploy/vizzy-encoder.py
+# The daemon lives OUTSIDE the release payload on purpose: install.sh only
+# copies dist/scripts/package.json/version.json/README.md into current/, and an
+# OTA update replaces current/ wholesale — so anything under current/deploy/
+# would vanish (it never existed: this unit used to point there and the service
+# crash-looped with "No such file"). encoder-setup.sh installs it here.
+ExecStart=/usr/bin/python3 /usr/local/lib/vizzy/vizzy-encoder.py
 Restart=always
 RestartSec=3
 # unbuffered so journalctl shows every turn of the knob live

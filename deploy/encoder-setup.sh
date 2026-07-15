@@ -63,7 +63,16 @@ else
   exit 1
 fi
 
-# 4) install + start the unit (install.sh copies the file; we enable it here,
+# 4) install the daemon itself to a stable path. NOT into $VIZZY_ROOT/current:
+#    install.sh only copies dist/scripts/package.json/version.json/README.md
+#    there, and an OTA update swaps that whole directory out — so the script
+#    would be missing (or vanish on the next update). Re-run this script after
+#    a git pull to refresh it.
+install -d /usr/local/lib/vizzy
+install -m 755 "$REPO_DIR/deploy/vizzy-encoder.py" /usr/local/lib/vizzy/vizzy-encoder.py
+echo "==> Daemon: /usr/local/lib/vizzy/vizzy-encoder.py"
+
+# 5) install + start the unit (install.sh copies the file; we enable it here,
 #    since only a device that actually HAS an encoder should run the daemon)
 install -m 644 "$REPO_DIR/deploy/systemd/vizzy-encoder.service" /tmp/vizzy-encoder.service
 sed -e "s/^User=pi/User=$VIZZY_USER/" -e "s/^Group=pi/Group=$VIZZY_USER/" \

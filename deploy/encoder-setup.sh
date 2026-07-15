@@ -83,7 +83,9 @@ systemctl enable vizzy-encoder.service >/dev/null 2>&1 || true
 systemctl restart vizzy-encoder.service
 echo "==> vizzy-encoder.service enabled + started"
 
-sleep 1
+# the service auto-restarts, so "is-active" right away can catch a crash loop
+# mid-restart and look healthy — wait long enough to see it actually stay up
+sleep 3
 if systemctl is-active --quiet vizzy-encoder.service; then
   echo
   echo "    Ready. Turn the knob to change visualization; press to favorite."
@@ -91,6 +93,10 @@ if systemctl is-active --quiet vizzy-encoder.service; then
   echo "    Change pins: sudo nano $ENV_FILE  &&  sudo systemctl restart vizzy-encoder"
 else
   echo
-  echo "!! The daemon isn't running. See why:  journalctl -u vizzy-encoder -n 30"
-  echo "   Most likely: wrong pins, or the 'gpio' group membership needs a reboot."
+  echo "!! The daemon isn't staying up. Its own reason (not just systemd's):"
+  echo "----------------------------------------------------------------"
+  journalctl -u vizzy-encoder -n 12 --no-pager -o cat | grep -E "vizzy-encoder\]|Error|error" || \
+    journalctl -u vizzy-encoder -n 12 --no-pager -o cat
+  echo "----------------------------------------------------------------"
+  echo "   Full log:  journalctl -u vizzy-encoder -n 30 --no-pager"
 fi

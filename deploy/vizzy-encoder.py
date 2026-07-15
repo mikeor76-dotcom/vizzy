@@ -99,13 +99,26 @@ def main():
         # bounce_time debounces the EC11's mechanical switch contacts
         button = Button(PIN_SW, pull_up=PULLUP, bounce_time=0.05)
     except Exception as e:  # noqa: BLE001
-        print(f"[vizzy-encoder] GPIO setup failed: {e}", file=sys.stderr, flush=True)
-        print(
-            "[vizzy-encoder] check the pins, that the user is in the 'gpio' group, "
-            "and that nothing else holds these lines.",
-            file=sys.stderr,
-            flush=True,
-        )
+        cwd = os.getcwd()
+        writable = os.access(cwd, os.W_OK)
+        print(f"[vizzy-encoder] GPIO setup failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+        print(f"[vizzy-encoder]   running as uid={os.getuid()}  cwd={cwd}  cwd-writable={writable}",
+              file=sys.stderr, flush=True)
+        if not writable:
+            # the classic: lgpio drops .lgd-nfy* notification files in the CWD,
+            # and systemd's default WorkingDirectory=/ isn't writable by a
+            # non-root user, so edge detection can't start
+            print("[vizzy-encoder]   ^ THAT's very likely the problem: lgpio needs a writable",
+                  file=sys.stderr, flush=True)
+            print("[vizzy-encoder]     working directory for its .lgd-nfy files. The unit sets",
+                  file=sys.stderr, flush=True)
+            print("[vizzy-encoder]     WorkingDirectory=/tmp — re-run deploy/encoder-setup.sh.",
+                  file=sys.stderr, flush=True)
+        else:
+            print("[vizzy-encoder]   check the pins, that the user is in the 'gpio' group,",
+                  file=sys.stderr, flush=True)
+            print("[vizzy-encoder]   and that nothing else holds these lines.",
+                  file=sys.stderr, flush=True)
         return 1
 
     encoder.when_rotated_clockwise = lambda: rotated(1)

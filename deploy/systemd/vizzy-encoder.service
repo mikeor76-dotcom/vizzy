@@ -12,6 +12,14 @@ User=pi
 Group=pi
 # GPIO character-device access on the Pi 5 comes from the gpio group
 SupplementaryGroups=gpio
+# gpiozero uses the lgpio backend on the Pi 5, and lgpio writes hidden
+# .lgd-nfy* notification files (that's how it delivers edge callbacks) into
+# its working directory. systemd defaults WorkingDirectory to / — which a
+# non-root user can't write to — so edge detection failed with status=1 even
+# though the pins themselves were fine. Give it somewhere writable. LG_WD is
+# lgpio's own override and is set as well, belt-and-braces.
+WorkingDirectory=/tmp
+Environment=LG_WD=/tmp
 EnvironmentFile=-/opt/vizzy/state/vizzy.env
 # The daemon lives OUTSIDE the release payload on purpose: install.sh only
 # copies dist/scripts/package.json/version.json/README.md into current/, and an

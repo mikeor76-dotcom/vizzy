@@ -58,7 +58,9 @@ export const REGISTRY = [
     stable: true,
     presets: ["Default"],
     idle: false,
-    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
+    // self-governing: it normalizes on time-domain EXCURSION, which "linear"
+    // (a frequency-bin measure) solved for wrongly — that's why it barely moved
+    auto: null,
   },
   {
     id: "radial",

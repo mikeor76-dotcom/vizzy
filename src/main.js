@@ -2,6 +2,7 @@ import { Galaxy } from "./galaxy.js";
 import { Aurora } from "./aurora.js";
 import { Ferrofluid } from "./ferrofluid.js";
 import { Spectrum } from "./spectrum.js";
+import { Wave } from "./wave.js";
 import { Classical } from "./classical.js";
 import { PixelQuest } from "./pixelquest.js";
 import { Synthwave } from "./synthwave.js";
@@ -124,6 +125,7 @@ const galaxy = new Galaxy();
 const aurora = new Aurora();
 const ferrofluid = new Ferrofluid();
 const spectrum = new Spectrum();
+const wave = new Wave();
 const classical = new Classical();
 const pixelquest = new PixelQuest();
 const synthwave = new Synthwave();
@@ -137,7 +139,6 @@ const studioMonitor = new StudioMonitor();
 // AutoGain can drive their sensitivity exactly like the class-based modes
 const rawBars = { cfg: { sensitivity: 1.25 } };
 const rawColorbars = { cfg: { sensitivity: 1.25 } };
-const rawWave = { cfg: { sensitivity: 1.25 } };
 const rawRadial = { cfg: { sensitivity: 1.25 } };
 
 // renderers whose cfg the controller state (preset) and AutoGain (sensitivity)
@@ -150,9 +151,9 @@ const INSTANCES = {
   synthwave,
   milkdrop,
   spectrum,
+  wave,
   bars: rawBars,
   colorbars: rawColorbars,
-  wave: rawWave,
   radial: rawRadial,
   "blue-power-meters": blueMeters,
   oscilloscope,
@@ -200,27 +201,6 @@ function drawColorBars(w, h) {
   }
 }
 
-function drawWave(w, h) {
-  analyser.getByteTimeDomainData(timeData);
-  ctx.lineWidth = 3;
-  ctx.lineJoin = "round";
-  const gradient = ctx.createLinearGradient(0, 0, w, 0);
-  gradient.addColorStop(0, "#7c5cff");
-  gradient.addColorStop(1, "#ff5c8a");
-  ctx.strokeStyle = gradient;
-
-  ctx.beginPath();
-  const slice = w / timeData.length;
-  const sens = rawWave.cfg.sensitivity;
-  for (let i = 0; i < timeData.length; i++) {
-    // scale the excursion around the midline so quiet songs still draw a wave
-    const y = ((128 + (timeData[i] - 128) * sens) / 255) * h;
-    if (i === 0) ctx.moveTo(0, y);
-    else ctx.lineTo(i * slice, y);
-  }
-  ctx.stroke();
-}
-
 function drawRadial(w, h) {
   analyser.getByteFrequencyData(freqData);
   const cx = w / 2;
@@ -257,7 +237,8 @@ function drawRadial(w, h) {
 const BINDINGS = {
   bars: { render: (c, a, w, h) => drawBars(w, h), fade: "rgba(11, 11, 18, 0.35)" },
   colorbars: { render: (c, a, w, h) => drawColorBars(w, h), fade: "rgba(11, 11, 18, 0.35)" },
-  wave: { render: (c, a, w, h) => drawWave(w, h), fade: "rgba(11, 11, 18, 0.35)" },
+  // wave keeps a longer phosphor trail — the triggered line morphs in place
+  wave: { render: (c, a, w, h, now) => wave.render(c, a, w, h, now), fade: "rgba(11, 11, 18, 0.22)" },
   radial: { render: (c, a, w, h) => drawRadial(w, h), fade: "rgba(11, 11, 18, 0.35)" },
   spectrum: { render: (c, a, w, h, now) => spectrum.render(c, a, w, h, now), fade: "rgba(4, 4, 9, 0.55)" },
   classical: { render: (c, a, w, h, now) => classical.render(c, a, w, h, now), fade: "rgba(5, 4, 2, 0.4)" },

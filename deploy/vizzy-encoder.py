@@ -125,6 +125,12 @@ def main():
     encoder.when_rotated_counter_clockwise = lambda: rotated(-1)
     button.when_pressed = lambda: send("favorite:toggle")
 
+    try:
+        from gpiozero import Device
+
+        print(f"[vizzy-encoder] pin factory: {type(Device.pin_factory).__name__}", flush=True)
+    except Exception:  # noqa: BLE001
+        pass
     print("[vizzy-encoder] ready — rotate to change, press to favorite", flush=True)
     from signal import pause
 

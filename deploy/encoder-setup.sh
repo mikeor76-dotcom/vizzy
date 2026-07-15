@@ -38,6 +38,23 @@ if getent group gpio >/dev/null; then
   echo "==> Added $VIZZY_USER to the 'gpio' group"
 fi
 
+# 2b) prove GPIO actually works AS THE SERVICE USER, from the same working
+#     directory the unit uses. gpiozero otherwise reports only "Unable to load
+#     any default pin factory!", which hides whether the real problem is the
+#     device permissions or lgpio's need for a writable cwd.
+echo "==> Testing GPIO access as '$VIZZY_USER'"
+ls -l /dev/gpiochip* 2>/dev/null | sed 's/^/    /' || echo "    (no /dev/gpiochip* found!)"
+GPIO_TEST='
+import os
+os.environ.setdefault("GPIOZERO_PIN_FACTORY", "lgpio")
+from gpiozero import Device
+Device.ensure_pin_factory()
+print("    OK - pin factory:", type(Device.pin_factory).__name__)
+'
+if sudo -u "$VIZZY_USER" env LG_WD=/tmp sh -c "cd /tmp && python3 -c '$GPIO_TEST'" 2>&1 | sed 's/^/    /'; then
+  :
+fi
+
 # 3) pin config lives in the same env file every unit reads
 if [[ -f "$ENV_FILE" ]]; then
   grep -q '^VIZZY_ENCODER_CLK=' "$ENV_FILE" || cat >> "$ENV_FILE" <<'EOF'

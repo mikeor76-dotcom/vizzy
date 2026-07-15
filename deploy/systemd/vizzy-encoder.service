@@ -20,6 +20,11 @@ SupplementaryGroups=gpio
 # lgpio's own override and is set as well, belt-and-braces.
 WorkingDirectory=/tmp
 Environment=LG_WD=/tmp
+# Pin lgpio explicitly. Left to itself gpiozero TRIES every backend and, if each
+# one raises during init, reports only "Unable to load any default pin factory!"
+# — which hides the actual cause. lgpio is the correct (only) backend for the
+# Pi 5's RP1 anyway, and forcing it makes gpiozero surface lgpio's real error.
+Environment=GPIOZERO_PIN_FACTORY=lgpio
 EnvironmentFile=-/opt/vizzy/state/vizzy.env
 # The daemon lives OUTSIDE the release payload on purpose: install.sh only
 # copies dist/scripts/package.json/version.json/README.md into current/, and an

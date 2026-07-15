@@ -87,7 +87,9 @@ export const REGISTRY = [
     stable: true,
     presets: ["Green Phosphor", "Amber Trace", "Blue Trace", "White Studio"],
     idle: true, // flat trace with a faint hum
-    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
+    // self-governing: auto-ranges on time-domain EXCURSION, which "linear"
+    // (a frequency-bin measure) solved for wrongly — the trace sat at ~5% tall
+    auto: null,
   },
   {
     id: "waterfall",

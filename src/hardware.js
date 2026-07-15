@@ -29,8 +29,13 @@ const ACTION_MAP = {
   "controls:toggle": (c) => c.toggleControlsVisible(),
 };
 
-export function createHardwareInput(controller, { toggleMic } = {}) {
+export function createHardwareInput(controller, { toggleMic, onEvent } = {}) {
   const dispatch = (action, arg) => {
+    // onEvent sees EVERY action before it runs — the ?hwdebug=1 overlay uses
+    // this to prove events are arriving even if a mapping is wrong
+    if (onEvent) {
+      try { onEvent(action, arg, !!ACTION_MAP[action] || action === "mic:toggle"); } catch {}
+    }
     if (action === "mic:toggle" && toggleMic) return toggleMic();
     const fn = ACTION_MAP[action];
     if (fn) fn(controller, arg);

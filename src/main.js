@@ -34,6 +34,41 @@ let micSource = null;
 let micStream = null;
 let micActive = false;
 
+// --- ?hwdebug=1 : on-screen physical-control log ----------------------------
+// Shows the encoder's events landing (or NOT landing) on the device's own
+// screen. Pairs with deploy/encoder-diagnose.py, which diagnoses the GPIO end.
+let hwLogEl = null;
+let hwStatus = "starting…";
+const hwLines = [];
+function hwOverlay() {
+  if (hwLogEl) return hwLogEl;
+  hwLogEl = document.createElement("div");
+  hwLogEl.style.cssText =
+    "position:fixed;top:8px;left:8px;z-index:9999;font:12px ui-monospace,Menlo,monospace;" +
+    "background:rgba(0,0,0,.75);color:#8ef;padding:8px 10px;border:1px solid #2a6;" +
+    "border-radius:6px;max-width:52vw;pointer-events:none;line-height:1.5;white-space:pre";
+    document.body.appendChild(hwLogEl);
+  return hwLogEl;
+}
+function hwRender() {
+  hwOverlay().textContent = [
+    `PHYSICAL CONTROLS  ·  relay: ${hwStatus}`,
+    hwLines.length ? `${hwLines.length} event(s), newest first:` : "no events yet — turn the knob",
+    ...hwLines.slice(0, 7),
+  ].join("\n");
+}
+// the relay's own state: distinguishes "browser never connected" from
+// "connected fine, but the knob is sending nothing" — different bugs entirely
+function setHwStatus(s) {
+  hwStatus = s;
+  if (hwLogEl || s) hwRender();
+}
+function logHwEvent(action, arg, known) {
+  const t = new Date().toTimeString().slice(0, 8);
+  hwLines.unshift(`${t}  ${known ? "✓" : "✗ UNKNOWN"} ${action}${arg ? " " + arg : ""}`);
+  hwRender();
+}
+
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = window.innerWidth * dpr;
@@ -263,7 +298,15 @@ for (const entry of REGISTRY) Object.assign(entry, BINDINGS[entry.id]);
 // methods; this subscriber applies the resulting state to the app.
 
 const controller = new VisualizerController();
-window.vizzy = { controller, hardware: createHardwareInput(controller, { toggleMic }) };
+// ?hwdebug=1 puts an on-screen log of every physical-control event in the
+// corner — so you can stand at the device, turn the knob, and SEE whether
+// anything is arriving without SSHing in. Deliberately built from the dispatch
+// hook (not the SSE handler) so it also proves keyboard/programmatic actions.
+const hwDebug = new URLSearchParams(location.search).get("hwdebug") === "1";
+window.vizzy = {
+  controller,
+  hardware: createHardwareInput(controller, { toggleMic, onEvent: hwDebug ? logHwEvent : null }),
+};
 // wired up after autogain is constructed below (QA: vizzy.autogain.status())
 
 // Console-only test hooks for Pixel Quest's Adventure Layer v1 + Biome
@@ -473,8 +516,17 @@ if (!Number.isNaN(sensParam)) autogain.pin(sensParam);
 // thing that injects __vizzyLastMode — so use that as the "am I running on the
 // device?" signal and skip the subscription in dev, where EventSource would
 // retry against a 404 forever. ?hw=1 forces it on for testing.
-if (typeof window.__vizzyLastMode === "string" || params.get("hw") === "1") {
-  window.vizzy.hardware.connect();
+if (typeof window.__vizzyLastMode === "string" || params.get("hw") === "1" || hwDebug) {
+  const es = window.vizzy.hardware.connect();
+  if (hwDebug) {
+    setHwStatus("connecting…");
+    es.addEventListener("open", () => setHwStatus("connected ✓"));
+    es.addEventListener("error", () =>
+      setHwStatus(es.readyState === 2 ? "FAILED (is the app served by serve.mjs?)" : "reconnecting…")
+    );
+  }
+} else if (hwDebug) {
+  setHwStatus("not connected");
 }
 
 // AUTO-START the mic whenever permission is already granted — the hardware

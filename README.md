@@ -139,6 +139,32 @@ visualizations, set `VIZZY_ENCODER_DIVIDER=2` (or `4`)** — EC11s differ in how
 many quadrature pulses they emit per detent. If it turns the wrong way, set
 `VIZZY_ENCODER_REVERSE=true`.
 
+### Encoder not working? Diagnose it bottom-up
+
+The chain is GPIO → daemon → server → browser, so find out *where* it stops:
+
+```bash
+sudo systemctl stop vizzy-encoder                        # release the pins
+
+# 1. Is the encoder sending ANYTHING, and on WHICH pins?
+sudo python3 deploy/encoder-diagnose.py --scan
+#    Watches every GPIO. Turn the knob + press the button; it names the pins
+#    that moved and prints the exact vizzy.env lines to paste.
+
+# 2. Do the CONFIGURED pins decode into clean rotation?
+sudo python3 deploy/encoder-diagnose.py
+#    Turn ONE detent and count the lines = your VIZZY_ENCODER_DIVIDER.
+
+sudo systemctl start vizzy-encoder
+journalctl -u vizzy-encoder -f                          # 3. daemon → server
+```
+
+For the last hop (server → browser), open the app with **`?hwdebug=1`**: an
+on-screen panel shows the relay's connection state and logs every event as it
+lands — so you can stand at the device, turn the knob, and see it (or see
+`connected ✓` with no events, which means the problem is upstream of the
+browser).
+
 How it fits together: `deploy/vizzy-encoder.py` (gpiozero) POSTs an action to
 `/api/input` (loopback only, allowlisted actions), `scripts/serve.mjs` fans it
 out over Server-Sent Events, and `src/hardware.js` dispatches it into the same

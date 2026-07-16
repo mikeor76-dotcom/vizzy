@@ -17,6 +17,8 @@
 // grids) is ONE cached offscreen; per frame it's a blit + batched fillRects
 // for lit windows. No shadowBlur anywhere.
 
+import { SilenceGate } from "./silencegate.js";
+
 const B = 28; // bands; each owns a mirrored PAIR of buildings
 const NB = B * 2;
 
@@ -56,9 +58,12 @@ const PALETTES = {
 
 export class Skyline {
   constructor() {
-    this.cfg = { sensitivity: 1.25, preset: "Midnight Amber" }; // AutoGain: linear
+    this.cfg = { preset: "Midnight Amber" }; // self-governing (auto: null)
     this.freq = new Uint8Array(1024);
+    this.gate = new SilenceGate();
     this.lvl = new Float32Array(B); // smoothed band levels
+    this.bandPeak = new Float32Array(B).fill(0.05); // per-band slow auto-level
+    this._vs = new Float32Array(B);
     this.litF = new Int16Array(NB); // lit floors per building (bench ground truth)
     this.peakF = new Float32Array(NB); // penthouse peak-hold (floors)
     this.bandLo = new Int16Array(B);
@@ -198,9 +203,21 @@ export class Skyline {
     c.fillRect(0, this.hwY - 4, w, 9);
   }
 
-  analyze(dt, now, sens) {
+  analyze(dt, now) {
     const f = this.freq;
-    // band levels: fast attack, musical decay (the windows are the meter)
+    const g = this.gate.update(f, dt);
+    // PER-BAND AUTO-LEVEL (the Ferrofluid engine) — this is what "adjusts to
+    // the song". The first version scaled every band by ONE AutoGain
+    // sensitivity, and raw band levels differ by ~20x between bass and
+    // treble, so on EVERY genre measured the suburbs sat at 0-3% lit and
+    // downtown never passed 36%: half the city was dead no matter what
+    // played. Now each building is normalized against ITS OWN slow peak
+    // (frozen while the gate is closed — silence must never wind the gain
+    // up), so a hi-hat lights its suburb tower as surely as the kick lights
+    // downtown, and within-song dynamics survive because the peak is the
+    // SONG's own recent maximum for that band.
+    const vs = this._vs;
+    let maxRaw = 0.02, maxPeak = 0.05;
     for (let k = 0; k < B; k++) {
       let s = 0, mx = 0;
       for (let i = this.bandLo[k]; i < this.bandHi[k]; i++) {
@@ -208,30 +225,39 @@ export class Skyline {
         if (f[i] > mx) mx = f[i];
       }
       // blend the band MEAN with its PEAK: log bands are 2 bins wide at the
-      // bass end and 30+ at the treble end, so a pure tone averaged over a
-      // wide band lit 3 floors while the same tone in a bass band lit 30 —
-      // the meter under-reported anything narrowband in the suburbs. The
-      // peak term restores tones; the mean keeps broadband honest.
-      const mean = s / ((this.bandHi[k] - this.bandLo[k]) * 255);
-      const raw = Math.max(mean, (mx / 255) * 0.55);
-      // the -0.03 floor cut keeps mic hiss from lighting first floors all
-      // night: in silence the city must actually sleep
-      const v = Math.min(1, Math.max(0, raw * sens - 0.03) * 1.08);
+      // bass end and 30+ at the treble end — a pure tone averaged over a wide
+      // band under-reports ~4x. Floor-subtract both (mic hiss must not light
+      // the city at night).
+      const mean = Math.max(0, s / ((this.bandHi[k] - this.bandLo[k]) * 255) - g.sub);
+      const pk = Math.max(0, mx / 255 - g.sub);
+      const raw = Math.max(mean, pk * 0.55);
+      vs[k] = raw;
+      if (raw > maxRaw) maxRaw = raw;
+      if (g.open) this.bandPeak[k] = Math.max(this.bandPeak[k] * (1 - dt * 0.05), raw, 0.02);
+      if (this.bandPeak[k] > maxPeak) maxPeak = this.bandPeak[k];
+    }
+    for (let k = 0; k < B; k++) {
+      // a band's peak may not read lower than 10% of the loudest band's: a
+      // steady quiet BED (pad, hiss remnant, crowd noise) would otherwise
+      // normalize itself to full scale and light its district all night —
+      // the same failure the noise floor causes, one level up
+      const norm = Math.min(1, vs[k] / Math.max(this.bandPeak[k], maxPeak * 0.1));
+      // shape = the band's share of the CURRENT spectrum: keeps the skyline
+      // honest (the loudest thing in the mix is the tallest light right now)
+      const shape = vs[k] / maxRaw;
+      const v = g.gate * Math.pow(norm, 1.35) * (0.35 + 0.65 * shape);
       this.lvl[k] = v > this.lvl[k] ? v : Math.max(0, this.lvl[k] - dt * 1.3);
     }
     let bs = 0;
     for (let i = 1; i < 6; i++) bs += f[i];
     const bass = bs / (5 * 255);
-    let all = 0;
-    for (let i = 1; i < 380; i += 4) all += f[i];
-    const rawLoud = all / (Math.ceil(379 / 4) * 255);
-    this.loud += (Math.min(1, rawLoud * 3) - this.loud) * Math.min(1, dt * 0.8);
+    this.loud += (g.gate * Math.min(1, g.loud * 3) - this.loud) * Math.min(1, dt * 0.8);
     // volume-independent kick + tempo (drives the sky pulse and the traffic)
-    if (bass > 0.03) this._bassPeak = Math.max(this._bassPeak * (1 - dt * 0.05), bass, 0.04);
-    const flux = Math.max(0, bass - this._prevBass) / Math.max(0.04, this._bassPeak);
+    if (g.open && bass > 0.03) this._bassPeak = Math.max(this._bassPeak * (1 - dt * 0.05), bass, 0.04);
+    const flux = g.open ? Math.max(0, bass - this._prevBass) / Math.max(0.04, this._bassPeak) : 0;
     this._prevBass = bass;
     this._fluxAvg += (flux - this._fluxAvg) * Math.min(1, dt * 1.5);
-    if (bass > 0.035 && flux > Math.max(0.05, this._fluxAvg * 2.1)) {
+    if (g.open && bass > 0.035 && flux > Math.max(0.05, this._fluxAvg * 2.1)) {
       if (this.beat < 0.6 && this._lastBeatAt) {
         const int = now - this._lastBeatAt;
         if (int > 240 && int < 2000) this.beatInt += (int - this.beatInt) * 0.25;
@@ -241,7 +267,7 @@ export class Skyline {
     }
     this.beat = Math.max(0, this.beat - dt * 4);
     // lightning: a genuine accent, not every kick
-    if (bass > 0.05 && flux > Math.max(0.16, this._fluxAvg * 4.4) && now - this._lastBolt > 8000) {
+    if (g.open && bass > 0.05 && flux > Math.max(0.16, this._fluxAvg * 4.4) && now - this._lastBolt > 8000) {
       this._lastBolt = now;
       this.bolt = 1;
       this.boltPts = null; // regenerate a fresh jag
@@ -320,7 +346,7 @@ export class Skyline {
       this.paintBg(w, h, pal);
       this.bgKey = key;
     }
-    this.analyze(dt, now, this.cfg.sensitivity);
+    this.analyze(dt, now);
 
     ctx.drawImage(this.bg, 0, 0);
 
@@ -357,22 +383,29 @@ export class Skyline {
       // penthouse peak-hold: flashes at the peak, then sinks floor by floor
       this.peakF[i] = lit >= this.peakF[i] ? lit : Math.max(lit, this.peakF[i] - dt * 2.6);
       const [wr, wg, wb] = pal.win[b.winTint];
+      // ONE path + one fill per building, not one fillRect per window: with
+      // the per-band engine lighting far more of the city, per-window calls
+      // cost 2.3ms/frame (would be ~10ms on the Pi); batched it's ~4x cheaper
       ctx.fillStyle = `rgba(${wr},${wg},${wb},0.9)`;
+      ctx.beginPath();
       for (let f = 0; f < lit; f++) {
         const wy = b.y - 8 - f * 11;
         const off = f * b.cols;
         for (let c = 0; c < b.cols; c++) {
-          if (b.mask[off + c]) ctx.fillRect(b.x + 4 + c * 9, wy - 6, 6, 7);
+          if (b.mask[off + c]) ctx.rect(b.x + 4 + c * 9, wy - 6, 6, 7);
         }
       }
+      ctx.fill();
       // night owls above the lit floors — the city is never fully dead
       ctx.fillStyle = `rgba(${pal.owl},0.5)`;
+      ctx.beginPath();
       for (let f = lit; f < b.floors; f++) {
         const off = f * b.cols;
         for (let c = 0; c < b.cols; c++) {
-          if (b.owls[off + c] && owlBlink(i, f, c)) ctx.fillRect(b.x + 4 + c * 9, b.y - 8 - f * 11 - 6, 6, 7);
+          if (b.owls[off + c] && owlBlink(i, f, c)) ctx.rect(b.x + 4 + c * 9, b.y - 8 - f * 11 - 6, 6, 7);
         }
       }
+      ctx.fill();
       const pf = Math.round(this.peakF[i]);
       if (pf > 0 && pf >= lit && pf <= b.floors) {
         const py = b.y - 8 - (pf - 1) * 11;

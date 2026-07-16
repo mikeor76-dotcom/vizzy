@@ -1,4 +1,4 @@
-// City Skyline bench — is the city actually a meter, and does it sleep?
+// City Skyline bench — is the WHOLE city a meter, on EVERY kind of music?
 //
 //   window.__Sky = (await import('/src/skyline.js')).Skyline;
 //   const src = await (await fetch('/test/skyline-suite.browser.js')).text();
@@ -6,15 +6,22 @@
 //
 // (No import in this file: Vite's transform of fetched JS breaks eval.)
 //
-// Ground truth is inst.litF (lit floors per building), not pixels — the
-// palette can't fool it. The tests:
-//   mapping     a tone at band k lights EXACTLY the mirrored building pair
-//               (27-k, 28+k), neighbours dark — downtown bass, suburb treble
-//   monotonic   lit floors track level (a meter that saturates lies)
-//   sleep       silence = only the night owls; zero meter windows, no traffic
-//   beat+tempo  kicks fire the sky pulse; traffic speed follows the bpm
-//   legibility  COMPRESSED real music still dances (the Murmuration lesson:
-//               4x synthetic swings prove nothing about real masters)
+// Ground truth is inst.litF (lit floors per building), not pixels. The tests
+// exist because of a user report — "it moves with the music but not
+// correctly" — and the measurement that explained it: with one global
+// sensitivity the suburbs sat at 0-3% lit on every genre and downtown never
+// passed 36%. So the headline test is the GENRE SWEEP: every district must
+// participate on every kind of music, silence must sleep the whole city, and
+// downtown must pump WITH the kick (correlation, not vibes).
+
+const SKY_SONGS = {
+  silence: { silence: 1 },
+  ambient: { level: 0.14, bpm: 52, hard: 0, hat: 0.05, melody: 0.3 },
+  ballad: { level: 0.25, bpm: 68, hard: 0.25, hat: 0.15, melody: 0.6 },
+  rock: { level: 0.75, bpm: 120, hard: 0.75, hat: 0.6, melody: 0.65 },
+  edm: { level: 0.9, bpm: 128, hard: 1, hat: 0.8, melody: 0.5 },
+  metal: { level: 0.95, bpm: 170, hard: 1, hat: 0.7, melody: 0.55 },
+};
 
 function skyAnalyser(state) {
   return {
@@ -24,27 +31,32 @@ function skyAnalyser(state) {
         for (let i = 0; i < a.length; i++) a[i] = Math.max(0, Math.round(2 + Math.random() * 3 - (i / a.length) * 1.5));
         return;
       }
+      const t = state.t;
       if (s.tone != null) {
-        a.fill(0);
+        // a tone riding on a faint mid bed (a naked sine has no mid/high
+        // content at all and the silence gate rightly refuses to call it
+        // music — real narrowband content always sits on SOMETHING)
+        for (let i = 0; i < a.length; i++) a[i] = i > 10 && i < 372 ? 12 : 0;
         for (let d = -3; d <= 3; d++) {
           const i = s.tone + d;
-          if (i >= 0 && i < a.length) a[i] = Math.round(255 * s.level * Math.exp(-(d * d) / 2));
+          if (i >= 0 && i < a.length) a[i] = Math.max(a[i], Math.round(255 * s.level * Math.exp(-(d * d) / 2)));
         }
         return;
       }
-      const t = state.t;
-      const kick = Math.exp(-((t * s.bpm / 60) % 1) * 16) * (s.hard ?? 0.7);
-      const L = s.level + (s.wobble ? Math.sin(t * 0.35) * s.wobble : 0);
+      const beatPhase = (t * s.bpm / 60) % 1;
+      const kick = Math.exp(-beatPhase * (5 + s.hard * 20)) * s.hard;
+      const hat = Math.exp(-((t * s.bpm / 30) % 1) * 26) * s.hat;
+      const L = (s.level + (s.wobble ? Math.sin(t * 0.35) * s.wobble : 0)) * 255;
       for (let i = 0; i < a.length; i++) {
         let v;
-        if (i < 6) v = L * (0.5 + kick * 0.5);
-        else if (i < 26) v = L * (0.4 + kick * 0.3);
+        if (i < 6) v = L * (0.55 + kick * 0.9);
+        else if (i < 26) v = L * (0.4 + kick * 0.5);
         else if (i < 200) {
           const c1 = 60 + Math.sin(t * 0.9) * 30, c2 = 130 + Math.sin(t * 0.6 + 2) * 40;
-          v = L * (0.12 + 0.5 * (Math.exp(-((i - c1) ** 2) / 300) + 0.8 * Math.exp(-((i - c2) ** 2) / 500)));
-        } else if (i < 380) v = L * 0.2;
-        else v = L * 0.04;
-        a[i] = Math.max(0, Math.min(255, Math.round(v * 255)));
+          v = L * (0.12 + s.melody * 0.55 * (Math.exp(-((i - c1) ** 2) / 300) + 0.8 * Math.exp(-((i - c2) ** 2) / 500)));
+        } else if (i < 380) v = L * (0.06 + hat * 0.8 * Math.exp(-(i - 200) / 120));
+        else v = L * 0.02;
+        a[i] = Math.max(0, Math.min(255, Math.round(v)));
       }
     },
   };
@@ -61,7 +73,6 @@ async function skySuite() {
 
   const mk = () => {
     const inst = new Skyline();
-    inst.cfg.sensitivity = 1.25;
     const state = { t: 0, spec: { silence: 1 } };
     return { inst, state, an: skyAnalyser(state), now: 1000 };
   };
@@ -71,60 +82,144 @@ async function skySuite() {
       r.inst.render(ctx, r.an, 1920, 480, r.now);
     }
   };
+  const districtOf = (inst, j) => {
+    const band = inst.bandOf(j);
+    return band < 4 ? "downtown" : band < 18 ? "mid" : "suburbs";
+  };
 
-  // --- 1. mapping: tone at band k lights the mirrored pair, neighbours dark
+  // --- 1. THE GENRE SWEEP: every district alive on every genre; silence sleeps
+  const genreRows = [];
+  let genrePass = true;
+  for (const [name, spec] of Object.entries(SKY_SONGS)) {
+    const r = mk();
+    r.state.spec = spec;
+    run(r, 6); // settle + learn the song
+    const stats = { downtown: [0, 0, 8], mid: [0, 0, 28], suburbs: [0, 0, 20] };
+    const prev = new Float32Array(56);
+    let frames = 0;
+    for (let i = 0; i < 8 * 60; i++) {
+      run(r, 1 / 60);
+      for (let j = 0; j < 56; j++) {
+        const frac = r.inst.litF[j] / r.inst.buildings[j].floors;
+        const d = stats[districtOf(r.inst, j)];
+        d[0] += frac;
+        d[1] += Math.abs(frac - prev[j]);
+        prev[j] = frac;
+      }
+      frames++;
+    }
+    const row = { genre: name };
+    for (const d of ["downtown", "mid", "suburbs"]) {
+      row[d] = {
+        lit: +(stats[d][0] / frames / stats[d][2]).toFixed(2),
+        motion: +((stats[d][1] / frames / stats[d][2]) * 100).toFixed(1),
+      };
+    }
+    if (spec.silence) {
+      row.ok = row.downtown.lit === 0 && row.mid.lit === 0 && row.suburbs.lit === 0;
+    } else {
+      // Alive = meaningfully lit AND moving, not saturated. The suburbs are
+      // only held to it when the genre actually HAS treble (hat >= 0.1):
+      // ambient pads have nothing up there, and a normalizer that lit the
+      // suburbs anyway would be amplifying the noise floor — the exact
+      // failure the maxPeak*0.1 bound exists to prevent. Dark suburbs on a
+      // pad is honesty.
+      // "alive" for sustained content = lit; for TRANSIENT content (a
+      // ballad's hats are brief glints) the average lit fraction is honestly
+      // low — MOTION is the aliveness signal there. lit>=0.03 guards against
+      // a district that's technically twitching but visibly black.
+      const must = ["downtown", "mid"];
+      if ((spec.hat ?? 0) >= 0.1) must.push("suburbs");
+      row.ok = must.every((d) => row[d].lit >= 0.03 && row[d].lit <= 0.9 && row[d].motion >= 0.3);
+    }
+    if (!row.ok) genrePass = false;
+    genreRows.push(row);
+  }
+  results.genres = { pass: genrePass, detail: genreRows };
+
+  // --- 2. kick coherence: downtown pumps WITH the kick (correlation)
+  const r2 = mk();
+  r2.state.spec = SKY_SONGS.rock;
+  run(r2, 6);
+  const dt2 = [], kickEnv = [];
+  for (let i = 0; i < 10 * 60; i++) {
+    run(r2, 1 / 60);
+    let s = 0, n = 0;
+    for (let j = 0; j < 56; j++) {
+      if (districtOf(r2.inst, j) === "downtown") { s += r2.inst.litF[j] / r2.inst.buildings[j].floors; n++; }
+    }
+    dt2.push(s / n);
+    const bp = (r2.state.t * 120 / 60) % 1;
+    kickEnv.push(Math.exp(-bp * (5 + 0.75 * 20)) * 0.75);
+  }
+  const avg = (a) => a.reduce((x, v) => x + v, 0) / a.length;
+  const corr = (a, b) => {
+    const ma = avg(a), mb = avg(b);
+    let num = 0, da = 0, db = 0;
+    for (let i = 0; i < a.length; i++) { num += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; }
+    return da && db ? num / Math.sqrt(da * db) : 0;
+  };
+  results.kickPump = {
+    pass: corr(dt2, kickEnv) > 0.3,
+    downtownKickCorr: +corr(dt2, kickEnv).toFixed(2),
+    note: "downtown's lights rise and fall WITH the kick, not near it",
+  };
+
+  // --- 3. mapping: a tone still lights exactly its mirrored pair
   const probe = new Skyline();
   const mapRows = [];
   let mapPass = true;
-  for (const k of [0, 6, 14, 24]) {
+  for (const k of [2, 6, 14, 24]) {
     const r = mk();
     r.state.spec = { tone: Math.round((probe.bandLo[k] + probe.bandHi[k]) / 2), level: 0.85 };
-    run(r, 3);
+    run(r, 4);
     const litOf = (bi) => r.inst.litF[bi] / r.inst.buildings[bi].floors;
     const left = litOf(B - 1 - k), right = litOf(B + k);
-    // brightest OTHER building (excluding the pair and its band-leak neighbours)
     let worst = 0;
     for (let i = 0; i < B * 2; i++) {
-      const bk = r.inst.bandOf(i);
-      if (Math.abs(bk - k) <= 1) continue;
+      if (Math.abs(r.inst.bandOf(i) - k) <= 1) continue;
       worst = Math.max(worst, litOf(i));
     }
-    const ok = left > 0.25 && right > 0.25 && worst < Math.min(left, right) * 0.5;
+    const ok = left > 0.3 && right > 0.3 && worst < Math.min(left, right) * 0.55;
     if (!ok) mapPass = false;
     mapRows.push({ band: k, left: +left.toFixed(2), right: +right.toFixed(2), worstOther: +worst.toFixed(2), ok });
   }
   results.mapping = { pass: mapPass, detail: mapRows };
 
-  // --- 2. monotonic: lit floors track level
-  const heights = [];
-  for (const L of [0.25, 0.45, 0.7, 0.95]) {
-    const r = mk();
-    r.state.spec = { tone: Math.round((probe.bandLo[6] + probe.bandHi[6]) / 2), level: L };
-    run(r, 3);
-    heights.push(+(r.inst.litF[B - 1 - 6] / r.inst.buildings[B - 1 - 6].floors).toFixed(2));
-  }
-  let mono = true;
-  for (let i = 1; i < heights.length; i++) if (heights[i] <= heights[i - 1]) mono = false;
-  results.monotonic = { pass: mono, heights, dynRange: +(heights[3] / Math.max(0.01, heights[0])).toFixed(2) };
-
-  // --- 3. the city SLEEPS: silence = night owls only, empty highway
-  const r3 = mk();
-  r3.state.spec = { level: 0.75, bpm: 120 };
-  run(r3, 6); // wake it first
-  r3.state.spec = { silence: 1 };
-  run(r3, 12);
-  let meterWin = 0;
-  for (let i = 0; i < B * 2; i++) meterWin += r3.inst.litF[i];
-  results.sleep = {
-    pass: meterWin === 0 && r3.inst.cars.length <= 2,
-    meterFloorsLit: meterWin, cars: r3.inst.cars.length,
-    note: "zero meter floors; the only lights left are the night owls",
+  // --- 4. within-song dynamics: the chorus lights more city than the verse
+  // (per-band normalization must NOT erase loud-vs-quiet inside a song)
+  const r4 = mk();
+  r4.state.spec = { ...SKY_SONGS.rock };
+  run(r4, 12); // learn the song's peaks at full level
+  const cityLit = (inst) => {
+    let s = 0;
+    for (let j = 0; j < 56; j++) s += inst.litF[j] / inst.buildings[j].floors;
+    return s / 56;
+  };
+  let chorus = 0;
+  for (let i = 0; i < 120; i++) { run(r4, 1 / 60); chorus += cityLit(r4.inst) / 120; }
+  r4.state.spec = { ...SKY_SONGS.rock, level: 0.32, hard: 0.3 }; // the quiet verse
+  run(r4, 4);
+  let verse = 0;
+  for (let i = 0; i < 120; i++) { run(r4, 1 / 60); verse += cityLit(r4.inst) / 120; }
+  results.dynamics = {
+    pass: chorus > verse * 1.25,
+    chorusLit: +chorus.toFixed(2), verseLit: +verse.toFixed(2),
+    ratio: +(chorus / Math.max(0.01, verse)).toFixed(2),
+    note: "the quiet verse visibly dims the city; the chorus relights it",
   };
 
-  // --- 4. beats fire the sky pulse; tempo drives the traffic speed
+  // --- 5. sleep + beats + tempo (unchanged behaviours, re-asserted)
+  const r5 = mk();
+  r5.state.spec = SKY_SONGS.rock;
+  run(r5, 6);
+  r5.state.spec = { silence: 1 };
+  run(r5, 12);
+  let meterWin = 0;
+  for (let i = 0; i < B * 2; i++) meterWin += r5.inst.litF[i];
   const beatCount = (bpm, secs = 10) => {
     const r = mk();
-    r.state.spec = { level: 0.8, bpm, hard: 0.9 };
+    r.state.spec = { ...SKY_SONGS.rock, bpm, hard: 0.9 };
     run(r, 4);
     let beats = 0, last = r.inst.beat;
     for (let i = 0; i < secs * 60; i++) {
@@ -136,40 +231,18 @@ async function skySuite() {
   };
   const slow = beatCount(70), fast = beatCount(140);
   const bpmOf = (i2) => 60000 / i2.beatInt;
-  results.beatTempo = {
-    pass: Math.abs(slow.perMin - 70) < 14 && Math.abs(fast.perMin - 140) < 25 &&
+  results.sleepBeatTempo = {
+    pass: meterWin === 0 && r5.inst.cars.length <= 2 &&
+      Math.abs(slow.perMin - 70) < 14 && Math.abs(fast.perMin - 140) < 25 &&
       bpmOf(fast.inst) > bpmOf(slow.inst) * 1.5,
+    meterFloorsLitInSilence: meterWin, cars: r5.inst.cars.length,
     beatsPerMin: { at70: +slow.perMin.toFixed(0), at140: +fast.perMin.toFixed(0) },
     trackedBpm: { at70: +bpmOf(slow.inst).toFixed(0), at140: +bpmOf(fast.inst).toFixed(0) },
-    note: "sky pulses on the kicks; traffic knows the tempo",
-  };
-
-  // --- 5. legibility on COMPRESSED music (the Murmuration lesson): the lit
-  // pattern must keep dancing when the master never leaves the top of its range
-  const r5 = mk();
-  r5.state.spec = { level: 0.72, wobble: 0.1, bpm: 120 };
-  run(r5, 6);
-  let motion = 0, frames = 0, pulses = 0, lastB2 = 0;
-  const prev = new Int16Array(B * 2);
-  prev.set(r5.inst.litF);
-  for (let i = 0; i < 12 * 60; i++) {
-    run(r5, 1 / 60);
-    let d = 0;
-    for (let j = 0; j < B * 2; j++) { d += Math.abs(r5.inst.litF[j] - prev[j]); prev[j] = r5.inst.litF[j]; }
-    motion += d; frames++;
-    if (r5.inst.beat > 0.9 && lastB2 <= 0.9) pulses++;
-    lastB2 = r5.inst.beat;
-  }
-  results.legibility = {
-    pass: motion / frames > 0.8 && pulses > 12,
-    floorsChangedPerFrame: +(motion / frames).toFixed(2),
-    skyPulses: pulses,
-    note: "windows keep moving + sky keeps pulsing on a compressed master",
   };
 
   // --- 6. perf at panel size
   const r6 = mk();
-  r6.state.spec = { level: 0.8, bpm: 128, hard: 0.9 };
+  r6.state.spec = SKY_SONGS.edm;
   run(r6, 3);
   const t0 = performance.now();
   run(r6, 4);

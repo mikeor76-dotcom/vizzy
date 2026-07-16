@@ -182,8 +182,11 @@ export const REGISTRY = [
     stable: false, // batched-rect city — needs a perf pass on the Pi
     presets: ["Midnight Amber", "Cyberpunk Neon", "Blackout Storm", "Dawn"],
     idle: true, // the sleeping city: night owls + stars before any audio
-    // frequency-bin display (windows ARE the meter) — exactly what linear is for
-    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
+    // self-governing: per-band auto-level behind a silence gate. It LOOKS like
+    // the frequency-bin case linear was made for, but raw band levels differ
+    // ~20x between bass and treble — one global sensitivity left the suburbs
+    // at 0-3% lit on every genre measured. Each district ranges itself.
+    auto: null,
   },
   {
     id: "lasers",

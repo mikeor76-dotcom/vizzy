@@ -47,21 +47,24 @@ export class Ferrofluid {
     this.slotJit = new Float32Array(N);
     this.slotHalf = new Float32Array(N);
     this.slotBand = new Int16Array(N);
-    // FULL-SPECTRUM spikes (the old version read only bins 1-10 — pure bass —
-    // so melody/vocals/hats were invisible and all 18 spikes moved as one).
-    // Each slot is a log-spread band; slots are INTERLEAVED around the circle
-    // (0,17,1,16,…) so broad bass lobes and fine treble needles alternate.
+    // MIRRORED SPECTRUM around the circle. (An earlier interleaved layout —
+    // 0,17,1,16,… — scattered related frequencies to unrelated positions, so
+    // a kick lit random-looking spots: the motion read as noise.) Now 9 bands
+    // are laid out by VERTICAL position, mirrored left/right: bass lobes at
+    // the BOTTOM (both sides jump together when the kick hits), mids on the
+    // flanks, fine treble needles at the top. Symmetry reads as intentional;
+    // you can follow the music around the shape with your ears.
     {
-      const order = [];
-      for (let a = 0, b = N - 1, f = true; a <= b; f = !f) order.push(f ? a++ : b--);
+      const B = 9; // bands; each appears twice (left/right mirror)
       for (let k = 0; k < N; k++) {
-        const band = order[k];
+        const th = ((k + 0.5) / N) * TAU; // canvas angle: sin=+1 is the BOTTOM
+        const band = Math.round((1 - (Math.sin(th) + 1) / 2) * (B - 1));
         this.slotBand[k] = band;
-        this.slotLo[k] = Math.round(2 + Math.pow(band / N, 1.7) * 340);
-        this.slotHi[k] = Math.max(this.slotLo[k] + 2, Math.round(2 + Math.pow((band + 1) / N, 1.7) * 340));
+        this.slotLo[k] = Math.round(2 + Math.pow(band / B, 1.7) * 340);
+        this.slotHi[k] = Math.max(this.slotLo[k] + 2, Math.round(2 + Math.pow((band + 1) / B, 1.7) * 340));
         // low bands = broad magnetic lobes, high bands = fine needles
-        this.slotHalf[k] = (TAU / N) * (0.9 - 0.5 * (band / (N - 1)));
-        this.slotJit[k] = 0.85 + 0.3 * ((k * 7 + 3) % 5) / 4; // organic, not a gear
+        this.slotHalf[k] = (TAU / N) * (1.05 - 0.6 * (band / (B - 1)));
+        this.slotJit[k] = 0.88 + 0.24 * ((k * 7 + 3) % 5) / 4; // organic, not a gear
       }
     }
     this.bass = new Smoother(0.6, 0.09); // NORMALIZED bass (vs its own slow peak)
@@ -70,6 +73,8 @@ export class Ferrofluid {
     this._bassPeak = 0.05;
     this._trebPeak = 0.05;
     this._loudPeak = 0.06;
+    this._floor = 0.008; // room-noise estimate (slow-rising minimum tracker)
+    this.gate = 0; // 0 = silence (calm droplet), 1 = music (smoothed ~0.5s)
     this._prevRawBass = 0;
     this._fluxAvg = 0.03;
     this._lastRupture = 0;
@@ -93,45 +98,78 @@ export class Ferrofluid {
       return sum / ((hi - lo) * 255);
     };
 
-    // ---- normalized levels: each vs its own SLOW peak, so any music — soft
-    // or pounding — drives the full visual range, while within-song dynamics
-    // survive (the slow peak holds through a quiet verse)
+    // ---- SILENCE GATE (the Pixel Quest phantom-beat lesson). A per-band
+    // normalizer in a silent room eventually equalizes the NOISE FLOOR to
+    // full scale — the blob pulsed to the air conditioner. So: track the
+    // room's noise floor (slow-rising minimum), open the gate only when the
+    // broadband level clears it, and while the gate is closed FREEZE every
+    // peak tracker (silence must never wind the gain up) and rest the blob.
     const rawBass = band(1, 6);
     const rawTreb = band(92, 372);
     const rawLoud = band(1, 372);
-    const dk = 1 - dt * 0.05; // ~20s decay to re-range to a quieter song
-    this._bassPeak = Math.max(this._bassPeak * dk, rawBass, 0.04);
-    this._trebPeak = Math.max(this._trebPeak * dk, rawTreb, 0.03);
-    this._loudPeak = Math.max(this._loudPeak * dk, rawLoud, 0.04);
-    this.bass.update(Math.min(1, rawBass / this._bassPeak));
-    this.treble.update(Math.min(1, rawTreb / this._trebPeak));
-    this.loud.update(Math.min(1, rawLoud / this._loudPeak));
+    // two-speed floor: follow DOWN fast; rise briskly while the signal hovers
+    // near the floor (steady room tone, loud HVAC included — it converges and
+    // gates out in seconds); rise barely at all when the signal is well above
+    // it (that's music — steady quiet music must NOT be eaten by the floor)
+    // "musical" = real mid/high-band content — the PixelQuest-proven
+    // discriminator that level statistics can't provide: quiet steady MUSIC
+    // and steady room tone can have the same broadband level, but hiss and
+    // HVAC rumble have no mid/high structure. Music never feeds the floor.
+    const rawMidHi = band(11, 372);
+    const musical = rawMidHi > 0.014;
+    const nearFloor = !musical && rawLoud < Math.max(0.016, this._floor * 2.5);
+    this._floor += (rawLoud - this._floor) * Math.min(1, dt * (rawLoud < this._floor ? 2 : nearFloor ? 0.25 : 0.008));
+    const open = musical && rawLoud > Math.max(0.012, this._floor * 1.6 + 0.004);
+    this.gate += ((open ? 1 : 0) - this.gate) * Math.min(1, dt * (open ? 4 : 2));
+    const gate = this.gate;
 
-    // ---- per-slot spikes: band level vs that band's own slow peak. pow 1.35
-    // adds contrast (hot bands stab, quiet bands rest); snap out fast, retract
-    // slowly (surface tension)
+    // ---- normalized levels: each vs its own SLOW peak (floor-subtracted), so
+    // any music drives the full visual range while within-song dynamics
+    // survive. Peaks only adapt while the gate is open.
+    if (open) {
+      const dk = 1 - dt * 0.05; // ~20s decay to re-range to a quieter song
+      this._bassPeak = Math.max(this._bassPeak * dk, rawBass, 0.04);
+      this._trebPeak = Math.max(this._trebPeak * dk, rawTreb, 0.03);
+      this._loudPeak = Math.max(this._loudPeak * dk, rawLoud, 0.04);
+    }
+    this.bass.update(gate * Math.min(1, rawBass / this._bassPeak));
+    this.treble.update(gate * Math.min(1, rawTreb / this._trebPeak));
+    this.loud.update(gate * Math.min(1, rawLoud / this._loudPeak));
+
+    // ---- per-slot spikes = self-normalized level (auto-adjusts to any genre)
+    // × the band's share of the CURRENT spectrum (so only bands that are hot
+    // RIGHT NOW extend — the silhouette mirrors what you actually hear; empty
+    // bands no longer dance on amplified noise)
+    const sub = this._floor * 1.2;
+    let maxV = 0.02;
+    const vs = this._vs || (this._vs = new Float32Array(N));
     for (let i = 0; i < N; i++) {
       let sum = 0;
       for (let k = this.slotLo[i]; k < this.slotHi[i]; k++) sum += this.freq[k];
-      const v = sum / ((this.slotHi[i] - this.slotLo[i]) * 255);
-      this.slotPeak[i] = Math.max(this.slotPeak[i] * (1 - dt * 0.05), v, 0.02);
-      const sN = Math.min(1, v / this.slotPeak[i]);
-      const target = Math.pow(sN, 1.35) * this.slotJit[i];
-      this.spikes[i] += (target - this.spikes[i]) * Math.min(1, dt * (target > this.spikes[i] ? 26 : 7));
+      const v = Math.max(0, sum / ((this.slotHi[i] - this.slotLo[i]) * 255) - sub);
+      vs[i] = v;
+      if (v > maxV) maxV = v;
+      if (open) this.slotPeak[i] = Math.max(this.slotPeak[i] * (1 - dt * 0.05), v, 0.02);
+    }
+    for (let i = 0; i < N; i++) {
+      const sN = Math.min(1, vs[i] / this.slotPeak[i]);
+      const shape = vs[i] / maxV;
+      const target = gate * Math.pow(sN, 1.35) * (0.35 + 0.65 * shape) * this.slotJit[i];
+      // attack 14/s: snappy but no longer chasing per-frame FFT jitter
+      this.spikes[i] += (target - this.spikes[i]) * Math.min(1, dt * (target > this.spikes[i] ? 14 : 7));
     }
 
     // ---- kick + rupture from RAW bass flux, normalized by the bass peak so
     // detection is volume-independent, with an ADAPTIVE threshold (vs the
-    // recent flux average) so it fires on accents in any genre. The old
-    // version measured flux of the SMOOTHED bass, which pegs at 1.0 on loud
-    // music (flux=0 → never ruptured on EDM) and chattered on ballads.
-    const fluxN = Math.max(0, rawBass - this._prevRawBass) / Math.max(0.04, this._bassPeak);
+    // recent flux average) so it fires on accents in any genre — but ONLY
+    // while the gate is open: room transients in silence are not beats.
+    const fluxN = open ? Math.max(0, rawBass - this._prevRawBass) / Math.max(0.04, this._bassPeak) : 0;
     this._prevRawBass = rawBass;
     this._fluxAvg += (fluxN - this._fluxAvg) * Math.min(1, dt * 1.5);
-    if (fluxN > Math.max(0.05, this._fluxAvg * 2.1)) this.beat = 1; // every kick: THUMP
+    if (open && fluxN > Math.max(0.05, this._fluxAvg * 2.1)) this.beat = 1; // every kick: THUMP
     // ruptures are the WOW moment — reserved for genuine accents well above
     // the song's own average transient, at most one per ~6s
-    if (fluxN > Math.max(0.14, this._fluxAvg * 4.2) && now - this._lastRupture > 6000) {
+    if (open && fluxN > Math.max(0.14, this._fluxAvg * 4.2) && now - this._lastRupture > 6000) {
       this._lastRupture = now;
       this.rupture = 1;
       this.rings.push({ r0: 1, age: 0, life: 0.9 });
@@ -199,12 +237,19 @@ export class Ferrofluid {
       // gentle breathing spikes when silent
       for (let i = 0; i < N; i++) this.spikes[i] = 0.18 + 0.12 * Math.sin(this.t * 0.7 + i * 1.3);
     }
-    this.rot += dt * (0.05 + bass * 0.1 + loud * 0.08); // energetic music spins faster
+    // a gentle sway, NOT accumulating rotation: the spectrum is mirrored with
+    // bass at the bottom, and spinning that axis away would scramble the
+    // left/right symmetry that makes the motion readable
+    this.rot = Math.sin(this.t * 0.26) * 0.05 + bass * 0.02;
 
     const cx = w / 2, cy = h * 0.52;
-    // the mass THUMPS on every kick (fast beat envelope) and swells with bass
-    const base = h * 0.15 * (1 + bass * 0.16 + this.beat * 0.14);
-    const spikeScale = base * (0.62 + this.beat * 0.18 + this.rupture * 0.9);
+    // the mass THUMPS on every kick (fast beat envelope), swells with bass,
+    // and in a silent room settles into one long slow breath (gate closed)
+    const calm = idle ? 0 : 1 - this.gate;
+    const base = h * 0.15 * (1 + bass * 0.16 + this.beat * 0.14 + calm * 0.02 * Math.sin(this.t * 0.5));
+    // 0.85: the shape-weighted spikes average lower than the old always-on
+    // ones, so the geometry compensates — hot bands still stab dramatically
+    const spikeScale = base * (0.85 + this.beat * 0.22 + this.rupture * 0.9);
     const sharp = 1.5 + this.beat * 0.6 + this.rupture * 2.6; // pointier on hits
     const maxR = h * 0.46; // keep the tallest spike on the panel
     const [vr, vg, vb] = pal.void, [rr, rg, rb] = pal.rim, [gr, gg, gb] = pal.glow;

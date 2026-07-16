@@ -11,6 +11,7 @@
 // a visible staircase.
 
 import { pickPalette, makeCache, withCache } from "./shared.js";
+import { RANGE_UP, RANGE_DN, RANGE_TARGET, RANGE_MAXGAIN, RANGE_KNEE } from "../wave.js";
 
 const PALETTES = {
   "Green Phosphor": { trace: "70,255,150", grid: "110,200,150", text: "#3f8f63" },
@@ -68,7 +69,7 @@ export class Oscilloscope {
     this.cfg = { preset: "Green Phosphor" }; // no sensitivity: self-governing
     this.time = new Float32Array(2048);
     this.byte = new Uint8Array(2048); // fallback for analysers without the float API
-    this.peak = 0.05; // recent excursion peak — a scope's auto-range
+    this.level = 0.05; // slow song-loudness the trace normalizes to (shared with Wave)
     this.lastNow = 0;
     this._grid = makeCache();
   }
@@ -87,15 +88,19 @@ export class Oscilloscope {
     }
     const t = this.time;
 
-    // auto-range on the EXCURSION: fast attack shows a transient instantly,
-    // slow release keeps the trace from pumping between beats
+    // SLOW auto-range on the excursion — normalize to the song's loudness over
+    // seconds, not the current frame's peak, so soft and pounding music look
+    // different and dynamic songs don't pump. Shared tuning with Wave.
     let maxExc = 0;
     if (live) for (let i = 0; i < t.length; i += 2) {
       const e = Math.abs(t[i]);
       if (e > maxExc) maxExc = e;
     }
-    this.peak = maxExc > this.peak ? this.peak + (maxExc - this.peak) * 0.35 : Math.max(0.015, this.peak * (1 - dt * 0.22));
-    const gain = Math.min(30, 0.8 / Math.max(0.015, this.peak));
+    const kUp = 1 - Math.exp(-dt / RANGE_UP);
+    const kDn = 1 - Math.exp(-dt / RANGE_DN);
+    this.level += (maxExc - this.level) * (maxExc > this.level ? kUp : kDn);
+    this.level = Math.max(0.012, this.level);
+    const gain = Math.min(RANGE_MAXGAIN, RANGE_TARGET / this.level);
 
     const cy = h / 2;
     const amp = h * 0.42;
@@ -119,7 +124,7 @@ export class Oscilloscope {
         if (!live) s = Math.sin(k * 0.06 + now / 300) * 0.06; // faint idle hum
         else {
           const e = Math.min(1, Math.max(-1, t[i] * gain));
-          s = Math.sign(e) * Math.pow(Math.abs(e), 0.7); // soft knee lifts the mids
+          s = Math.sign(e) * Math.pow(Math.abs(e), RANGE_KNEE); // gentle low-end lift
         }
         const y = cy - s * amp;
         const x = (k / n) * w;

@@ -20,6 +20,17 @@
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+// Shared auto-range tuning for the waveform displays (Wave + Oscilloscope).
+// UP/DN are the seconds to adapt to a louder / quieter song; slow on purpose so
+// within-song dynamics survive. TARGET is where a typical loud peak sits (with
+// headroom above for transients). KNEE < 1 lifts the low end for visibility;
+// near 1 = nearly linear (0.7 was too aggressive and ballooned mids).
+export const RANGE_UP = 2.5;
+export const RANGE_DN = 6.0;
+export const RANGE_TARGET = 0.6;
+export const RANGE_MAXGAIN = 26;
+export const RANGE_KNEE = 0.9;
+
 export class Wave {
   constructor() {
     this.cfg = { preset: "Default" }; // no sensitivity: this mode self-governs
@@ -29,7 +40,7 @@ export class Wave {
     this.time = new Float32Array(2048);
     this.byte = new Uint8Array(2048); // fallback for analysers without the float API
     this.freq = new Uint8Array(1024);
-    this.peak = 0.05; // recent excursion peak — what the wave actually displays
+    this.level = 0.05; // slow song-loudness the wave normalizes to
     this.beat = 0;
     this._prevBass = 0;
     this.lastNow = 0;
@@ -47,16 +58,26 @@ export class Wave {
     analyser.getByteFrequencyData(this.freq);
     const N = this.time.length;
 
-    // ---- normalize on the EXCURSION, not the spectrum ---------------------
+    // ---- SLOW auto-range on the excursion ---------------------------------
+    // Track the song's LOUDNESS over seconds, not the current frame's peak.
+    // The old fast tracker targeted peaks at 80%, soft-knee-lifted on top, and
+    // let the gain creep up until every song — soft or pounding — clipped flat
+    // at 100% and dynamic songs pumped. Normalizing to a slow level instead
+    // keeps any song visible and off the clip rails WHILE preserving the
+    // music's dynamics: loud passages draw bigger, quiet ones smaller.
     let maxExc = 0;
     for (let i = 0; i < N; i += 2) {
       const e = Math.abs(this.time[i]);
       if (e > maxExc) maxExc = e;
     }
-    // fast attack so a transient shows instantly; slow release so the wave
-    // doesn't pump between beats
-    this.peak = maxExc > this.peak ? this.peak + (maxExc - this.peak) * 0.35 : Math.max(0.015, this.peak * (1 - dt * 0.22));
-    const gain = Math.min(30, 0.8 / Math.max(0.015, this.peak));
+    const kUp = 1 - Math.exp(-dt / RANGE_UP); // rise to a louder song
+    const kDn = 1 - Math.exp(-dt / RANGE_DN); // fall to a quieter song
+    this.level += (maxExc - this.level) * (maxExc > this.level ? kUp : kDn);
+    this.level = Math.max(0.012, this.level);
+    // aim a typical loud peak at RANGE_TARGET of full height; instantaneous
+    // excursion still scales linearly, so transients punch above it and quiet
+    // moments fall below
+    const gain = Math.min(RANGE_MAXGAIN, RANGE_TARGET / this.level);
 
     // ---- kick accent -------------------------------------------------------
     let b = 0;
@@ -85,7 +106,7 @@ export class Wave {
     ctx.beginPath();
     for (let i = 0; i < span; i += step) {
       const e = clamp(this.time[start + i] * gain, -1, 1);
-      const shaped = Math.sign(e) * Math.pow(Math.abs(e), 0.7); // lift the mids
+      const shaped = Math.sign(e) * Math.pow(Math.abs(e), RANGE_KNEE); // gentle low-end lift
       const x = (i / span) * w;
       const y = mid - shaped * amp;
       if (i === 0) ctx.moveTo(x, y);

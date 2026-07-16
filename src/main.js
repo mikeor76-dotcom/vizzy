@@ -5,6 +5,7 @@ import { Flames } from "./flames.js";
 import { Murmuration } from "./murmuration.js";
 import { Skyline } from "./skyline.js";
 import { Lasers } from "./lasers.js";
+import { VectorCrt } from "./vectorcrt.js";
 import { Spectrum } from "./spectrum.js";
 import { Wave } from "./wave.js";
 import { Classical } from "./classical.js";
@@ -170,6 +171,7 @@ const flames = new Flames();
 const murmuration = new Murmuration();
 const skyline = new Skyline();
 const lasers = new Lasers();
+const vectorcrt = new VectorCrt();
 const spectrum = new Spectrum();
 const wave = new Wave();
 const classical = new Classical();
@@ -197,6 +199,7 @@ const INSTANCES = {
   murmuration,
   skyline,
   lasers,
+  vectorcrt,
   pixelquest,
   synthwave,
   milkdrop,
@@ -304,6 +307,8 @@ const BINDINGS = {
   // skyline repaints fully every frame (opaque cached bg blit)
   skyline: { render: (c, a, w, h, now) => skyline.render(c, a, w, h, now), fade: "rgb(2, 3, 8)" },
   lasers: { render: (c, a, w, h, now) => lasers.render(c, a, w, h, now), fade: "rgb(2, 2, 4)" },
+  // vectorcrt owns persistence via its feedback buffer (opaque blit each frame)
+  vectorcrt: { render: (c, a, w, h, now) => vectorcrt.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },
   pixelquest: { render: (c, a, w, h, now) => pixelquest.render(c, a, w, h, now), fade: "rgb(4, 4, 8)" },
   // milkdrop blits an opaque WebGL frame over the whole canvas every frame
   milkdrop: { render: (c, a, w, h, now) => milkdrop.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },

@@ -196,6 +196,17 @@ export const REGISTRY = [
     auto: null,
   },
   {
+    id: "vectorcrt",
+    name: "Vector CRT",
+    category: "scenes",
+    stable: false, // feedback-buffer persistence — needs a perf pass on the Pi
+    presets: ["P1 Green", "P7 Blue", "Amber Mono"],
+    idle: true, // the standby dot drifts with its burn-in ghost
+    // self-governing: time-domain excursion range (the wave.js lesson) behind
+    // a silence gate
+    auto: null,
+  },
+  {
     id: "murmuration",
     name: "Murmuration",
     category: "scenes",

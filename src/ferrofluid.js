@@ -9,6 +9,8 @@
 // Pi-friendly: one polygon fill for the body, one rim stroke, a couple of
 // additive gradients — no per-pixel work, no shadowBlur. ~0.3ms/frame.
 
+import { SilenceGate } from "./silencegate.js";
+
 const TAU = Math.PI * 2;
 
 class Smoother {
@@ -73,7 +75,9 @@ export class Ferrofluid {
     this._bassPeak = 0.05;
     this._trebPeak = 0.05;
     this._loudPeak = 0.06;
-    this._floor = 0.008; // room-noise estimate (slow-rising minimum tracker)
+    // silence gate (src/silencegate.js): in a quiet room the per-band
+    // normalizer below would otherwise equalize the noise floor to full scale
+    this._gate = new SilenceGate();
     this.gate = 0; // 0 = silence (calm droplet), 1 = music (smoothed ~0.5s)
     this._prevRawBass = 0;
     this._fluxAvg = 0.03;
@@ -98,29 +102,15 @@ export class Ferrofluid {
       return sum / ((hi - lo) * 255);
     };
 
-    // ---- SILENCE GATE (the Pixel Quest phantom-beat lesson). A per-band
-    // normalizer in a silent room eventually equalizes the NOISE FLOOR to
-    // full scale — the blob pulsed to the air conditioner. So: track the
-    // room's noise floor (slow-rising minimum), open the gate only when the
-    // broadband level clears it, and while the gate is closed FREEZE every
-    // peak tracker (silence must never wind the gain up) and rest the blob.
+    // ---- SILENCE GATE: while it's closed, FREEZE every peak tracker (silence
+    // must never wind the gain up) and rest the blob. See silencegate.js for
+    // why the decision is spectral, not level-based.
     const rawBass = band(1, 6);
     const rawTreb = band(92, 372);
-    const rawLoud = band(1, 372);
-    // two-speed floor: follow DOWN fast; rise briskly while the signal hovers
-    // near the floor (steady room tone, loud HVAC included — it converges and
-    // gates out in seconds); rise barely at all when the signal is well above
-    // it (that's music — steady quiet music must NOT be eaten by the floor)
-    // "musical" = real mid/high-band content — the PixelQuest-proven
-    // discriminator that level statistics can't provide: quiet steady MUSIC
-    // and steady room tone can have the same broadband level, but hiss and
-    // HVAC rumble have no mid/high structure. Music never feeds the floor.
-    const rawMidHi = band(11, 372);
-    const musical = rawMidHi > 0.014;
-    const nearFloor = !musical && rawLoud < Math.max(0.016, this._floor * 2.5);
-    this._floor += (rawLoud - this._floor) * Math.min(1, dt * (rawLoud < this._floor ? 2 : nearFloor ? 0.25 : 0.008));
-    const open = musical && rawLoud > Math.max(0.012, this._floor * 1.6 + 0.004);
-    this.gate += ((open ? 1 : 0) - this.gate) * Math.min(1, dt * (open ? 4 : 2));
+    const g = this._gate.update(this.freq, dt);
+    const open = g.open;
+    const rawLoud = g.loud;
+    this.gate = g.gate;
     const gate = this.gate;
 
     // ---- normalized levels: each vs its own SLOW peak (floor-subtracted), so
@@ -140,7 +130,7 @@ export class Ferrofluid {
     // × the band's share of the CURRENT spectrum (so only bands that are hot
     // RIGHT NOW extend — the silhouette mirrors what you actually hear; empty
     // bands no longer dance on amplified noise)
-    const sub = this._floor * 1.2;
+    const sub = g.sub;
     let maxV = 0.02;
     const vs = this._vs || (this._vs = new Float32Array(N));
     for (let i = 0; i < N; i++) {

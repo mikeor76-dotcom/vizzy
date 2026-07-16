@@ -92,6 +92,15 @@ export const REGISTRY = [
     auto: null,
   },
   {
+    id: "flames",
+    name: "Flame Spectrum",
+    category: "meters",
+    stable: false, // heat automaton — needs a perf pass on the Pi
+    presets: ["Inferno", "Blue Gas", "Witchfire Green", "White Heat"],
+    idle: true, // pilot flames gutter along the hearth before any audio
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
+  },
+  {
     id: "waterfall",
     name: "Waterfall",
     category: "meters",

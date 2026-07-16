@@ -1,6 +1,7 @@
 import { Galaxy } from "./galaxy.js";
 import { Aurora } from "./aurora.js";
 import { Ferrofluid } from "./ferrofluid.js";
+import { Flames } from "./flames.js";
 import { Spectrum } from "./spectrum.js";
 import { Wave } from "./wave.js";
 import { Classical } from "./classical.js";
@@ -122,6 +123,9 @@ async function startMic() {
         echoCancellation: false,
         noiseSuppression: false,
         autoGainControl: false,
+        // ideal, not exact: a mono USB mic must still work. Stereo matters for
+        // the line-in appliance path (vectorscope/goniometer need real L/R).
+        channelCount: { ideal: 2 },
         latency: 0,
       },
     });
@@ -159,6 +163,7 @@ micBtn.addEventListener("click", toggleMic);
 const galaxy = new Galaxy();
 const aurora = new Aurora();
 const ferrofluid = new Ferrofluid();
+const flames = new Flames();
 const spectrum = new Spectrum();
 const wave = new Wave();
 const classical = new Classical();
@@ -182,6 +187,7 @@ const INSTANCES = {
   galaxy,
   aurora,
   ferrofluid,
+  flames,
   pixelquest,
   synthwave,
   milkdrop,
@@ -281,6 +287,8 @@ const BINDINGS = {
   galaxy: { render: (c, a, w, h, now) => galaxy.render(c, a, w, h, now), fade: "rgba(5, 9, 20, 0.28)" },
   aurora: { render: (c, a, w, h, now) => aurora.render(c, a, w, h, now), fade: "rgb(1, 3, 12)" },
   ferrofluid: { render: (c, a, w, h, now) => ferrofluid.render(c, a, w, h, now), fade: "rgb(1, 2, 4)" },
+  // flames repaints the full field every frame (the automaton IS the trail)
+  flames: { render: (c, a, w, h, now) => flames.render(c, a, w, h, now), fade: "rgb(4, 3, 10)" },
   pixelquest: { render: (c, a, w, h, now) => pixelquest.render(c, a, w, h, now), fade: "rgb(4, 4, 8)" },
   // milkdrop blits an opaque WebGL frame over the whole canvas every frame
   milkdrop: { render: (c, a, w, h, now) => milkdrop.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },

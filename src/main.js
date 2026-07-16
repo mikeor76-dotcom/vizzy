@@ -3,6 +3,7 @@ import { Aurora } from "./aurora.js";
 import { Ferrofluid } from "./ferrofluid.js";
 import { Flames } from "./flames.js";
 import { Murmuration } from "./murmuration.js";
+import { Skyline } from "./skyline.js";
 import { Spectrum } from "./spectrum.js";
 import { Wave } from "./wave.js";
 import { Classical } from "./classical.js";
@@ -166,6 +167,7 @@ const aurora = new Aurora();
 const ferrofluid = new Ferrofluid();
 const flames = new Flames();
 const murmuration = new Murmuration();
+const skyline = new Skyline();
 const spectrum = new Spectrum();
 const wave = new Wave();
 const classical = new Classical();
@@ -191,6 +193,7 @@ const INSTANCES = {
   ferrofluid,
   flames,
   murmuration,
+  skyline,
   pixelquest,
   synthwave,
   milkdrop,
@@ -295,6 +298,8 @@ const BINDINGS = {
   // murmuration owns its sky + trails (it fades toward the dusk gradient,
   // not toward black), so the shared repaint must not touch the canvas
   murmuration: { render: (c, a, w, h, now) => murmuration.render(c, a, w, h, now), fade: "rgba(0, 0, 0, 0)" },
+  // skyline repaints fully every frame (opaque cached bg blit)
+  skyline: { render: (c, a, w, h, now) => skyline.render(c, a, w, h, now), fade: "rgb(2, 3, 8)" },
   pixelquest: { render: (c, a, w, h, now) => pixelquest.render(c, a, w, h, now), fade: "rgb(4, 4, 8)" },
   // milkdrop blits an opaque WebGL frame over the whole canvas every frame
   milkdrop: { render: (c, a, w, h, now) => milkdrop.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },

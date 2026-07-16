@@ -176,6 +176,16 @@ export const REGISTRY = [
     auto: null,
   },
   {
+    id: "skyline",
+    name: "City Skyline",
+    category: "scenes",
+    stable: false, // batched-rect city — needs a perf pass on the Pi
+    presets: ["Midnight Amber", "Cyberpunk Neon", "Blackout Storm", "Dawn"],
+    idle: true, // the sleeping city: night owls + stars before any audio
+    // frequency-bin display (windows ARE the meter) — exactly what linear is for
+    auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
+  },
+  {
     id: "murmuration",
     name: "Murmuration",
     category: "scenes",

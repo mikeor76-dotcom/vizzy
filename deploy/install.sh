@@ -55,7 +55,8 @@ printf '{\n  "status": "current",\n  "currentVersion": %s\n}\n' \
   "$("$BUN" -e 'console.log(JSON.stringify(require("'"$REPO_DIR"'/version.json").version))' 2>/dev/null || echo '"1.0.0"')" \
   > "$VIZZY_ROOT/state/update-status.json"
 
-# env file (edit VIZZY_UPDATE_MANIFEST_URL to enable auto-update)
+# env file (edit VIZZY_UPDATE_MANIFEST_URL to change the update source)
+MANIFEST_DEFAULT="https://github.com/mikeor76-dotcom/vizzy/releases/latest/download/manifest.json"
 if [[ ! -f "$VIZZY_ROOT/state/vizzy.env" ]]; then
   cat > "$VIZZY_ROOT/state/vizzy.env" <<EOF
 # Vizzy appliance configuration (read by every systemd unit)
@@ -63,10 +64,22 @@ VIZZY_ROOT=$VIZZY_ROOT
 VIZZY_APP_PORT=$VIZZY_APP_PORT
 VIZZY_HEALTH_URL=http://localhost:$VIZZY_APP_PORT/health
 VIZZY_AUTO_UPDATE=true
-# Set this to your published manifest to enable background updates:
-VIZZY_UPDATE_MANIFEST_URL=
+# Where updates come from. GitHub's /latest/ redirect only ever serves a
+# PUBLISHED, non-draft, non-prerelease release. Blank = auto-update disabled.
+VIZZY_UPDATE_MANIFEST_URL=$MANIFEST_DEFAULT
 EOF
+else
+  # existing installs: add the manifest URL if the var is missing or empty
+  if ! grep -q '^VIZZY_UPDATE_MANIFEST_URL=..*' "$VIZZY_ROOT/state/vizzy.env"; then
+    sed -i '/^VIZZY_UPDATE_MANIFEST_URL=/d' "$VIZZY_ROOT/state/vizzy.env"
+    printf '\n# Where updates come from (GitHub latest published release):\nVIZZY_UPDATE_MANIFEST_URL=%s\n' "$MANIFEST_DEFAULT" >> "$VIZZY_ROOT/state/vizzy.env"
+    echo "==> Enabled GitHub Releases auto-update in vizzy.env"
+  fi
 fi
+
+# admin CLI: sudo vizzy-update status|check|cancel-pending|rollback|clear-bad|logs
+install -m 755 "$REPO_DIR/deploy/vizzy-update" /usr/local/bin/vizzy-update
+echo "==> Installed /usr/local/bin/vizzy-update"
 
 chown -R "$VIZZY_USER":"$VIZZY_USER" "$VIZZY_ROOT"
 

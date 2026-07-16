@@ -17,7 +17,7 @@
 // replaced once a new update is being applied, never deleted speculatively.
 import {
   paths, log, acquireLock, releaseLock, readStatus, writeStatus, moveDir, rmrf,
-  isDir, validateApp, dirVersion, writeJSONAtomic, doRollback, pruneFailed,
+  isDir, validateApp, dirVersion, writeJSONAtomic, doRollback, pruneFailed, badVersions,
 } from "./lib.mjs";
 
 function apply() {
@@ -47,6 +47,13 @@ function apply() {
       log("ERROR", `staged next/ is invalid — discarding: ${val.problems.join("; ")}`);
       rmrf(paths.next);
       writeStatus({ status: "stage_discarded", error: val.problems.join("; ") });
+      return 0;
+    }
+    if (badVersions().includes(val.version)) {
+      // staged before it was quarantined (or a stale stage) — never activate it
+      log("WARN", `staged v${val.version} is quarantined — discarding, keeping current`);
+      rmrf(paths.next);
+      writeStatus({ status: "stage_discarded", error: `v${val.version} is quarantined` });
       return 0;
     }
     log("INFO", `applying staged v${val.version}`);

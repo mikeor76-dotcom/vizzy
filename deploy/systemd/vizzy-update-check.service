@@ -4,7 +4,9 @@
 [Unit]
 Description=Vizzy — background update check and stage
 Wants=network-online.target
-After=network-online.target
+# never delay or compete with the visualizer's startup: check only after the
+# app is up (the timer's OnBootSec provides further margin)
+After=network-online.target vizzy.service
 
 [Service]
 Type=oneshot

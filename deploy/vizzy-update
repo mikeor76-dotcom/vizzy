@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# vizzy-update — appliance update administration.
+#   vizzy-update status           active / previous / pending / quarantined versions
+#   vizzy-update check            check GitHub and stage a newer release now
+#   vizzy-update stage            force-stage whatever the manifest points at
+#   vizzy-update cancel-pending   remove a staged (pending) update
+#   vizzy-update rollback         switch back to the previous good release + restart
+#   vizzy-update clear-bad <ver>  remove a version from quarantine
+#   vizzy-update logs             updater log + recent service journal
+# Installed to /usr/local/bin by deploy/install.sh.
+set -Eeuo pipefail
+
+VIZZY_ROOT="${VIZZY_ROOT:-/opt/vizzy}"
+ENV_FILE="$VIZZY_ROOT/state/vizzy.env"
+APP="$VIZZY_ROOT/current"
+[[ -f "$ENV_FILE" ]] && set -a && source "$ENV_FILE" && set +a
+export VIZZY_ROOT
+
+[[ -d "$APP" ]] || { echo "!! no installation at $APP"; exit 1; }
+BUN="$(command -v bun || true)"
+[[ -n "$BUN" ]] || { echo "!! bun not found on PATH"; exit 1; }
+
+cmd="${1:-status}"; shift || true
+case "$cmd" in
+  status)         exec "$BUN" "$APP/scripts/updater/status.mjs" ;;
+  check)          exec "$BUN" "$APP/scripts/updater/check.mjs" ;;
+  stage)          exec "$BUN" "$APP/scripts/updater/stage.mjs" ;;
+  cancel-pending) exec "$BUN" "$APP/scripts/updater/cancel.mjs" ;;
+  clear-bad)      exec "$BUN" "$APP/scripts/updater/clear-bad.mjs" "$@" ;;
+  rollback)
+    "$BUN" "$APP/scripts/updater/rollback.mjs"
+    command -v systemctl >/dev/null && systemctl restart vizzy.service && echo "vizzy.service restarted"
+    ;;
+  logs)
+    echo "== updater log ($VIZZY_ROOT/logs/updater.log) =="
+    tail -n 40 "$VIZZY_ROOT/logs/updater.log" 2>/dev/null || echo "(no updater log yet)"
+    if command -v journalctl >/dev/null; then
+      echo; echo "== vizzy.service (last 20) ==";              journalctl -u vizzy.service -n 20 --no-pager -o cat || true
+      echo; echo "== vizzy-update-check.service (last 20) =="; journalctl -u vizzy-update-check.service -n 20 --no-pager -o cat || true
+      echo; echo "== vizzy-apply-update.service (last 10) =="; journalctl -u vizzy-apply-update.service -n 10 --no-pager -o cat || true
+    fi
+    ;;
+  *)
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+    ;;
+esac

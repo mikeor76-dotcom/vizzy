@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // update:status — print a one-shot snapshot of the updater state (versions in
 // each slot, config, and the last status record). Safe to run anytime.
-import { cfg, paths, readStatus, readJSON, isDir, dirVersion, UPDATER_VERSION } from "./lib.mjs";
+import { cfg, paths, readStatus, readJSON, isDir, dirVersion, UPDATER_VERSION, badVersions, freeMB } from "./lib.mjs";
 
 const snapshot = {
   updaterVersion: UPDATER_VERSION,
@@ -15,6 +15,8 @@ const snapshot = {
     staged_next: isDir(paths.next) ? dirVersion(paths.next) : null,
   },
   appliedVersion: readJSON(paths.versionFile)?.version || null,
+  quarantined: badVersions(),
+  freeDiskMB: freeMB(),
   status: readStatus(),
 };
 

@@ -6,8 +6,9 @@ import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import {
   cfg, paths, log, acquireLock, releaseLock, fetchManifest, download, sha256File,
-  extract, installAndBuild, validateApp, writeStatus, readStatus, moveDir, rmrf,
+  extract, installAndBuild, validateApp, writeStatus, moveDir, rmrf,
   isDir, dirVersion, isNewer, currentVersion, cmpVer, UPDATER_VERSION,
+  badVersions, requireDiskSpace, smokeTestStaged,
 } from "./lib.mjs";
 
 // Stage `manifest`'s release. `gate` = only stage if strictly newer than current.
@@ -17,14 +18,19 @@ export async function stage(manifest, { gate = false } = {}) {
     throw new Error(`updater ${UPDATER_VERSION} is older than required minUpdaterVersion ${manifest.minUpdaterVersion}`);
 
   const local = currentVersion();
-  const st = readStatus();
-  if (manifest.version === st.failedVersion) { log("WARN", `skip: v${manifest.version} previously failed health check`); return { staged: false, reason: "known_bad" }; }
+  if (badVersions().includes(manifest.version)) {
+    log("WARN", `skip: v${manifest.version} is quarantined (failed before). Clear with: update:clear-bad ${manifest.version}`);
+    writeStatus({ status: "skipped_bad", remoteVersion: manifest.version });
+    return { staged: false, reason: "known_bad" };
+  }
   if (gate && !isNewer(manifest.version, local)) {
     log("INFO", `up to date: remote v${manifest.version} not newer than local v${local}`);
     writeStatus({ status: "up_to_date", localVersion: local, remoteVersion: manifest.version });
     return { staged: false, reason: "up_to_date" };
   }
   if (isDir(paths.next) && dirVersion(paths.next) === manifest.version) { log("INFO", `v${manifest.version} already staged`); return { staged: true, version: manifest.version, alreadyStaged: true }; }
+
+  requireDiskSpace(); // refuse to fill the Pi's SD card with a doomed download
 
   writeStatus({ status: "downloading", remoteVersion: manifest.version });
   rmrf(paths.work); mkdirSync(paths.work, { recursive: true });
@@ -54,6 +60,21 @@ export async function stage(manifest, { gate = false } = {}) {
     rmrf(paths.work);
     writeStatus({ status: "stage_failed", error: val.problems.join("; ") });
     throw new Error(`staged release invalid: ${val.problems.join("; ")}`);
+  }
+  if (val.version !== manifest.version) {
+    rmrf(paths.work);
+    writeStatus({ status: "stage_failed", error: `version mismatch: archive says v${val.version}, manifest says v${manifest.version}` });
+    throw new Error(`version mismatch: archive v${val.version} != manifest v${manifest.version}`);
+  }
+
+  // REAL smoke test: boot the staged release's server on a localhost side port
+  // and require /health before it can ever become pending
+  try {
+    await smokeTestStaged(extractDir);
+  } catch (e) {
+    rmrf(paths.work);
+    writeStatus({ status: "stage_failed", error: `smoke test: ${e.message}` });
+    throw new Error(`staged smoke test failed: ${e.message}`);
   }
 
   moveDir(extractDir, paths.next); // atomic-ish: swap the validated build into next/

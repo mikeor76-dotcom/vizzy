@@ -28,6 +28,11 @@ export const cfg = {
   healthUrl: process.env.VIZZY_HEALTH_URL || `http://localhost:${PORT}/health`,
   healthTimeoutMs: Number(process.env.VIZZY_HEALTH_TIMEOUT_MS || 40000),
   autoUpdate: String(process.env.VIZZY_AUTO_UPDATE ?? "true").toLowerCase() !== "false",
+  // staged smoke test: boot the staged release on a localhost-only side port
+  stagePort: Number(process.env.VIZZY_STAGE_PORT || 3777),
+  stageSmokeTimeoutMs: Number(process.env.VIZZY_STAGE_SMOKE_TIMEOUT_MS || 25000),
+  // refuse to download/stage with less free space than this (MB)
+  minFreeMB: Number(process.env.VIZZY_MIN_FREE_MB || 300),
 };
 
 export const paths = {
@@ -106,6 +111,28 @@ export function dirVersion(dir) {
 }
 export function currentVersion() { return dirVersion(paths.current) || readJSON(paths.versionFile)?.version || "0.0.0"; }
 
+// ---- bad-version quarantine ----------------------------------------------
+// A version that failed after activation is quarantined and never re-staged
+// until an admin clears it (update:clear-bad) or a DIFFERENT version ships.
+export function badVersions() {
+  const st = readStatus();
+  const list = Array.isArray(st.badVersions) ? st.badVersions : [];
+  // migrate the old single-field form
+  if (st.failedVersion && !list.includes(st.failedVersion)) list.push(st.failedVersion);
+  return list;
+}
+export function markBad(version) {
+  if (!version) return;
+  const list = badVersions();
+  if (!list.includes(version)) list.push(version);
+  writeStatus({ badVersions: list });
+}
+export function clearBad(version) {
+  const list = badVersions().filter((v) => v !== version);
+  writeStatus({ badVersions: list, failedVersion: undefined });
+  return list;
+}
+
 // ---- filesystem (atomic-ish) -------------------------------------------
 export const exists = (p) => existsSync(p);
 export function isDir(p) { try { return statSync(p).isDirectory(); } catch { return false; } }
@@ -125,6 +152,76 @@ export function which(cmd) { const r = spawnSync("sh", ["-c", `command -v ${cmd}
 
 // ---- checksum -----------------------------------------------------------
 export function sha256File(file) { return createHash("sha256").update(readFileSync(file)).digest("hex"); }
+
+// ---- disk space guard ----------------------------------------------------
+// Free MB on the filesystem holding `dir` (POSIX df; -1 if unknown — callers
+// treat unknown as "don't block", availability beats a wrong refusal).
+export function freeMB(dir = cfg.root) {
+  try {
+    const r = spawnSync("df", ["-Pk", dir], { encoding: "utf8" });
+    if (r.status !== 0) return -1;
+    const cols = r.stdout.trim().split("\n").pop().trim().split(/\s+/);
+    return Math.floor(Number(cols[3]) / 1024); // "Available" KB -> MB
+  } catch { return -1; }
+}
+export function requireDiskSpace(minMB = cfg.minFreeMB) {
+  const free = freeMB();
+  if (free >= 0 && free < minMB) throw new Error(`low disk space: ${free}MB free < ${minMB}MB required`);
+  if (free >= 0) log("INFO", `disk space ok: ${free}MB free (need ${minMB}MB)`);
+  return free;
+}
+
+// ---- staged smoke test ----------------------------------------------------
+// Actually BOOT the staged release: run its own serve.mjs on a localhost-only
+// side port with VIZZY_ROOT pointed at a scratch state dir (so it can't touch
+// production state), poll /health until it answers, then shut it down. This is
+// hardware-safe — serve.mjs is a static file server; the mic/GPIO/display all
+// belong to the browser and the encoder daemon, not this process.
+export async function smokeTestStaged(dir, { port = cfg.stagePort, timeoutMs = cfg.stageSmokeTimeoutMs } = {}) {
+  const { spawn } = await import("node:child_process");
+  const runner = which("bun") || which("node");
+  if (!runner) throw new Error("smoke test needs bun or node on PATH");
+  const scratch = join(paths.work, "smoke-state");
+  rmrf(scratch); mkdirSync(scratch, { recursive: true });
+  const child = spawn(runner, [join(dir, "scripts", "serve.mjs")], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      VIZZY_APP_PORT: String(port),
+      VIZZY_APP_HOST: "127.0.0.1", // never exposed off the device
+      VIZZY_DIST: join(dir, "dist"),
+      VIZZY_ROOT: scratch,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr?.on("data", (d) => { stderr = (stderr + d).slice(-2000); });
+  const url = `http://127.0.0.1:${port}/health`;
+  const deadline = Date.now() + timeoutMs;
+  let lastErr = "no response";
+  try {
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null) throw new Error(`staged server exited early (code ${child.exitCode}) ${stderr}`);
+      try {
+        const r = await withTimeout(fetch(url, { cache: "no-store" }), 2500, "staged health");
+        if (r.ok) {
+          const body = await r.json().catch(() => ({}));
+          log("INFO", `staged smoke test passed: ${url} ok (v${body.version ?? "?"})`);
+          return true;
+        }
+        lastErr = `HTTP ${r.status}`;
+      } catch (e) { lastErr = e.message; }
+      await new Promise((r) => setTimeout(r, 700));
+    }
+    throw new Error(`staged release never became healthy on :${port} (${lastErr}) ${stderr}`);
+  } finally {
+    try { child.kill("SIGTERM"); } catch { /* already gone */ }
+    // give it a moment, then make sure
+    await new Promise((r) => setTimeout(r, 300));
+    try { child.kill("SIGKILL"); } catch { /* already gone */ }
+    rmrf(scratch);
+  }
+}
 
 // ---- network (fetch: node 18+/bun) -------------------------------------
 export async function withTimeout(promise, ms, label) {
@@ -225,6 +322,7 @@ export function doRollback(reason, badVersion) {
   const restored = dirVersion(paths.current);
   writeJSONAtomic(paths.versionFile, { version: restored, appliedAt: new Date().toISOString(), rolledBackFrom: badVersion });
   writeStatus({ status: "rolled_back", reason, restoredVersion: restored, failedVersion: badVersion, failedDir });
+  markBad(badVersion); // quarantine: never re-stage this exact version
   log("WARN", `rolled back to v${restored} (${reason}); failed v${badVersion} kept at ${failedDir}`);
   if (isDir(paths.next) && dirVersion(paths.next) === badVersion) { rmrf(paths.next); log("INFO", "discarded staged next/ (same known-bad version)"); }
   return true;

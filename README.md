@@ -196,7 +196,57 @@ blocks startup.
 
 Directory swaps are atomic renames; `backup/` is never deleted until a newer
 update takes its place; versions are compared with real semver (so `1.10.0` >
-`1.9.0`).
+`1.9.0`). Failed versions are moved aside as `failed-<version>-<time>/`
+(quarantine — pruned to the newest 3) and recorded in a **bad-version list**
+so the same release is never re-staged until an admin clears it or a newer
+version ships.
+
+### Release lifecycle
+
+```
+published on GitHub → downloaded → sha256-verified → extracted → validated
+  → SMOKE-TESTED (booted on a localhost side port, /health must answer)
+  → pending (next/)
+  → activated at the next boot (apply, once per OS boot)
+  → first-boot verified (/health within timeout)
+  → last known good (previous good kept in backup/)
+
+failure at any point before "pending"      → work/ discarded, current untouched
+activated but unhealthy / crash-looping    → automatic rollback to backup/
+                                             + version quarantined (badVersions)
+power loss mid-apply                       → next boot detects and recovers
+```
+
+Activation is **once per OS boot** by construction: `vizzy-apply-update.service`
+is a oneshot with `RemainAfterExit=yes` ordered before the app — restarting
+`vizzy.service` (or a crash-restart) during the same boot does **not** re-run
+it, so a pending release only ever activates on a full reboot.
+
+### Publishing a release (GitHub)
+
+Releases are **prebuilt in CI** — the Pi never builds, lints or runs npm; it
+downloads a finished artifact, verifies its checksum, smoke-tests it, and
+serves it. `.github/workflows/release.yml` runs on version tags:
+
+```bash
+# 1. bump the version
+$EDITOR version.json                    # e.g. "1.0.1"
+git commit -am "v1.0.1"
+# 2. tag + push — CI builds, tests, packages, publishes the GitHub Release
+git tag v1.0.1 && git push && git push --tags
+```
+
+The workflow refuses a tag that doesn't match `version.json`, runs the updater
+test suite as a release gate, then uploads `vizzy-<v>.zip` + `manifest.json`
+(with sha256) as release assets. Devices poll
+`https://github.com/<repo>/releases/latest/download/manifest.json` — GitHub's
+`latest` only ever points at a **published, non-draft, non-prerelease**
+release, and release assets are immutable, which is the eligibility contract.
+(Drafts and prereleases are therefore ignored by construction.)
+
+For a private repo, set a token in `vizzy.env` and add an
+`Authorization: Bearer` header in `scripts/updater/lib.mjs` `fetchManifest`/
+`download` — the env file is root-owned and never logged.
 
 ### Configuration (env, read from `/opt/vizzy/state/vizzy.env`)
 
@@ -205,8 +255,12 @@ update takes its place; versions are compared with real semver (so `1.10.0` >
 | `VIZZY_ROOT` | `/opt/vizzy` | Root of the layout above |
 | `VIZZY_APP_PORT` | `3000` | Port the app server listens on |
 | `VIZZY_HEALTH_URL` | `http://localhost:3000/health` | Smoke-test endpoint |
-| `VIZZY_UPDATE_MANIFEST_URL` | *(unset)* | Remote manifest to check; unset = updates disabled |
+| `VIZZY_UPDATE_MANIFEST_URL` | GitHub `latest` manifest | Update source; blank = auto-update disabled (app unaffected) |
 | `VIZZY_AUTO_UPDATE` | `true` | Set `false` to disable background checks |
+| `VIZZY_STAGE_PORT` | `3777` | Localhost-only port for the staged smoke test |
+| `VIZZY_STAGE_SMOKE_TIMEOUT_MS` | `25000` | How long a staged release has to become healthy |
+| `VIZZY_MIN_FREE_MB` | `300` | Refuse to download/stage below this much free disk |
+| `VIZZY_HEALTH_TIMEOUT_MS` | `40000` | First-boot verification window before rollback |
 
 ### Install on the Pi (once)
 
@@ -234,7 +288,27 @@ bun run update:apply   # apply staged next/ (run before launch; recovers a faile
 bun run update:confirm # smoke-test the running version; rolls back if unhealthy
 bun run update:rollback# manually restore backup/ as current/
 bun run update:status  # print versions in each slot + last status (JSON)
+bun run update:cancel  # remove a pending (staged) update
+bun run update:clear-bad <v>  # readmit a quarantined version
+bun run test:updater   # the end-to-end updater suite (also the CI release gate)
 ```
+
+### Admin CLI (installed to /usr/local/bin by install.sh)
+
+```bash
+sudo vizzy-update status           # active / previous / pending / quarantined
+sudo vizzy-update check            # check GitHub + stage a newer release now
+sudo vizzy-update cancel-pending   # drop the staged update
+sudo vizzy-update rollback         # back to the previous good release + restart
+sudo vizzy-update clear-bad 1.2.3  # readmit a quarantined version
+sudo vizzy-update logs             # updater log + recent service journals
+```
+
+**Recovery if both new and previous fail:** the crash-loop backstop keeps
+rolling back to `backup/`; if that is also broken, reinstall from the repo —
+`cd ~/vizzy && git pull && sudo bash deploy/install.sh` rebuilds `current/`
+from source without touching `state/`. **Disable updates without touching the
+app:** set `VIZZY_AUTO_UPDATE=false` in `vizzy.env`.
 
 ### systemd units (samples in `deploy/systemd/`, installed by `deploy/install.sh`)
 

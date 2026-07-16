@@ -162,7 +162,9 @@ export const REGISTRY = [
     stable: true,
     presets: ["Chrome Cyan", "Magma", "Violet", "Mercury"],
     idle: true, // the mass breathes softly before any audio
-    auto: { model: "agc", target: 0.62 },
+    // self-governing: normalizes every spectral band against its own slow
+    // peak, so it re-ranges to any music by itself
+    auto: null,
   },
   {
     id: "pixelquest",

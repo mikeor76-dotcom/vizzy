@@ -72,13 +72,21 @@ function hat(out, at, gain = 1, open = false) {
   }
 }
 
+// RELEASE MATTERS, and not cosmetically. A voice that simply stops mid-decay
+// leaves a step discontinuity in the waveform — a CLICK, broadband, which no
+// real instrument makes. Measured: without this, every note in
+// solo-piano-melody produced a phantom second onset ~40ms after it ended, and
+// the note tracker was blamed for what the song bank was doing to it. `rel`
+// fades the last 30ms to zero.
+const rel = (t, dur) => Math.min(1, Math.max(0, (dur - t) / 0.03));
+
 // bass: saw-ish (harmonic stack) — the thing chroma must fold to a pitch class
 function bass(out, at, midi, dur, gain = 1) {
   const f = mtof(midi);
   const n = Math.round(dur * SR);
   for (let i = 0; i < n && at + i < out.length; i++) {
     const t = i / SR;
-    const env = Math.min(1, t * 90) * Math.exp(-t * 2.2);
+    const env = Math.min(1, t * 90) * Math.exp(-t * 2.2) * rel(t, dur);
     let s = 0;
     for (let h = 1; h <= 8; h++) s += Math.sin(2 * Math.PI * f * h * t) / h;
     out[at + i] += s * env * 0.22 * gain;
@@ -107,7 +115,7 @@ function tone(out, at, midi, dur, gain = 1, bright = 1) {
   const n = Math.round(dur * SR);
   for (let i = 0; i < n && at + i < out.length; i++) {
     const t = i / SR;
-    const env = Math.min(1, t * 200) * Math.exp(-t * 3.4);
+    const env = Math.min(1, t * 200) * Math.exp(-t * 3.4) * rel(t, dur);
     let s = 0;
     for (let h = 1; h <= 6; h++) s += Math.sin(2 * Math.PI * f * h * t) * (1 / (h * h)) * (h === 1 ? 1 : bright);
     out[at + i] += s * env * 0.34 * gain;
@@ -115,31 +123,59 @@ function tone(out, at, midi, dur, gain = 1, bright = 1) {
 }
 
 // ---------------------------------------------------------------- chords
+//
+// REAL VOICINGS, and this is not pedantry — it decides whether the song is
+// actually IN the key it claims. The first version took arbitrary slices of a
+// note array, which dropped the root out of the audible register and doubled
+// the third: "G major" rendered as B2-D3-G3-B3 — two B's and no G underneath —
+// and its pitch histogram came out B:1.00 D:0.92 F#:0.71 G:0.61. That is a B
+// minor triad, and the key detector said so, correctly, while being marked
+// wrong. Root position, root doubled at the octave, everything inside C3-C5
+// where the analyser can resolve semitones.
+//   root = the bass note (its harmonics reinforce the root in the chroma band)
+//   pad  = the sounding voicing
 const CH = {
-  Em: [40, 47, 52, 55, 59], C: [36, 43, 48, 52, 55], G: [43, 47, 50, 55, 59],
-  D: [38, 45, 50, 54, 57], Am: [45, 52, 57, 60, 64], F: [41, 48, 53, 57, 60],
-  Cm: [36, 43, 48, 51, 55], Ab: [44, 51, 56, 60, 63], Eb: [39, 46, 51, 55, 58],
-  Bb: [46, 50, 53, 58, 62], Dm: [38, 45, 50, 53, 57], A7: [45, 49, 52, 55, 57],
-  Gm: [43, 50, 55, 58, 62], Bbmaj: [46, 53, 58, 62, 65],
+  Em: { root: 40, pad: [52, 55, 59, 64] }, //  E3 G3 B3 E4
+  C: { root: 36, pad: [48, 52, 55, 60] }, //  C3 E3 G3 C4
+  G: { root: 43, pad: [55, 59, 62, 67] }, //  G3 B3 D4 G4
+  D: { root: 38, pad: [50, 54, 57, 62] }, //  D3 F#3 A3 D4
+  Am: { root: 45, pad: [57, 60, 64, 69] },
+  F: { root: 41, pad: [53, 57, 60, 65] },
+  Cm: { root: 36, pad: [48, 51, 55, 60] },
+  Ab: { root: 44, pad: [56, 60, 63, 68] },
+  Eb: { root: 39, pad: [51, 55, 58, 63] },
+  Bb: { root: 46, pad: [58, 62, 65, 70] },
+  Dm: { root: 38, pad: [50, 53, 57, 62] },
+  A7: { root: 45, pad: [57, 61, 64, 67] }, //  A C# E G
+  Gm: { root: 43, pad: [55, 58, 62, 67] },
+  Bbmaj: { root: 46, pad: [58, 62, 65, 70] },
+  B: { root: 47, pad: [59, 63, 66, 71] }, //  B3 D#4 F#4 B4 — the V of E minor
 };
-const ROOT_PC = { Em: 4, C: 0, G: 7, D: 2, Am: 9, F: 5, Cm: 0, Ab: 8, Eb: 3, Bb: 10, Dm: 2, A7: 9, Gm: 7, Bbmaj: 10 };
+const ROOT_PC = { Em: 4, C: 0, G: 7, D: 2, Am: 9, F: 5, Cm: 0, Ab: 8, Eb: 3, Bb: 10, Dm: 2, A7: 9, Gm: 7, Bbmaj: 10, B: 11 };
 
 // ---------------------------------------------------------------- songs
 // Each returns { duration, bpm, key, mode, chords[], notes[], keyChanges[], build }
 
 export const SONGS = {
-  // full band, driving, clear key centre
+  // full band, driving, UNAMBIGUOUS key centre.
+  // The progression ends on B (the V of E minor) resolving back to Em: B major
+  // carries D#, E minor's leading tone, and that one note is the whole
+  // difference between E minor and its relative G major. The first version was
+  // Em-C-G-D — pure Aeolian, which shares all seven notes with G major and has
+  // no leading tone at all. The detector called it G major and was arguably
+  // RIGHT; a musician would have shrugged too. Ground truth has to actually be
+  // true before it can judge anything.
   "rock-e-minor": () => {
     const bpm = 120, beat = 60 / bpm, bar = beat * 4, bars = 12;
-    const prog = ["Em", "C", "G", "D"];
+    const prog = ["Em", "C", "G", "B"];
     const chords = [], notes = [], bassHits = [];
     const riff = [64, 67, 71, 67, 74, 71, 67, 64]; // E minor pentatonic
     const build = (out) => {
       for (let b = 0; b < bars; b++) {
         const t0 = b * bar, name = prog[b % 4];
         const at = (t) => Math.round(t * SR);
-        pad(out, at(t0), CH[name].slice(1, 4), bar * 0.98, 0.85);
-        for (let q = 0; q < 4; q++) bass(out, at(t0 + q * beat), CH[name][0], beat * 0.9, 1);
+        pad(out, at(t0), CH[name].pad, bar * 0.98, 0.85);
+        for (let q = 0; q < 4; q++) bass(out, at(t0 + q * beat), CH[name].root, beat * 0.9, 1);
         kick(out, at(t0)); kick(out, at(t0 + 2 * beat));
         bassHits.push(t0, t0 + 2 * beat);
         if (b > 0) { kick(out, at(t0 + 2.5 * beat), 0.7); bassHits.push(t0 + 2.5 * beat); }
@@ -154,7 +190,7 @@ export const SONGS = {
           }
         }
       }
-      for (let b = 0; b < bars; b++) chords.push({ t: +(b * bar).toFixed(3), name: prog[b % 4], pc: ROOT_PC[prog[b % 4]], notes: CH[prog[b % 4]] });
+      for (let b = 0; b < bars; b++) chords.push({ t: +(b * bar).toFixed(3), name: prog[b % 4], pc: ROOT_PC[prog[b % 4]], notes: CH[prog[b % 4]].pad });
     };
     return { duration: bars * bar, bpm, key: "E", mode: "minor", chords, notes, bassHits, keyChanges: [], build, hasBeat: true };
   },
@@ -169,11 +205,11 @@ export const SONGS = {
         const t0 = b * bar, name = prog[b % 4], at = (t) => Math.round(t * SR);
         const dropped = b >= 4; // bars 0-3 build, then the drop
         const g = dropped ? 1 : 0.45;
-        pad(out, at(t0), CH[name].slice(1, 4), bar * 0.98, 0.7 * g);
+        pad(out, at(t0), CH[name].pad, bar * 0.98, 0.7 * g);
         for (let q = 0; q < 4; q++) {
           kick(out, at(t0 + q * beat), 1.1 * (dropped ? 1 : 0.6));
           bassHits.push(t0 + q * beat);
-          bass(out, at(t0 + q * beat + beat / 2), CH[name][0], beat * 0.45, 1.1 * g); // offbeat
+          bass(out, at(t0 + q * beat + beat / 2), CH[name].root, beat * 0.45, 1.1 * g); // offbeat
         }
         if (dropped) {
           snare(out, at(t0 + beat), 0.8); snare(out, at(t0 + 3 * beat), 0.8);
@@ -181,11 +217,11 @@ export const SONGS = {
         }
         for (let e = 0; e < 8; e++) hat(out, at(t0 + e * beat / 2 + beat / 4), 0.9 * g, false);
         if (dropped) for (let e = 0; e < 4; e++) { // saw stabs
-          const m = CH[name][2] + 12;
+          const m = CH[name].pad[2];
           tone(out, at(t0 + e * beat), m, beat * 0.3, 0.5, 1.6);
           notes.push({ t: +(t0 + e * beat).toFixed(3), dur: +(beat * 0.3).toFixed(3), midi: m });
         }
-        chords.push({ t: +t0.toFixed(3), name, pc: ROOT_PC[name], notes: CH[name] });
+        chords.push({ t: +t0.toFixed(3), name, pc: ROOT_PC[name], notes: CH[name].pad });
       }
     };
     return { duration: bars * bar, bpm, key: "C", mode: "minor", chords, notes, bassHits, keyChanges: [], build, hasBeat: true };
@@ -197,15 +233,19 @@ export const SONGS = {
     const bpm = 68, beat = 60 / bpm, bar = beat * 4, bars = 8;
     const prog = ["G", "Em", "C", "D"];
     const chords = [], notes = [], bassHits = [];
-    const mel = [67, 69, 71, 74, 71, 69, 67, 62];
+    // centres on G and returns to it: the first version was G-A-B-D-B-A-G-D,
+    // which put two D's (the dominant, and the highest/loudest note) in every
+    // phrase — the rendered song's most prominent pitch was D, so "G major"
+    // was a label the audio didn't support
+    const mel = [67, 71, 74, 71, 67, 64, 62, 67];
     const build = (out) => {
       for (let b = 0; b < bars; b++) {
         const t0 = b * bar, name = prog[b % 4], at = (t) => Math.round(t * SR);
         const chorus = b >= 4; // bars 0-3 verse (quiet), 4-7 chorus (loud)
         const g = chorus ? 1 : 0.3;
-        pad(out, at(t0), CH[name].slice(1, 5), bar * 0.98, 0.9 * g);
-        bass(out, at(t0), CH[name][0], beat * 1.8, g);
-        bass(out, at(t0 + 2 * beat), CH[name][0], beat * 1.8, g);
+        pad(out, at(t0), CH[name].pad, bar * 0.98, 0.9 * g);
+        bass(out, at(t0), CH[name].root, beat * 1.8, g);
+        bass(out, at(t0 + 2 * beat), CH[name].root, beat * 1.8, g);
         kick(out, at(t0), 0.7 * g);
         snare(out, at(t0 + 2 * beat), 0.5 * g);
         bassHits.push(t0, t0 + 2 * beat);
@@ -215,7 +255,7 @@ export const SONGS = {
           tone(out, at(t0 + e * beat), m, beat * 0.8, 0.6 * g);
           notes.push({ t: +(t0 + e * beat).toFixed(3), dur: +(beat * 0.8).toFixed(3), midi: m });
         }
-        chords.push({ t: +t0.toFixed(3), name, pc: ROOT_PC[name], notes: CH[name] });
+        chords.push({ t: +t0.toFixed(3), name, pc: ROOT_PC[name], notes: CH[name].pad });
       }
     };
     return {
@@ -236,18 +276,18 @@ export const SONGS = {
         const t0 = b * bar, at = (t) => Math.round(t * SR);
         const inB = b >= 6;
         const name = inB ? Bp[b % 4] : A[b % 4];
-        pad(out, at(t0), CH[name].slice(1, 5), bar * 0.98, 0.95);
-        bass(out, at(t0), CH[name][0], beat * 1.9, 1);
-        bass(out, at(t0 + 2 * beat), CH[name][0] + 7, beat * 1.9, 0.8);
+        pad(out, at(t0), CH[name].pad, bar * 0.98, 0.95);
+        bass(out, at(t0), CH[name].root, beat * 1.9, 1);
+        bass(out, at(t0 + 2 * beat), CH[name].root + 7, beat * 1.9, 0.8);
         kick(out, at(t0), 0.6); snare(out, at(t0 + 2 * beat), 0.4);
         bassHits.push(t0, t0 + 2 * beat);
         for (let e = 0; e < 8; e++) hat(out, at(t0 + e * beat / 2), 0.35, e % 4 === 3);
         for (let e = 0; e < 3; e++) { // comping
-          const m = CH[name][2 + (e % 3)] + 12;
+          const m = CH[name].pad[1 + (e % 3)] + 12;
           tone(out, at(t0 + e * beat * 1.2), m, beat * 0.5, 0.45);
           notes.push({ t: +(t0 + e * beat * 1.2).toFixed(3), dur: +(beat * 0.5).toFixed(3), midi: m });
         }
-        chords.push({ t: +t0.toFixed(3), name, pc: ROOT_PC[name], notes: CH[name] });
+        chords.push({ t: +t0.toFixed(3), name, pc: ROOT_PC[name], notes: CH[name].pad });
       }
     };
     return {
@@ -270,6 +310,27 @@ export const SONGS = {
       for (const n of notes) tone(out, Math.round(n.t * SR), n.midi, n.dur, 1.1, 0.8);
     };
     return { duration: t + 1.5, bpm, key: "C", mode: "major", chords: [], notes, bassHits: [], keyChanges: [], build, hasBeat: false };
+  },
+
+  // percussion ONLY: the note tracker must find NOTHING here. (Highpassing a
+  // full mix does not substitute — it leaves the pad's and lead's upper
+  // partials, which are real pitches and SHOULD produce notes.)
+  "drums-only": () => {
+    const bpm = 120, beat = 60 / bpm, bar = beat * 4, bars = 8;
+    const bassHits = [];
+    const build = (out) => {
+      for (let b = 0; b < bars; b++) {
+        const t0 = b * bar, at = (t) => Math.round(t * SR);
+        kick(out, at(t0), 1); kick(out, at(t0 + 2 * beat), 1);
+        snare(out, at(t0 + beat), 0.9); snare(out, at(t0 + 3 * beat), 0.9);
+        bassHits.push(t0, t0 + beat, t0 + 2 * beat, t0 + 3 * beat);
+        for (let e = 0; e < 8; e++) hat(out, at(t0 + e * beat / 2), 0.85, e === 7);
+      }
+    };
+    return {
+      duration: bars * bar, bpm, key: null, mode: null, chords: [], notes: [],
+      bassHits, keyChanges: [], build, hasBeat: true,
+    };
   },
 
   // a quiet ROOM, not digital zero: the silence gate's actual adversary

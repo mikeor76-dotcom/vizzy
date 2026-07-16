@@ -97,6 +97,24 @@ function ensureAudioContext() {
   if (audioCtx.state === "suspended") audioCtx.resume();
 }
 
+// The hi-res analyser for pitch/harmony (src/chroma.js). The shared analyser
+// is fftSize 2048 = 23.4Hz bins, and a semitone at C3 is 7.7Hz wide — you
+// cannot tell C from C# down there. 8192 gives 5.9Hz bins. Created lazily and
+// only attached for modes that declare `needsChroma`, so the other twenty
+// modes never pay for it. smoothing 0.35: harmony needs to track chord
+// CHANGES, and 0.55 smears the boundary between them.
+let hiResAnalyser = null;
+function ensureHiRes() {
+  if (!audioCtx) return null;
+  if (!hiResAnalyser) {
+    hiResAnalyser = audioCtx.createAnalyser();
+    hiResAnalyser.fftSize = 8192;
+    hiResAnalyser.smoothingTimeConstant = 0.35;
+    if (micSource) micSource.connect(hiResAnalyser);
+  }
+  return hiResAnalyser;
+}
+
 function stopMic() {
   if (micStream) {
     micStream.getTracks().forEach((t) => t.stop());
@@ -138,6 +156,7 @@ async function startMic() {
     micStream = stream;
     micSource = audioCtx.createMediaStreamSource(stream);
     micSource.connect(analyser);
+    if (hiResAnalyser) micSource.connect(hiResAnalyser); // if chroma asked first
     micActive = true;
     micBtn.classList.add("active");
     micBtn.textContent = "Stop Mic";
@@ -613,6 +632,8 @@ function draw(now = performance.now()) {
     return;
   }
   applyAutoSens(autogain.update(analyser, now)); // the automated sensitivity hand
+  // pitch/harmony modes read `analyser.hiRes`; benches inject their own
+  if (entry.needsChroma) analyser.hiRes = ensureHiRes();
   entry.render(ctx, analyser, w, h, now);
 }
 

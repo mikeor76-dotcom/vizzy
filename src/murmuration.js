@@ -78,8 +78,12 @@ export class Murmuration {
     this.cols = 0; this.rows = 0;
 
     // audio-driven state
-    this.energy = 0; // smoothed 0..1 — drives cohesion + airspeed
+    this.energy = 0; // smoothed 0..1 — loudness vs the song's own peak
+    this.visE = 0; // CONTRAST-STRETCHED energy — what actually drives the look
+    this._eLo = 0.35; this._eHi = 0.65; // learned within-song energy range
     this.beat = 0;
+    this.turnLeft = 0; // coherent flock-turn remaining (radians) — the beat dance
+    this._turnDir = 1;
     this.treble = 0;
     this.ground = 1; // 1 = landed on the reeds, 0 = in the air
     this._loudPeak = 0.06;
@@ -147,11 +151,44 @@ export class Murmuration {
     this.energy += (loudN - this.energy) * Math.min(1, dt * 2.2);
     this.treble += (g.gate * Math.min(1, rawTreb / this._trebPeak) - this.treble) * Math.min(1, dt * 6);
 
+    // CONTRAST STRETCH — the user's actual complaint lives here. Real masters
+    // are compressed: measured on a realistic signal, `energy` sat pinned at
+    // 0.83..1.00 for the whole song, so the loose<->tight flock range moved by
+    // ~20px while the flock breathed 88..298px ON ITS OWN — the music's
+    // contribution was invisible under the autonomous motion. So learn the
+    // song's own energy range (frozen while the gate is closed) and stretch it
+    // to full scale: THIS song's quietest passage = loose, ITS loudest = tight.
+    // If a song genuinely has no dynamics, low confidence blends back toward
+    // raw energy rather than amplifying noise into fake drama.
+    if (g.open) {
+      const e = this.energy;
+      if (e < this._eLo) this._eLo = e;
+      else this._eLo += (e - this._eLo) * Math.min(1, dt * 0.02);
+      if (e > this._eHi) this._eHi = e;
+      else this._eHi += (e - this._eHi) * Math.min(1, dt * 0.02);
+    }
+    const span = this._eHi - this._eLo;
+    const stretched = span > 0.02 ? Math.max(0, Math.min(1, (this.energy - this._eLo) / span)) : 0.5;
+    const conf = Math.min(1, span / 0.12);
+    this.visE += ((stretched * conf + this.energy * (1 - conf)) * g.gate - this.visE) * Math.min(1, dt * 3);
+
     // kick from raw bass flux, volume-independent + adaptive threshold
     const fluxN = g.open ? Math.max(0, rawBass - this._prevBass) / Math.max(0.04, this._bassPeak) : 0;
     this._prevBass = rawBass;
     this._fluxAvg += (fluxN - this._fluxAvg) * Math.min(1, dt * 1.5);
-    if (g.open && fluxN > Math.max(0.05, this._fluxAvg * 2.1)) this.beat = 1;
+    if (g.open && fluxN > Math.max(0.05, this._fluxAvg * 2.1)) {
+      // A beat must DO something the eye can attribute to the kick. It used to
+      // raise the speed ceiling 22% — a cap, not a force, so nothing moved
+      // (measured: 39 beats in 20s, zero visible effect). Now every kick banks
+      // the WHOLE flock into a coherent turn, alternating direction — the
+      // murmuration dances in time. Real flocks turn as one; this is that,
+      // cued by the music.
+      if (this.beat < 0.6) { // a fresh kick, not the same one re-triggering
+        this._turnDir = -this._turnDir;
+        this.turnLeft = this._turnDir * (0.5 + Math.random() * 0.35);
+      }
+      this.beat = 1;
+    }
     // A big accent sends the HAWK through the flock — the money shot. It dives
     // THROUGH the flock's current centre on a random heading, because a
     // predator hunts the flock; flying a fixed path across the screen meant it
@@ -224,13 +261,16 @@ export class Murmuration {
     // music actually moves) stops mattering. Keep it just strong enough to
     // knit neighbours together and let containment set the size; alignment is
     // what makes them read as one flock anyway.
-    const coh = 0.15 + this.energy * 0.35;
-    const ali = 0.7 + this.energy * 1.6;
+    const coh = 0.15 + this.visE * 0.35;
+    const ali = 0.7 + this.visE * 1.6;
     const sep = 1.5;
-    const speed = (46 + this.energy * 118) * (0.6 + air * 0.4);
-    // the flock's size IS the audio response: loud balls it up, quiet lets it
-    // drift open (see the containment note at the top)
-    const wantR = FLOCK_R_LOOSE + (FLOCK_R_TIGHT - FLOCK_R_LOOSE) * this.energy;
+    const speed = (46 + this.visE * 118) * (0.6 + air * 0.4);
+    // The flock's size IS the audio response: loud balls it up, quiet lets it
+    // drift open — driven by the contrast-stretched visE (raw energy sits
+    // pinned ~0.9 on compressed masters; see analyze). On top of that, every
+    // kick INHALES the flock ~18% with a real inward force below — the throb
+    // you can attribute to the drum, same trick as Ferrofluid's body thump.
+    const wantR = (FLOCK_R_LOOSE + (FLOCK_R_TIGHT - FLOCK_R_LOOSE) * this.visE) * (1 - this.beat * 0.22);
     const R2 = R * R;
     // The hawk reaches MOST of the flock (1.3x its radius), not just the birds
     // it brushes past. Sized at 0.6-0.85x it touched a small, luck-dependent
@@ -246,8 +286,15 @@ export class Murmuration {
     // the flock by exactly as much as the extra cohesion pulled it in (203 vs
     // 192 px — a wash). Excited starlings really do pack tighter; this is the
     // knob that makes a chorus visibly ball them up.
-    const SEP2 = (R * (0.5 - this.energy * 0.2)) ** 2;
+    const SEP2 = (R * (0.5 - this.visE * 0.2)) ** 2;
     const hawkR2 = hawkR * hawkR;
+
+    // the beat dance: rotate every bird's velocity by the same small angle —
+    // the flock banks as one body, in time with the kick (scheduled in
+    // analyze; spent over ~3 frames so it reads as a swerve, not a snap)
+    const turn = this.turnLeft * Math.min(1, dt * 9) * (1 - this.ground);
+    this.turnLeft -= this.turnLeft * Math.min(1, dt * 9);
+    const ctn = Math.cos(turn), stn = Math.sin(turn);
 
     for (let i = 0; i < this.n; i++) {
       let ax = 0, ay = 0;
@@ -303,6 +350,16 @@ export class Murmuration {
         const f = ((rc - wantR) * CONTAIN_K * (1 - this.ground)) / rc;
         ax -= dxc * f; ay -= dyc * f;
       }
+      // the kick inhale: a real inward force (containment only ever pushes
+      // birds that are OUTSIDE, so shrinking wantR alone can't contract the
+      // body on a beat)
+      const inhale = this.beat * (1 - this.ground);
+      if (inhale > 0.01) {
+        // 2.0 measured: at 1.1 the contraction was ~4.5% — technically there,
+        // invisible in practice, which was the user's whole complaint
+        ax -= dxc * inhale * 2.0;
+        ay -= dyc * inhale * 2.0;
+      }
 
       // the hawk: local scatter, strongest at its centre
       let panic = 0;
@@ -328,8 +385,8 @@ export class Murmuration {
       const m = 200;
       if (x[i] < m) ax += (m - x[i]) * 7;
       if (x[i] > w - m) ax -= (x[i] - (w - m)) * 7;
-      const ceil = h * 0.2;
-      if (y[i] < ceil) ay += (ceil - y[i]) * 12;
+      const ceil = h * 0.22;
+      if (y[i] < ceil) ay += (ceil - y[i]) * 16;
       const floorY = h * 0.78;
       if (y[i] > floorY) ay -= (y[i] - floorY) * 12;
 
@@ -348,6 +405,14 @@ export class Murmuration {
       }
 
       vx[i] += ax * dt; vy[i] += ay * dt;
+      if (turn !== 0) { // the coherent beat-turn
+        const nvx = vx[i] * ctn - vy[i] * stn;
+        vy[i] = (vx[i] * stn + vy[i] * ctn) * (1 - Math.abs(turn) * 2.5);
+        vx[i] = nvx;
+        // the vy damping keeps the dance horizontal-dominant: full 2D swerves
+        // kept pointing the flock's momentum at the ceiling of a panel with
+        // only 480px of headroom (containment minY flirted with its bound)
+      }
       // wingbeat: the whole flock contracts a touch on every kick.
       // The panic term matters more than it looks: this normalizer pins every
       // bird to cruise speed, so it was ERASING the hawk's impulse within

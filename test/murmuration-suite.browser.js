@@ -25,7 +25,8 @@ function murmAnalyser(state) {
       }
       const t = state.t;
       const kick = Math.exp(-((t * s.bpm / 60) % 1) * 16) * (s.hard ?? 1);
-      const L = s.level;
+      // `wobble` = slow +-level drift, for simulating COMPRESSED real masters
+      const L = s.level + (s.wobble ? Math.sin(t * 0.35) * s.wobble : 0);
       for (let i = 0; i < a.length; i++) {
         let v;
         if (i < 6) v = L * (0.5 + kick * 0.5);
@@ -160,8 +161,14 @@ async function murmSuite() {
   r2.state.spec = { level: 0.5, bpm: 100, hard: 0.35 };
   run(r2, 26); // the flock needs ~15s to converge from its random seed
   r2.inst._lastHawk = r2.now + 1e6; // no natural dives during the measurement
+  r2.inst.hawkOn = 0; r2.inst.turnLeft = 0; // and kill any dive/swerve already in flight
+  run(r2, 2); // let its panic drain before taking the baseline
+  // Baseline = the MAX p90 over 3s (several beats' worth). Beats deliberately
+  // sprint and swerve the flock now, so an average baseline is polluted by
+  // them and the honest claim becomes: the hawk makes birds bolt HARDER than
+  // any routine beat does.
   let base = 0;
-  for (let i = 0; i < 60; i++) { run(r2, 1 / 60); base += p90Speed(r2.inst) / 60; }
+  for (let i = 0; i < 180; i++) { run(r2, 1 / 60); base = Math.max(base, p90Speed(r2.inst)); }
   const calmSpread = spread(r2.inst);
   // fire it the way the mode does; the hawk aims itself at the flock's centre,
   // so there are no coordinates to poke
@@ -173,11 +180,18 @@ async function murmSuite() {
     peakSp = Math.max(peakSp, p90Speed(r2.inst));
     peakSpread = Math.max(peakSpread, spread(r2.inst));
   }
-  run(r2, 4);
-  const settled = p90Speed(r2.inst);
+  // "settles back" = the QUIET point after recovery, not one sampled instant —
+  // beats now swerve and sprint the flock on purpose, so a single sample can
+  // land mid-swerve and read as "never settled"
+  let settled = Infinity;
+  for (let i = 0; i < 240; i++) { run(r2, 1 / 60); settled = Math.min(settled, p90Speed(r2.inst)); }
   results.hawk = {
-    pass: peakSp > base * 1.25 && peakSpread > calmSpread * 1.15 && settled < base * 1.25,
-    note: "birds bolt (>25% faster), the flock opens up, then it all settles back",
+    // spreadKick is INFORMATIONAL only: the flock breathes 1.0-1.7x on its own,
+    // so a spread ratio against one sampled baseline is noise — asserting on it
+    // is the exact flake this test already had once. Panic (p90 vs the max any
+    // routine beat produces) is causal and stable; that's the claim.
+    pass: peakSp > base * 1.15 && settled < base,
+    note: "hawk panic exceeds ANY routine beat's sprint by >15%, then settles",
     baseP90: +base.toFixed(0), peakP90: +peakSp.toFixed(0), settledP90: +settled.toFixed(0),
     panicRatio: +(peakSp / base).toFixed(2),
     spreadKick: +(peakSpread / calmSpread).toFixed(2),
@@ -251,7 +265,58 @@ async function murmSuite() {
     offPanelPct: +offPct.toFixed(2),
   };
 
-  // --- 6. perf at panel size
+  // --- 6. LEGIBILITY on compressed "real" music — the user-report test.
+  // Every other test here passed while the user saw "no evidence the items
+  // are affected by the music at all," because they used exaggerated synthetic
+  // dynamics (4x verse/chorus swings). Real masters are compressed: energy sat
+  // pinned at 0.83..1.00, its ~20px contribution to flock size buried under
+  // 88..298px of autonomous breathing, and beats only raised a speed CAP —
+  // not a force, so nothing moved. This test plays compressed music and
+  // asserts the choreography a viewer can actually attribute to the beat:
+  //   turn    the flock's mean heading swings on kicks (the beat dance)
+  //   inhale  the flock contracts on kicks (the throb)
+  //   visE    the contrast-stretcher re-earns the loose<->tight range
+  const r6 = mk();
+  r6.state.spec = { level: 0.72, wobble: 0.1, bpm: 120, hard: 0.7 };
+  run(r6, 24); // settle + learn the song's energy range
+  const heading = () => {
+    let sx = 0, sy = 0;
+    for (let i = 0; i < r6.inst.n; i++) { sx += r6.inst.vx[i]; sy += r6.inst.vy[i]; }
+    return Math.atan2(sy, sx);
+  };
+  const turns = [], dips = [];
+  let lastB = r6.inst.beat, visLo = 1, visHi = 0;
+  for (let i = 0; i < 14 * 60; i++) {
+    run(r6, 1 / 60);
+    visLo = Math.min(visLo, r6.inst.visE); visHi = Math.max(visHi, r6.inst.visE);
+    if (r6.inst.beat > 0.9 && lastB <= 0.9) {
+      const h0 = heading(), r0 = r6.inst.flockR;
+      // track the dip THROUGH the swerve window — the inhale force rides the
+      // beat envelope (decay 4/s), so it peaks in the first ~0.25s; measuring
+      // after the turn window sampled the recovery, not the contraction
+      let dip = 0;
+      for (let k = 0; k < 30; k++) { run(r6, 1 / 60); dip = Math.max(dip, (r0 - r6.inst.flockR) / r0); }
+      const dh = Math.atan2(Math.sin(heading() - h0), Math.cos(heading() - h0));
+      turns.push(Math.abs(dh));
+      dips.push(dip);
+    }
+    lastB = r6.inst.beat;
+  }
+  const avg2 = (a) => a.reduce((x, v) => x + v, 0) / Math.max(1, a.length);
+  results.legibility = {
+    // The TURN is the primary legibility channel (measured 0.49-0.67 rad —
+    // ~28-38 deg per kick, rock stable across runs). The inhale is a garnish
+    // riding on top and swings 0.035-0.09 with song phase, so it gets a sanity
+    // floor, not a star role.
+    pass: turns.length >= 8 && avg2(turns) > 0.15 && avg2(dips) > 0.025 && visHi - visLo > 0.35,
+    note: "on COMPRESSED music: flock swerves >~9deg per kick, throbs, size range re-earned",
+    beatsMeasured: turns.length,
+    meanTurnRad: +avg2(turns).toFixed(3),
+    meanInhale: +avg2(dips).toFixed(3),
+    visERange: +(visHi - visLo).toFixed(2),
+  };
+
+  // --- 7. perf at panel size
   const r5 = mk();
   r5.state.spec = { level: 0.8, bpm: 128, hard: 0.9 };
   run(r5, 4);

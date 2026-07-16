@@ -186,6 +186,16 @@ export const REGISTRY = [
     auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
+    id: "lasers",
+    name: "Laser Show",
+    category: "scenes",
+    stable: false, // additive polylines — needs a perf pass on the Pi
+    presets: ["Club RGB", "Emerald Mono", "Sunset", "UV Violet"],
+    idle: true, // the rig at rest: one faint fan through breathing haze
+    // self-governing: normalized against its own peaks behind a silence gate
+    auto: null,
+  },
+  {
     id: "murmuration",
     name: "Murmuration",
     category: "scenes",

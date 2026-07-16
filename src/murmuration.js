@@ -160,12 +160,21 @@ export class Murmuration {
     // to full scale: THIS song's quietest passage = loose, ITS loudest = tight.
     // If a song genuinely has no dynamics, low confidence blends back toward
     // raw energy rather than amplifying noise into fake drama.
-    if (g.open) {
+    // Learn only while the gate is FULLY open: as a song starts, energy is
+    // still ramping through its smoother, and snapping eLo to those ramp
+    // values records a quiet passage that never happened.
+    if (g.gate > 0.8) {
       const e = this.energy;
+      // relax at 0.05/s (~20s time constant), not 0.02: measured, the slow
+      // version took 100+ seconds to converge onto a compressed master's real
+      // range, and until then the stretcher divided by a span ~5x too wide —
+      // the rig sat dim and static for the first two minutes of every song.
+      // 20s matches the loudness peak's own decay scale: the range stays
+      // honest within a verse, and the next quiet passage re-earns it.
       if (e < this._eLo) this._eLo = e;
-      else this._eLo += (e - this._eLo) * Math.min(1, dt * 0.02);
+      else this._eLo += (e - this._eLo) * Math.min(1, dt * 0.05);
       if (e > this._eHi) this._eHi = e;
-      else this._eHi += (e - this._eHi) * Math.min(1, dt * 0.02);
+      else this._eHi += (e - this._eHi) * Math.min(1, dt * 0.05);
     }
     const span = this._eHi - this._eLo;
     const stretched = span > 0.02 ? Math.max(0, Math.min(1, (this.energy - this._eLo) / span)) : 0.5;

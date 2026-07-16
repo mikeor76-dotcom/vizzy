@@ -222,6 +222,17 @@ is a oneshot with `RemainAfterExit=yes` ordered before the app — restarting
 `vizzy.service` (or a crash-restart) during the same boot does **not** re-run
 it, so a pending release only ever activates on a full reboot.
 
+### Version identity on the splash
+
+The loading splash shows the running release in its corner —
+`v1.0.1 · cec9f2e · 2026-07-16` (semver · git commit · build date), stamped
+into the HTML at build time by `vite.config.js`. That's how you verify an
+update landed: the line changes. **Every push to main must bump
+`version.json`** (`bun run version:bump`, or `minor`/`major`) — enforced by
+the `deploy/git-hooks/pre-push` hook (install once:
+`cp deploy/git-hooks/pre-push .git/hooks/ && chmod +x .git/hooks/pre-push`;
+bypass in an emergency with `VIZZY_SKIP_VERSION_CHECK=1 git push`).
+
 ### Publishing a release (GitHub)
 
 Releases are **prebuilt in CI** — the Pi never builds, lints or runs npm; it

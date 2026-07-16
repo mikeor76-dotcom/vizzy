@@ -18,10 +18,20 @@
       }
       #splash.hide { opacity: 0; pointer-events: none; }
       #splash img { width: 100%; height: 100%; object-fit: contain; }
+      /* release identity, stamped at build (vite.config.js) — the proof an
+         update landed, visible from the first paint */
+      #splash-version {
+        position: absolute; right: 14px; bottom: 10px;
+        font: 12px ui-monospace, Menlo, monospace; color: rgba(160, 170, 190, 0.55);
+        letter-spacing: 0.04em;
+      }
     </style>
   </head>
   <body>
-    <div id="splash"><img src="/vizzy-splash.png" alt="Vizzy" /></div>
+    <div id="splash">
+      <img src="/vizzy-splash.png" alt="Vizzy" />
+      <div id="splash-version">__VIZZY_VERSION_LABEL__</div>
+    </div>
     <canvas id="canvas"></canvas>
 
     <div id="hint">

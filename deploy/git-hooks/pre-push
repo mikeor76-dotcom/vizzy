@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Vizzy pre-push guard: every push to main must bump version.json, so the
+# device's loading splash always proves whether an update landed.
+#
+#   install:  cp deploy/git-hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+#   bump:     bun run version:bump        (patch; or: minor / major)
+#   bypass:   VIZZY_SKIP_VERSION_CHECK=1 git push
+set -euo pipefail
+[[ "${VIZZY_SKIP_VERSION_CHECK:-}" == "1" ]] && exit 0
+
+remote_ref="refs/remotes/origin/main"
+git rev-parse --verify -q "$remote_ref" >/dev/null || exit 0 # no remote-tracking yet
+
+local_v=$(git show HEAD:version.json 2>/dev/null | grep -o '"version"[^,}]*' | grep -o '[0-9][0-9.]*' || echo "")
+remote_v=$(git show "$remote_ref":version.json 2>/dev/null | grep -o '"version"[^,}]*' | grep -o '[0-9][0-9.]*' || echo "")
+
+# only guard pushes that actually add commits to main
+while read -r _local_ref _local_sha remote_name _remote_sha; do
+  [[ "$remote_name" == "refs/heads/main" ]] || continue
+  if [[ -n "$local_v" && "$local_v" == "$remote_v" ]]; then
+    echo "!! version.json is still v$local_v (same as origin/main)."
+    echo "   Every push should bump it so the device splash shows the update:"
+    echo "       bun run version:bump   # then commit it with your change"
+    echo "   (bypass once: VIZZY_SKIP_VERSION_CHECK=1 git push)"
+    exit 1
+  fi
+done
+exit 0

@@ -16,6 +16,7 @@
     "update:confirm": "bun scripts/updater/confirm.mjs",
     "update:rollback": "bun scripts/updater/rollback.mjs",
     "update:status": "bun scripts/updater/status.mjs",
+    "version:bump": "bun scripts/bump-version.mjs",
     "update:cancel": "bun scripts/updater/cancel.mjs",
     "update:clear-bad": "bun scripts/updater/clear-bad.mjs",
     "test:updater": "bun test/updater.test.mjs"

@@ -62,10 +62,29 @@ export class Milkdrop {
     this._silentMs = 0; // time spent in true silence (song gap)
     this._lastCut = 0;
 
-    // resolution governor
+    // resolution governor (see _govern for why this measures what it does)
     this._scaleIdx = 1; // start at 0.8 — one governor step settles it either way
-    this._ms = 6;
+    this._frameMs = 16.7; // EMA of the REAL frame interval
+    this._submitMs = 0; // GL command submission (diagnostic only)
+    this._blitMs = 0; // drawImage cost — exposes a GPU readback if there is one
+    this._lastNow = 0;
     this._frames = 0;
+    this._sinceChange = 0;
+  }
+
+  // What the governor is actually seeing. `milkdrop.status()` in the console,
+  // or ?mdebug=1 for an on-screen version on the appliance.
+  status() {
+    return {
+      fps: +(1000 / this._frameMs).toFixed(1),
+      frameMs: +this._frameMs.toFixed(2),
+      submitMs: +this._submitMs.toFixed(2),
+      blitMs: +this._blitMs.toFixed(2),
+      scale: SCALES[this._scaleIdx],
+      internal: `${this.canvas.width}x${this.canvas.height}`,
+      preset: this._name,
+      blending: this._blendSec,
+    };
   }
 
   _ensure(analyser) {
@@ -107,7 +126,11 @@ export class Milkdrop {
   _load(blendSec, now) {
     this._idx = (this._idx + 1) % this._names.length;
     this._name = this._names[this._idx];
-    this.viz.loadPreset(this._presets[this._name], blendSec);
+    // A blend renders BOTH presets every frame for its whole duration — double
+    // cost, precisely when a struggling device can least afford it. Once the
+    // governor has had to drop below 65% it hard-cuts instead.
+    this._blendSec = this._scaleIdx >= 2 ? 0 : blendSec;
+    this.viz.loadPreset(this._presets[this._name], this._blendSec);
     this._nameUntil = now + 4200;
     this._lastCut = now;
   }
@@ -154,11 +177,41 @@ export class Milkdrop {
     return { drop, newSong };
   }
 
-  _govern(w, h) {
-    // EMA the WebGL render cost; step the internal resolution to hold ~60fps
-    if (++this._frames % 90 === 0) {
-      if (this._ms > 10 && this._scaleIdx < SCALES.length - 1) this._scaleIdx++;
-      else if (this._ms < 4.5 && this._scaleIdx > 0) this._scaleIdx--;
+  // THE GOVERNOR MUST MEASURE THE FRAME, NOT THE SUBMISSION.
+  //
+  // This used to time `viz.render()` with performance.now() and steer on that.
+  // WebGL is ASYNCHRONOUS: render() queues GL commands and returns long before
+  // the GPU executes them, so that timer measures command submission and
+  // nothing else. Measured on a 28x internal-resolution sweep (768x192 ->
+  // 4096x1024): submission moved 0.23ms -> 0.25ms (+9%) while real
+  // GPU-drained cost more than doubled. It is blind by construction.
+  //
+  // That's not a governor that merely fails to help — on a slow GPU it reads
+  // ~1ms, concludes there's huge headroom, and scales resolution UP to
+  // maximum, which is exactly the Pi's reported symptom. The honest signal is
+  // the wall-clock interval between frames: rAF cannot run ahead of the
+  // compositor, so GPU backpressure lands in it automatically — and it also
+  // captures the blit, the preset's cost, and everything else the frame does.
+  _govern(w, h, now) {
+    const dt = this._lastNow ? now - this._lastNow : 16.7;
+    this._lastNow = now;
+    // a tab switch, a debugger pause or a first frame is not a perf signal
+    if (dt > 0 && dt < 250) this._frameMs += (dt - this._frameMs) * 0.06;
+    this._frames++;
+    this._sinceChange++;
+    if (this._frames % 30 === 0) {
+      // Asymmetric on purpose. Drop resolution promptly when we're missing
+      // frames; raise it only after a sustained stretch of comfortable 60fps,
+      // or the two rules chase each other and the picture visibly pulses.
+      // (>21ms = below ~48fps. rAF is capped at the refresh rate, so <17.4ms
+      // means "we are actually hitting 60", not "we have headroom".)
+      if (this._frameMs > 21 && this._scaleIdx < SCALES.length - 1) {
+        this._scaleIdx++;
+        this._sinceChange = 0;
+      } else if (this._frameMs < 17.4 && this._scaleIdx > 0 && this._sinceChange > 240) {
+        this._scaleIdx--;
+        this._sinceChange = 0;
+      }
     }
     const iw = Math.max(320, Math.round(w * SCALES[this._scaleIdx]));
     const ih = Math.max(180, Math.round(h * SCALES[this._scaleIdx]));
@@ -167,6 +220,28 @@ export class Milkdrop {
       this.canvas.height = ih;
       this.viz.setRendererSize(iw, ih);
     }
+  }
+
+  // ?mdebug=1 — the numbers, on the device's own screen. The Pi is the only
+  // machine whose answer matters here and it has no console to speak of.
+  _drawDebug(ctx, w, h) {
+    const s = this.status();
+    const lines = [
+      `fps ${s.fps}  (frame ${s.frameMs}ms)`,
+      `scale ${s.scale}  internal ${s.internal}`,
+      `gl submit ${s.submitMs}ms   blit ${s.blitMs}ms`,
+      s.blitMs > 4 ? "BLIT IS EXPENSIVE -> canvas2d not GPU-backed" : "blit cheap (GPU-side)",
+      `blend ${s.blending}s`,
+    ];
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.72)";
+    ctx.fillRect(8, 8, 330, 18 * lines.length + 12);
+    ctx.font = "12px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = s.fps < 45 ? "#f88" : "#8ef";
+    lines.forEach((l, i) => ctx.fillText(l, 16, 16 + i * 18));
+    ctx.restore();
   }
 
   render(ctx, analyser, w, h, now) {
@@ -179,7 +254,7 @@ export class Milkdrop {
       }
       return;
     }
-    this._govern(w, h);
+    this._govern(w, h, now);
 
     const mode = this.cfg.preset;
     const { drop, newSong } = this._listen(analyser, now);
@@ -196,12 +271,20 @@ export class Milkdrop {
       }
     }
 
+    // These two are DIAGNOSTIC only — never steer on them (see _govern).
+    // The blit is worth timing on real hardware though: if the 2D canvas isn't
+    // GPU-backed, drawImage from a WebGL canvas forces a framebuffer readback,
+    // and a readback is a synchronous stall that DOES show up in a CPU timer.
     const t0 = performance.now();
     this.viz.render();
-    this._ms += (performance.now() - t0 - this._ms) * 0.08;
+    const t1 = performance.now();
+    this._submitMs += (t1 - t0 - this._submitMs) * 0.08;
 
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.canvas, 0, 0, w, h);
+    this._blitMs += (performance.now() - t1 - this._blitMs) * 0.08;
+
+    if (this.cfg.debug) this._drawDebug(ctx, w, h);
 
     // the classic touch: the preset's (gloriously weird) name, fading out
     if (now < this._nameUntil) {

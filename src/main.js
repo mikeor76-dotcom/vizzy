@@ -400,18 +400,20 @@ window.vizzy = {
 window.pqAdventure = pixelquest.adventure;
 
 // MilkDrop QA: milkdrop.next() hard-cuts to the next preset immediately;
-// milkdrop.status() reports health (failed flag, preset, internal res, ms)
+// milkdrop.status() reports real fps, the governor's internal scale, and the
+// GL-submit vs blit split (?mdebug=1 puts the same thing on screen — the Pi is
+// the machine whose answer matters and it has no console to speak of).
 window.milkdrop = {
   next: () => milkdrop.next(),
+  debug: (on = true) => { milkdrop.cfg.debug = on; },
   status: () => ({
     failed: milkdrop.failed,
     built: !!milkdrop.viz,
-    preset: milkdrop._name,
     presets: milkdrop._names.length,
-    internal: [milkdrop.canvas.width, milkdrop.canvas.height],
-    ms: +milkdrop._ms.toFixed(2),
+    ...milkdrop.status(),
   }),
 };
+if (new URLSearchParams(location.search).get("mdebug") === "1") milkdrop.cfg.debug = true;
 
 // Dev controls for the Pixel Quest cinematic opening:
 //   pixelQuestOpening.replay()   play it again now (ignores play-mode / seen)

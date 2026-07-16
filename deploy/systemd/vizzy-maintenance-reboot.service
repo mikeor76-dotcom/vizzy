@@ -1,0 +1,17 @@
+# Vizzy — reboot to activate a staged update (triggered by
+# vizzy-maintenance-reboot.timer, never at boot).
+#
+# Both conditions must hold or this is a silent no-op:
+#   * /opt/vizzy/next exists            — a downloaded, checksum-verified,
+#                                         smoke-tested update is pending
+#   * /opt/vizzy/state/hold-updates     — does NOT exist (operator hold:
+#                                         `sudo touch` it to park updates)
+# The boot then runs the normal safe chain: apply -> confirm -> (rollback).
+[Unit]
+Description=Vizzy — reboot to activate a pending update
+ConditionPathExists=/opt/vizzy/next
+ConditionPathExists=!/opt/vizzy/state/hold-updates
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl reboot

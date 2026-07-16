@@ -1,0 +1,19 @@
+# Vizzy — the appliance's nightly activation window. A staged update only
+# becomes active on a boot, and a headless device near the stereo is never
+# rebooted by hand — so once a night, at ~4:30am (jittered), this timer fires
+# a service that reboots ONLY IF a validated update is actually pending.
+# No update staged = no reboot = the visualizer never blinks.
+#
+# Persistent MUST stay false: catching up a "missed" run right after boot
+# would reboot a machine that just booted.
+[Unit]
+Description=Vizzy — nightly activation window (reboots only if an update is pending)
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=20min
+Persistent=false
+Unit=vizzy-maintenance-reboot.service
+
+[Install]
+WantedBy=timers.target

@@ -7,8 +7,12 @@
 # does this for you). /opt/vizzy must be writable by this user.
 [Unit]
 Description=Vizzy audio visualizer (appliance)
-Wants=network-online.target vizzy-apply-update.service
-After=network-online.target vizzy-apply-update.service
+# NO network dependency: the app serves localhost only, and waiting on
+# network-online.target stalls boot 60-120s when the wifi is down — a black
+# panel for nothing. Update checks (a separate unit) wait for the network;
+# the visualizer must start instantly with or without it.
+Wants=vizzy-apply-update.service
+After=vizzy-apply-update.service
 # crash-loop guard: if it fails to start N times, give up and roll back
 StartLimitIntervalSec=120
 StartLimitBurst=4

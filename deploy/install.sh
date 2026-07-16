@@ -89,7 +89,7 @@ for unit in "$REPO_DIR"/deploy/systemd/*.service "$REPO_DIR"/deploy/systemd/*.ti
       -e "s#/opt/vizzy#$VIZZY_ROOT#g" "$unit" > "/etc/systemd/system/$(basename "$unit")"
 done
 systemctl daemon-reload
-systemctl enable vizzy-apply-update.service vizzy.service vizzy-update-check.timer
+systemctl enable vizzy-apply-update.service vizzy.service vizzy-update-check.timer vizzy-maintenance-reboot.timer
 systemctl start vizzy.service
 
 echo "==> Done. App: http://localhost:$VIZZY_APP_PORT   health: /health"

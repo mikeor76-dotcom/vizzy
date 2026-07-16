@@ -329,7 +329,20 @@ app:** set `VIZZY_AUTO_UPDATE=false` in `vizzy.env`.
   staged update or recovers a failed one.
 - `vizzy-update-check.service` + `.timer` — background check ~2 min after boot and
   every 6 h; exits cleanly when offline.
+- `vizzy-maintenance-reboot.service` + `.timer` — the headless activation
+  window: ~4:30am (jittered), reboots ONLY if a validated update is pending
+  (`next/` exists), so staged updates activate on their own with zero human
+  interaction. No update = no reboot. Park it: `sudo touch
+  /opt/vizzy/state/hold-updates` (remove the file to resume).
 - `vizzy-rollback.service` — automatic rollback backstop for crash-loops.
+
+**Fully hands-off loop:** publish a release → within ~6h a device stages it
+(download, sha256, smoke test) while the app keeps running → at ~4:30am it
+reboots once, activates, health-checks, and rolls back automatically if the
+release is bad. **No wifi = no change:** checks skip cleanly offline, the app
+starts instantly without the network (no network dependency in
+vizzy.service), and the current version keeps running until connectivity
+returns.
 
 ### Publishing a new release
 

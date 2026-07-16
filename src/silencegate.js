@@ -52,13 +52,20 @@ export class SilenceGate {
 
     const musical = rawMidHi > this.musicalMin;
     this.musical = musical;
-    // two-speed floor: follow DOWN fast; rise briskly while the signal hovers
-    // near the floor (steady room tone, loud HVAC included — it converges and
-    // gates out in seconds); rise barely at all when well above it. Music
-    // never feeds the floor at all, or steady quiet music gets absorbed.
+    // Multi-speed floor. Music NEVER raises it — not even slowly. The original
+    // let music creep the floor at 0.008/s "because it's negligible", and it
+    // is not: measured, 16 seconds of loud music dragged the floor from 0.008
+    // to 0.036, so the quiet verse that followed (0.061) fell under the open
+    // threshold (0.064) and the mode went to sleep mid-song. Over a whole
+    // playlist it would keep climbing. The floor tracks the ROOM, so only
+    // non-musical audio may raise it; music may only ever pull it DOWN (a
+    // quieter room is always believable).
     const nearFloor = !musical && rawLoud < Math.max(0.016, this.floor * 2.5);
-    this.floor += (rawLoud - this.floor) *
-      Math.min(1, dt * (rawLoud < this.floor ? 2 : nearFloor ? 0.25 : 0.008));
+    const rise = rawLoud < this.floor ? 2 // the room got quieter: follow it down
+      : musical ? 0 // music: never
+      : nearFloor ? 0.25 // steady room tone: converge and gate out in seconds
+      : 0.008; // loud but non-musical (an HVAC surge): creep up
+    this.floor += (rawLoud - this.floor) * Math.min(1, dt * rise);
 
     this.open = musical && rawLoud > Math.max(this.openMin, this.floor * 1.6 + 0.004);
     this.gate += ((this.open ? 1 : 0) - this.gate) * Math.min(1, dt * (this.open ? 4 : 2));

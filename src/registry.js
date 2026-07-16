@@ -176,6 +176,17 @@ export const REGISTRY = [
     auto: null,
   },
   {
+    id: "murmuration",
+    name: "Murmuration",
+    category: "scenes",
+    stable: false, // ~1000-boid sim — needs a perf pass on the Pi
+    presets: ["Dusk", "Night Neon", "Dawn Silver", "Storm"],
+    idle: true, // the flock sits on the reeds until music wakes it
+    // self-governing: normalizes against its own slow peaks behind a silence
+    // gate, so it re-ranges to any music by itself
+    auto: null,
+  },
+  {
     id: "pixelquest",
     name: "Pixel Quest",
     category: "scenes",

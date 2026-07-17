@@ -155,6 +155,16 @@ export class Chroma {
   update(analyser, dt) {
     if (!analyser) return this;
     const sr = analyser.sampleRate ?? 48000;
+    // Adapt to whatever analyser we're actually handed. If the hi-res node is
+    // missing (a mode forgot `needsChroma`, or an old build), this would
+    // otherwise ask a 1024-bin analyser to fill a 4096-bin array: no throw,
+    // just three quarters of the spectrum silently stale. Degraded pitch
+    // resolution is survivable; reading garbage is not.
+    const nBins = analyser.frequencyBinCount;
+    if (nBins && nBins * 2 !== this.fftSize) {
+      this.fftSize = nBins * 2;
+      this._ready = false;
+    }
     if (!this._ready || this._sr !== sr) this._prepare(sr);
     const bins = this.fftSize >> 1;
     if (this._freq.length !== bins) this._prepare(sr);

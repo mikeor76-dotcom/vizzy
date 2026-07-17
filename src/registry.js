@@ -101,6 +101,20 @@ export const REGISTRY = [
     auto: { model: "linear", target: 0.8, clamp: [0.6, 5] },
   },
   {
+    id: "harmony",
+    name: "Harmony Wheel",
+    category: "meters",
+    stable: false, // needs a look on the Pi panel
+    presets: ["Spectral", "Gold Engraving", "Nebula"],
+    idle: true, // the ring rests at "listening…" before any audio
+    // self-governing: chroma.js runs its own tonality gate and normalizes the
+    // pitch-class vector per frame — AutoGain has nothing to say about harmony
+    auto: null,
+    // asks main.js for the 8192-fft analyser: the shared 2048 cannot resolve a
+    // semitone below ~C5, so a chroma built on it would be fiction
+    needsChroma: true,
+  },
+  {
     id: "waterfall",
     name: "Waterfall",
     category: "meters",

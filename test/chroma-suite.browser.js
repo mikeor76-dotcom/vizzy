@@ -134,8 +134,8 @@ async function chromaSuite() {
   {
     const { pcm, truth } = renderSong("jazz-keychange");
     const changeAt = truth.keyChanges[1].t;
-    let beforeKey = null, afterKey = null, flaps = 0, last = null;
-    const ch = run(pcm, truth.duration - 0.2, {
+    let beforeKey = null, afterKey = null, flaps = 0, last = null, lockedF = null;
+    run(pcm, truth.duration - 0.2, {
       onFrame: (c, t) => {
         const lbl = c.key ? `${c.key} ${c.keyMode}` : null;
         // count label changes in the settled stretch BEFORE the modulation:
@@ -146,16 +146,31 @@ async function chromaSuite() {
           if (lbl) last = lbl;
           beforeKey = lbl;
         }
-        if (t > changeAt + 6) afterKey = lbl;
+        if (t > changeAt) {
+          afterKey = lbl;
+          if (lbl === "F major" && lockedF === null) lockedF = t;
+        }
       },
     });
+    // MEASURE the lag; don't just check the final value. The first version
+    // asserted the label at "t > changeAt + 6" but kept overwriting it to the
+    // end of the song, so it was really asserting "eventually" — it would have
+    // passed at any lag whatsoever. The real number is ~12s, and it is the
+    // KEY_TAU window filling with the new key: a leaky histogram cannot know a
+    // key changed until it has heard enough of the new one, and shortening it
+    // breaks slow songs (a 68bpm ballad's progression is 14s long). Only the
+    // key LABEL is slow; petals, chord polygon, ribbon and tension are instant.
+    // A stale label for a few seconds beats a label that flickers — that reads
+    // as a broken instrument.
+    const lag = lockedF === null ? Infinity : lockedF - changeAt;
     results.modulation = {
-      pass: beforeKey === "D minor" && afterKey === "F major" && flaps === 0,
+      pass: beforeKey === "D minor" && afterKey === "F major" && flaps === 0 && lag < 15,
       before: beforeKey, want1: "D minor",
       after: afterKey, want2: "F major",
       flapsBeforeChange: flaps,
       changeAt: +changeAt.toFixed(1),
-      note: "finds Dm, follows the modulation to F, never flickers between",
+      lockLagSec: lag === Infinity ? "never" : +lag.toFixed(1),
+      note: "finds Dm, follows the modulation to F within ~KEY_TAU, never flickers",
     };
   }
 

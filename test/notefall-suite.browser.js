@@ -118,6 +118,36 @@ async function notefallSuite() {
     };
   }
 
+  // --- 2b. BLACK KEYS play too (user report: "I never see the black keys
+  // played") — an all-accidental melody must track and paint at its rows,
+  // permanently guarding against any white-key bias creeping into the
+  // tracker or the keyboard
+  {
+    const seq = [66, 68, 70, 73, 75, 78]; // F#4 G#4 A#4 C#5 D#5 F#5
+    const pcm = new Float32Array(Math.round((seq.length * 0.55 + 1) * SR));
+    seq.forEach((m, k) => {
+      const f = 440 * Math.pow(2, (m - 69) / 12);
+      const at = Math.round((0.3 + k * 0.55) * SR), dur = Math.round(0.45 * SR);
+      for (let i = 0; i < dur; i++) {
+        const t = i / SR;
+        const env = Math.min(1, t * 200) * Math.exp(-t * 2.0) * Math.min(1, (0.45 - t) / 0.03);
+        let s = 0;
+        for (let hN = 1; hN <= 6; hN++) s += Math.sin(2 * Math.PI * f * hN * t) / (hN * hN);
+        pcm[at + i] += s * env * 0.5;
+      }
+    });
+    const inst = run(pcm, pcm.length / SR, null);
+    const midis = inst.stats.onsets.map((o) => o.midi);
+    const found = seq.filter((m) => midis.includes(m));
+    let rowsRight = true;
+    for (const o of inst.stats.onsets) if (o.row !== inst.rowOf(o.midi)) rowsRight = false;
+    results.blackKeys = {
+      pass: found.length >= 5 && rowsRight,
+      found: `${found.length}/${seq.length}`,
+      drawnOnsets: midis, rowsRight,
+    };
+  }
+
   // --- 3. a held note's bar is as long as the note was held (60 px/s)
   {
     const HOLD = 3;

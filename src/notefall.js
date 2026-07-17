@@ -136,6 +136,12 @@ export class NoteFall {
     }
   }
 
+  // A real piano, turned on its side — the user's own words on v1.0.22 were
+  // "oh so that's a piano to the left?", which is a redesign order. White
+  // keys are L-SHAPED like the physical thing: seven fat slabs per octave at
+  // the front (the roll side), narrowing where the black keys inset into the
+  // back section. Black keys are true near-black slabs on a bright ivory
+  // plate, so a lit accidental POPS instead of hiding in the striping.
   _drawKeyboard(ctx, x, y, w, h, rowH) {
     const pal = this._pal();
     const live = new Map();
@@ -144,27 +150,90 @@ export class NoteFall {
     }
     const idle = live.size === 0;
     const breathe = idle ? 0.85 + 0.15 * Math.sin(this.t * 0.9) : 1;
-    for (let row = 0; row < NROWS; row++) {
-      const midi = MIDI_HI - row;
+    const [ir, ig2, ib] = pal.ink;
+    const backW = w * 0.6; // black keys live here; the front 40% is all white
+    const octH = rowH * 12, whiteH = octH / 7;
+    const WHITE_IDX = [0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6]; // pc -> C..B
+    const laneY = (midi) => y + (MIDI_HI - midi) * rowH;
+    const yBot = y + h;
+    // the white key's FRONT slab (clamped at the keyboard's ends)
+    const slab = (midi) => {
       const pc = ((midi % 12) + 12) % 12;
-      const ky = y + row * rowH;
-      const black = BLACK.has(pc);
-      ctx.fillStyle = black
-        ? `rgba(${pal.dim},${0.16 * breathe})`
-        : `rgba(${pal.ink},${0.13 * breathe})`;
-      ctx.fillRect(x, ky + 0.5, black ? w * 0.62 : w, rowH - 1);
-      const glow = live.get(midi);
-      if (glow) {
-        ctx.fillStyle = pal.note(midi, Math.min(1, 0.35 + glow));
-        ctx.fillRect(x, ky + 0.5, w, rowH - 1);
+      const octBottom = laneY(midi - pc) + rowH;
+      const bottom = Math.min(yBot, octBottom - WHITE_IDX[pc] * whiteH);
+      return [Math.max(y, bottom - whiteH), bottom];
+    };
+
+    // the ivory plate
+    ctx.fillStyle = `rgba(${ir},${ig2},${ib},${0.5 * breathe})`;
+    ctx.fillRect(x, y, w, h);
+
+    ctx.lineWidth = 1;
+    for (let midi = MIDI_LO; midi <= MIDI_HI; midi++) {
+      const pc = ((midi % 12) + 12) % 12;
+      if (BLACK.has(pc)) {
+        // a black key: dark slab in the back section, tiny bright front face
+        const ky = laneY(midi);
+        ctx.fillStyle = `rgba(8,9,13,${0.92 * breathe})`;
+        ctx.fillRect(x, ky + 0.5, backW, rowH - 1);
+        ctx.fillStyle = `rgba(${ir},${ig2},${ib},0.18)`;
+        ctx.fillRect(x + backW - 1.5, ky + 1, 1.5, rowH - 2);
+      } else {
+        // cut line between neighbouring white keys: across the FRONT at the
+        // slab boundary; where two whites touch in the back too (B|C, E|F),
+        // the back cut sits at the true semitone boundary
+        // cut lines strong enough to survive the semi-transparent plate —
+        // at 0.5 alpha the front section read as one continuous strip and
+        // the "seven keys per octave" cue vanished
+        const [, bottom] = slab(midi);
+        if (bottom < yBot - 1) {
+          ctx.strokeStyle = "rgba(5,6,9,0.85)";
+          ctx.beginPath();
+          ctx.moveTo(x + backW, bottom - 0.5);
+          ctx.lineTo(x + w, bottom - 0.5);
+          ctx.stroke();
+        }
+        const below = ((midi - 1) % 12 + 12) % 12;
+        if (!BLACK.has(below) && midi > MIDI_LO) {
+          const by = laneY(midi) + rowH;
+          ctx.strokeStyle = "rgba(5,6,9,0.85)";
+          ctx.beginPath();
+          ctx.moveTo(x, by - 0.5);
+          ctx.lineTo(x + backW, by - 0.5);
+          ctx.stroke();
+        }
       }
-      if (pc === 0) { // label the Cs — the eye needs anchors
-        ctx.font = "9px ui-monospace, Menlo, monospace";
-        ctx.textAlign = "right";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = `rgba(${pal.dim},0.85)`;
-        ctx.fillText(`C${Math.floor(midi / 12) - 1}`, x - 4, ky + rowH / 2);
+    }
+
+    // lit keys: whites light their whole L (front slab + back lane), blacks
+    // light their slab — colored glow on near-black reads instantly
+    for (const [midi, glow] of live) {
+      if (midi < MIDI_LO || midi > MIDI_HI) continue;
+      const pc = ((midi % 12) + 12) % 12;
+      const a = Math.min(1, 0.45 + glow);
+      ctx.fillStyle = pal.note(midi, a);
+      if (BLACK.has(pc)) {
+        ctx.fillRect(x, laneY(midi) + 0.5, backW, rowH - 1);
+      } else {
+        const [top, bottom] = slab(midi);
+        ctx.fillRect(x + backW, top + 0.5, w - backW, bottom - top - 1);
+        ctx.fillRect(x, laneY(midi) + 0.5, backW, rowH - 1);
       }
+    }
+
+    // felt rail between keyboard and roll
+    ctx.fillStyle = `rgba(${pal.dim},0.9)`;
+    ctx.fillRect(x + w + 1, y, 1.5, h);
+
+    // C labels anchor the octaves
+    ctx.font = "600 9px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = `rgba(${pal.dim},0.95)`;
+    for (let midi = MIDI_LO; midi <= MIDI_HI; midi += 1) {
+      if (((midi % 12) + 12) % 12 !== 0) continue;
+      const [top, bottom] = slab(midi);
+      ctx.fillText(`C${Math.floor(midi / 12) - 1}`, x - 4, (top + bottom) / 2);
     }
   }
 
@@ -182,8 +251,8 @@ export class NoteFall {
     // layout: C labels | keyboard | the roll, all sharing row geometry
     const top = h * 0.1, rh = h * 0.84;
     const rowH = rh / NROWS;
-    const kbX = w * 0.024, kbW = w * 0.034;
-    const rollX = kbX + kbW + 2, rollW = Math.round(w - rollX - w * 0.012);
+    const kbX = w * 0.024, kbW = w * 0.052; // wide enough to read as a PIANO
+    const rollX = kbX + kbW + 4, rollW = Math.round(w - rollX - w * 0.012);
 
     this._ensureRoll(rollW, rh);
     this._scrollAcc += dt * SPEED;

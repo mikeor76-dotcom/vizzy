@@ -289,19 +289,47 @@ export class HarmonicRibbon {
     this._paint(ctx, w, h, style);
     ctx.restore();
 
-    // restrained time scale: small ticks + labels, no grid
+    // axis + dashed gridlines (the reference's), time labels below
+    ctx.strokeStyle = `rgba(${style.dim},0.45)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, y);
+    ctx.lineTo(x + 0.5, y + h);
+    ctx.stroke();
+    ctx.setLineDash([2, 6]);
+    for (let i = 1; i < 3; i++) {
+      const gx = Math.round(x + (i / 3) * w) + 0.5;
+      ctx.strokeStyle = `rgba(${style.dim},0.3)`;
+      ctx.beginPath();
+      ctx.moveTo(gx, y);
+      ctx.lineTo(gx, y + h);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
     ctx.font = "10px ui-monospace, Menlo, monospace";
     ctx.textBaseline = "alphabetic";
     for (let i = 0; i <= 3; i++) {
       const gx = x + (i / 3) * w;
-      ctx.strokeStyle = `rgba(${style.dim},0.4)`;
-      ctx.beginPath();
-      ctx.moveTo(gx + 0.5, y + h);
-      ctx.lineTo(gx + 0.5, y + h + 4);
-      ctx.stroke();
       ctx.textAlign = i === 0 ? "left" : i === 3 ? "right" : "center";
       ctx.fillStyle = `rgba(${style.dim},0.8)`;
       ctx.fillText(i === 3 ? "NOW" : `-${30 - i * 10}s`, gx, y + h + 16);
+    }
+    // lane letters (the labels the 12-lane version had, back by request):
+    // the ribbon's vertical lanes ARE the circle of fifths, so the ladder
+    // reads C at the top to F at the bottom, lit by each class's current
+    // energy — you can see WHICH note the ribbon is riding
+    ctx.font = "10px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    {
+      const pad = h * 0.1;
+      const laneH = (h - pad * 2) / 11;
+      for (let slot = 0; slot < 12; slot++) {
+        const pc = FIFTHS[slot];
+        const v = this.hist[pc * RIB_COLS + (this.idx + RIB_COLS - 1) % RIB_COLS];
+        ctx.fillStyle = `rgba(${style.dim},${0.4 + Math.min(0.6, v * 0.6)})`;
+        ctx.fillText(PC_NAMES[pc], x - 7, y + pad + slot * laneH);
+      }
     }
     // the NOW marker
     ctx.strokeStyle = `rgba(${style.ink},0.22)`;

@@ -420,6 +420,24 @@ window.milkdrop = {
 };
 if (new URLSearchParams(location.search).get("mdebug") === "1") milkdrop.cfg.debug = true;
 
+// Harmony QA: harmony.status() in the console reports what the key detector
+// is actually seeing — on the Pi, with real music, in the real room. When
+// "it gets the key wrong", these numbers say WHY: gate closed (tonality too
+// low)? confidence low (ambiguous)? or a confident wrong answer (report it).
+window.harmony = {
+  status: () => ({
+    key: harmony.chroma.keyLabel() || null,
+    relative: harmony.chroma.relativeLabel() || null,
+    confidence: +harmony.chroma.keyConfidence.toFixed(2),
+    bestCandidate: harmony.chroma._best,
+    tonality: +harmony.chroma.tonality.toFixed(1),
+    gateOpen: harmony.chroma._open,
+    percussive: +harmony.chroma.percussive.toFixed(2),
+    tension: +harmony.chroma.tension.toFixed(2),
+    chroma: [...harmony.chroma.chroma].map((v) => +v.toFixed(2)),
+  }),
+};
+
 // Dev controls for the Pixel Quest cinematic opening:
 //   pixelQuestOpening.replay()   play it again now (ignores play-mode / seen)
 //   pixelQuestOpening.skip()     skip the current run

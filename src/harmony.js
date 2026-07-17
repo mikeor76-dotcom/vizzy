@@ -133,124 +133,112 @@ export class Harmony {
   _drawWheel(ctx, cx, cy, R) {
     const pal = this._pal();
     const ch = this.chroma.chroma;
-    const inner = R * 0.42;
-    const pulse = 1 + this.beat * 0.025; // the only thing loudness moves here
+    const pulse = 1 + this.beat * 0.02; // restrained: the only loudness cue
+    const angOf = (pc) => -Math.PI / 2 + (pc / 12) * TAU; // C at 12 o'clock,
+    // CHROMATIC clockwise, per the user's reference. (The fifths insight
+    // lives on in the Harmonic Ribbon's lanes; here the radar reads best
+    // against the familiar clock layout.)
 
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(pulse, pulse);
 
-    // the ring the petals stand on
-    ctx.strokeStyle = `rgba(${pal.dim},0.3)`;
+    // watch-face ring: fine minute ticks + a heavier tick at each note
+    ctx.strokeStyle = `rgba(${pal.dim},0.5)`;
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(0, 0, inner, 0, TAU);
-    ctx.stroke();
     ctx.beginPath();
     ctx.arc(0, 0, R, 0, TAU);
     ctx.stroke();
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * TAU;
+      const major = i % 5 === 0;
+      const r0 = R - (major ? 7 : 4);
+      ctx.strokeStyle = `rgba(${pal.dim},${major ? 0.55 : 0.28})`;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+      ctx.lineTo(Math.cos(a) * (R - 1), Math.sin(a) * (R - 1));
+      ctx.stroke();
+    }
+    // per-class colour arcs riding the ring, brightening with energy
+    for (let pc = 0; pc < 12; pc++) {
+      const a = angOf(pc);
+      const [r, g, b] = pal.pcRGB(pc);
+      ctx.strokeStyle = `rgba(${r},${g},${b},${0.3 + ch[pc] * 0.7})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, R + 2, a - 0.09, a + 0.09);
+      ctx.stroke();
+    }
+    // faint spokes
+    ctx.strokeStyle = `rgba(${pal.dim},0.12)`;
+    ctx.lineWidth = 1;
+    for (let pc = 0; pc < 12; pc++) {
+      const a = angOf(pc);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * (R - 8), Math.sin(a) * (R - 8));
+      ctx.stroke();
+    }
+    // note labels outside the ring
+    ctx.font = "12px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let pc = 0; pc < 12; pc++) {
+      const a = angOf(pc);
+      ctx.fillStyle = `rgba(${ch[pc] > 0.4 ? pal.ink : pal.dim},${0.5 + ch[pc] * 0.5})`;
+      ctx.fillText(PC_NAMES[pc], Math.cos(a) * (R + 17), Math.sin(a) * (R + 17));
+    }
 
-    // --- petals: length AND brightness carry the class's energy
+    // THE RADAR: vertex radius = the class's energy. Straight segments with
+    // dwell dots at the vertices, a soft glow pass under a hot core, and the
+    // faintest fill — the chord IS the shape.
+    const inner = R * 0.2;
+    const rOf = (pc) => inner + (R * 0.8 - inner) * Math.min(1, ch[pc]);
+    const px = [], py = [];
+    for (let pc = 0; pc < 12; pc++) {
+      const a = angOf(pc);
+      px.push(Math.cos(a) * rOf(pc));
+      py.push(Math.sin(a) * rOf(pc));
+    }
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    for (let slot = 0; slot < 12; slot++) {
-      const pc = FIFTHS[slot];
-      const v = ch[pc];
-      const a = (slot / 12) * TAU - Math.PI / 2;
-      const half = (TAU / 12) * 0.36;
-      const len = inner + (R - inner) * Math.max(0.02, v);
-      const col = pal.pc(pc, v);
+    const poly = () => {
       ctx.beginPath();
-      ctx.moveTo(Math.cos(a - half) * inner, Math.sin(a - half) * inner);
-      ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
-      ctx.lineTo(Math.cos(a + half) * inner, Math.sin(a + half) * inner);
+      for (let pc = 0; pc < 12; pc++) (pc ? ctx.lineTo(px[pc], py[pc]) : ctx.moveTo(px[pc], py[pc]));
       ctx.closePath();
-      ctx.fillStyle = col;
-      ctx.globalAlpha = 0.25 + v * 0.75;
+    };
+    poly();
+    ctx.fillStyle = `rgba(${pal.accent},0.05)`;
+    ctx.fill();
+    poly();
+    ctx.strokeStyle = "rgba(255,240,215,0.16)"; // wide warm glow
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    poly();
+    ctx.strokeStyle = `rgba(${pal.ink},0.85)`; // hot core
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    for (let pc = 0; pc < 12; pc++) {
+      ctx.fillStyle = `rgba(${pal.ink},${0.35 + ch[pc] * 0.6})`;
+      ctx.beginPath();
+      ctx.arc(px[pc], py[pc], 2.2, 0, TAU);
       ctx.fill();
-      ctx.globalAlpha = 1;
     }
     ctx.restore();
-
-    // --- THE CHORD POLYGON. Because the wheel is in fifths, this shape is
-    // transposition-invariant: every major triad is the same figure, rotated to
-    // its root, and compact — an arbitrary set of five pitch classes would
-    // sprawl right across the wheel. That's the whole idea: you read chords by
-    // shape, and the progression by watching it turn.
-    const active = [];
-    for (let slot = 0; slot < 12; slot++) {
-      const pc = FIFTHS[slot];
-      if (ch[pc] > 0.42) active.push({ slot, pc, v: ch[pc] });
-    }
-    if (active.length >= 2) {
-      const pts = active.map(({ slot }) => {
-        const a = (slot / 12) * TAU - Math.PI / 2;
-        return [Math.cos(a) * inner * 0.92, Math.sin(a) * inner * 0.92];
-      });
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      const mean = active.reduce((s, x) => s + x.v, 0) / active.length;
-      ctx.beginPath();
-      pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
-      ctx.closePath();
-      ctx.fillStyle = `rgba(${pal.accent},${0.05 + mean * 0.12})`;
-      ctx.fill();
-      ctx.strokeStyle = `rgba(${pal.accent},${0.14 + mean * 0.2})`; // wide soft
-      ctx.lineWidth = 6;
-      ctx.stroke();
-      ctx.strokeStyle = `rgba(${pal.ink},${0.5 + mean * 0.45})`; // bright core
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
-      for (const [px, py] of pts) { // dwell dots at the chord tones
-        ctx.fillStyle = `rgba(${pal.ink},0.9)`;
-        ctx.beginPath();
-        ctx.arc(px, py, 2.4, 0, TAU);
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    // --- the tonic marker glides around the ring instead of teleporting
-    const kp = this.chroma.keyPc;
-    if (kp >= 0 && this.chroma.keyConfidence > 0.05) {
-      const target = SLOT_OF[kp];
-      let d = target - this.homeSlot;
-      while (d > 6) d -= 12;
-      while (d < -6) d += 12;
-      this.homeSlot = (this.homeSlot + d * Math.min(1, this._dt * 2.5) + 12) % 12;
-      const a = (this.homeSlot / 12) * TAU - Math.PI / 2;
-      const conf = this.chroma.keyConfidence;
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.strokeStyle = `rgba(${pal.ink},${0.25 + conf * 0.6})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(Math.cos(a) * (R + 9), Math.sin(a) * (R + 9), 5, 0, TAU);
-      ctx.stroke();
-      ctx.restore();
-    }
     ctx.restore();
 
-    // --- hub: the key, and how sure we are. An uncertain label must LOOK
-    // uncertain — a confidently wrong key reads as a broken instrument.
+    // hub text: the key, spoken with exactly as much confidence as we have
     const conf = this.chroma.keyConfidence;
-    if (conf > 0.02) {
-      const hg = ctx.createRadialGradient(cx, cy, 0, cx, cy, inner * 0.95);
-      hg.addColorStop(0, `rgba(${pal.accent},${0.05 + conf * 0.22})`);
-      hg.addColorStop(1, `rgba(${pal.accent},0)`);
-      ctx.fillStyle = hg;
-      ctx.fillRect(cx - inner, cy - inner, inner * 2, inner * 2);
-    }
     const label = this.chroma.keyLabel();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     if (label) {
-      ctx.font = "600 21px -apple-system, 'Segoe UI', sans-serif";
-      ctx.fillStyle = `rgba(${pal.ink},${0.25 + conf * 0.7})`;
-      ctx.fillText(label, cx, cy - 6);
-      ctx.font = "9px ui-monospace, Menlo, monospace";
-      ctx.fillStyle = `rgba(${pal.dim},${0.4 + conf * 0.4})`;
-      ctx.fillText(`${Math.round(conf * 100)}% sure`, cx, cy + 14);
+      ctx.font = "600 22px -apple-system, 'Segoe UI', sans-serif";
+      ctx.fillStyle = `rgba(${pal.ink},${0.3 + conf * 0.65})`;
+      ctx.fillText(label, cx, cy - 8);
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.fillStyle = `rgba(${pal.dim},${0.5 + conf * 0.4})`;
+      ctx.fillText(`${Math.round(conf * 100)}% confidence`, cx, cy + 13);
     } else {
       ctx.font = "12px ui-monospace, Menlo, monospace";
       ctx.fillStyle = `rgba(${pal.dim},0.5)`;
@@ -277,7 +265,9 @@ export class Harmony {
   _drawGauge(ctx, x, y, w, h) {
     const pal = this._pal();
     const t = Math.min(1, this.chroma.tension * 1.25);
-    this._header(ctx, "Harmonic Tension", x, y - 14);
+    // two lines: on one line this ran straight into "TENSION OVER TIME"
+    this._header(ctx, "Harmonic", x, y - 28);
+    this._header(ctx, "Tension", x, y - 14);
 
     // frame + faint well
     ctx.fillStyle = `rgba(${pal.ink},0.04)`;
@@ -449,30 +439,30 @@ export class Harmony {
     const conf = this.chroma.keyConfidence;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    if (label) {
-      ctx.font = "600 27px -apple-system, 'Segoe UI', sans-serif";
-      ctx.fillStyle = `rgba(${pal.ink},${0.35 + conf * 0.6})`;
-      ctx.fillText(label, x, y + 76);
-      const d = this._diatonicity();
-      const word = d === null ? "" : d > 0.82 ? "Diatonic" : d > 0.62 ? "Mostly diatonic" : "Chromatic";
-      ctx.font = "13px -apple-system, 'Segoe UI', sans-serif";
-      ctx.fillStyle = `rgba(${pal.dim},0.95)`;
-      ctx.fillText(word, x, y + 98);
-    } else {
+    if (!label) {
       ctx.font = "13px ui-monospace, Menlo, monospace";
       ctx.fillStyle = `rgba(${pal.dim},0.6)`;
-      ctx.fillText("listening…", x, y + 76);
+      ctx.fillText("listening…", x, y + 40);
+      return;
     }
+    ctx.font = "600 24px -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillStyle = `rgba(${pal.ink},${0.35 + conf * 0.6})`;
+    ctx.fillText(label, x, y + 44);
 
-    // a live 12-bar chroma glyph — the mock's little mark, but real data
-    const gw2 = 4, gap = 2.5;
-    const gx0 = x + 2, gy0 = y + 150;
-    ctx.fillStyle = "rgba(255,198,112,0.75)";
-    for (let pc = 0; pc < 12; pc++) {
-      const v = this.chroma.chroma[pc];
-      const bh = 3 + v * 15;
-      ctx.fillRect(gx0 + pc * (gw2 + gap), gy0 - bh, gw2, bh);
-    }
+    // the relative: relatives share all seven notes, so when the detector
+    // "gets it wrong" it has usually landed here — showing both makes an
+    // ambiguous call read as informed rather than broken
+    const rel = this.chroma.relative();
+    this._header(ctx, rel.mode === "minor" ? "Relative Minor" : "Relative Major", x, y + 96);
+    ctx.font = "15px -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillStyle = `rgba(${pal.ink},${0.3 + conf * 0.4})`;
+    ctx.fillText(this.chroma.relativeLabel(), x, y + 118);
+
+    const d = this._diatonicity();
+    this._header(ctx, "Mode", x, y + 166);
+    ctx.font = "15px -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillStyle = `rgba(${pal.dim},0.95)`;
+    ctx.fillText(d === null ? "" : d > 0.82 ? "Diatonic" : d > 0.62 ? "Mostly diatonic" : "Chromatic", x, y + 188);
   }
 
   render(ctx, analyser, w, h, now) {
@@ -512,6 +502,7 @@ export class Harmony {
     // width — the two readouts that genuinely want to be wide get the rest.
     // A first pass centred the wheel and left the right third as dead space
     // around a thin gauge; everything now earns its width.
+    this._header(ctx, "Harmony Wheel", w * 0.51 - 46, h * 0.09);
     const ribH = h * 0.72, ribW = w * 0.34, ribX = w * 0.028, ribY = (h - ribH) / 2;
     this._header(ctx, "Harmonic History", ribX, ribY - 14);
     ctx.font = "9px ui-monospace, Menlo, monospace";
@@ -521,11 +512,11 @@ export class Harmony {
     ctx.fillText(`last ${RIB_SECONDS} seconds`, ribX + ribW, ribY - 14);
     this.ribbon.draw(ctx, { x: ribX, y: ribY, w: ribW, h: ribH },
       { id: this.cfg.preset, pcRGB: pal.pcRGB, dim: pal.dim, ink: pal.ink }, dt);
-    this._drawWheel(ctx, w * 0.545, h * 0.5, Math.min(h * 0.43, w * 0.12));
-    const gy = h * 0.2, gh = h * 0.55;
-    this._drawGauge(ctx, w * 0.672, gy, 34, gh);
-    this._drawChart(ctx, w * 0.732, gy, w * 0.16, gh);
-    this._drawKeyPanel(ctx, w * 0.918, gy, w * 0.055);
+    this._drawWheel(ctx, w * 0.51, h * 0.52, Math.min(h * 0.38, w * 0.11));
+    const gy = h * 0.22, gh = h * 0.52;
+    this._drawGauge(ctx, w * 0.675, gy, 34, gh);
+    this._drawChart(ctx, w * 0.745, gy, w * 0.15, gh);
+    this._drawKeyPanel(ctx, w * 0.922, gy, w * 0.058);
 
     this.ms += (performance.now() - t0 - this.ms) * 0.05;
   }

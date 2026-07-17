@@ -263,7 +263,14 @@ export class Chroma {
     //     smoothly, in 12 floats instead of a 900-frame ring.
     const decay = Math.exp(-dt / KEY_TAU);
     const avg = this._keyAcc;
-    for (let i = 0; i < 12; i++) avg[i] = avg[i] * decay + this._accKey[i] * dt;
+    // Percussion damping: a drum hit is broadband, so it adds energy to EVERY
+    // pitch class at once — which flattens the key histogram, shrinks the
+    // winner's margin, and drags confidence down on exactly the music people
+    // actually play (drums on everything). Frames the flatness detector calls
+    // percussive contribute far less to the KEY estimate; the display chroma
+    // is untouched, so the wheel still moves with the hit.
+    const keyW = dt * (1 - this.percussive * 0.65);
+    for (let i = 0; i < 12; i++) avg[i] = avg[i] * decay + this._accKey[i] * keyW;
     this._keyT = (this._keyT || 0) + dt;
     if (this._keyT < 2.5) return; // needs some history before it means anything
 
@@ -390,6 +397,21 @@ export class Chroma {
       this.notes.sort((a, b) => b.conf - a.conf);
       this.notes.length = 8;
     }
+  }
+
+  // The relative key (A major <-> F# minor). Relatives share all seven notes,
+  // which makes them THE classic "detector picked the wrong key" case — often
+  // the detector and the listener are both right. Displays show this next to
+  // the key so an ambiguous call reads as informed rather than wrong.
+  relative() {
+    if (this.keyPc < 0) return null;
+    return this.keyMode === "major"
+      ? { pc: (this.keyPc + 9) % 12, mode: "minor" }
+      : { pc: (this.keyPc + 3) % 12, mode: "major" };
+  }
+  relativeLabel() {
+    const r = this.relative();
+    return r ? `${PC_NAMES[r.pc]} ${r.mode}` : "";
   }
 
   // convenience for displays

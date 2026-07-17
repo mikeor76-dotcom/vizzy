@@ -50,6 +50,21 @@ function tensionWord(t) {
 const MAJ_SCALE = [0, 2, 4, 5, 7, 9, 11];
 const MIN_SCALE = [0, 2, 3, 5, 7, 8, 10];
 
+// gradients need numeric rgb, and the palettes speak hsl
+function hslToRgb(hDeg, sFrac, lFrac) {
+  const h = ((hDeg % 360) + 360) % 360 / 360;
+  const q = lFrac < 0.5 ? lFrac * (1 + sFrac) : lFrac + sFrac - lFrac * sFrac;
+  const p = 2 * lFrac - q;
+  const f = (t) => {
+    t = ((t % 1) + 1) % 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [f(h + 1 / 3), f(h), f(h - 1 / 3)].map((v) => Math.round(v * 255));
+}
+
 const RIB_SECONDS = 30;
 const RIB_HZ = 20; // ribbon columns per second
 const RIB_COLS = RIB_SECONDS * RIB_HZ;
@@ -58,17 +73,20 @@ const PALETTES = {
   Spectral: {
     // hue per pitch class — 30 degrees each, so the wheel is also a colour wheel
     pc: (pc, v) => `hsl(${pc * 30} 85% ${18 + v * 45}%)`,
+    pcRGB: (pc) => hslToRgb(pc * 30, 0.85, 0.62),
     ink: [225, 232, 248], dim: [90, 105, 140], bg: [6, 7, 14],
     accent: [120, 200, 255],
   },
   "Gold Engraving": {
     // one colour, energy only: no hue to read, so you read the SHAPE
     pc: (pc, v) => `rgb(${Math.round(30 + v * 225)},${Math.round(22 + v * 180)},${Math.round(8 + v * 70)})`,
+    pcRGB: (pc) => [255, 186 + (pc % 4) * 12, 96 + (pc % 3) * 14], // braided golds
     ink: [246, 232, 200], dim: [110, 95, 62], bg: [10, 8, 5],
     accent: [255, 205, 110],
   },
   Nebula: {
     pc: (pc, v) => `hsl(${255 + pc * 9} ${70 + v * 25}% ${16 + v * 46}%)`,
+    pcRGB: (pc) => hslToRgb(255 + pc * 9, 0.8, 0.64),
     ink: [232, 224, 255], dim: [110, 96, 150], bg: [8, 5, 16],
     accent: [200, 130, 255],
   },
@@ -115,42 +133,161 @@ export class Harmony {
     this.beat = Math.max(0, this.beat - dt * 4);
   }
 
-  _ensureRibbon(h) {
-    const rh = Math.round(h * 0.75);
-    const key = `${RIB_COLS}x${rh}|${this.cfg.preset}`;
+  _ensureRibbon(w, h) {
+    const key = `${w}x${h}|${this.cfg.preset}`;
     if (this.rib && this.ribKey === key) return;
     this.rib = document.createElement("canvas");
-    this.rib.width = RIB_COLS;
-    this.rib.height = rh;
+    this.rib.width = Math.max(2, Math.round(w));
+    this.rib.height = Math.max(2, Math.round(h));
     this.ribKey = key;
-    const c = this.rib.getContext("2d");
-    c.fillStyle = `rgb(${this._pal().bg})`;
-    c.fillRect(0, 0, RIB_COLS, rh);
+    if (!this.ribHist) {
+      this.ribHist = new Float32Array(12 * RIB_COLS); // ring, per pitch class
+      this._ribIdx = 0;
+      this._ribCount = 0;
+    }
+    this._ribDirty = true;
   }
 
-  // scroll one pixel and paint the newest chroma column at the right edge.
-  // (Redrawing 600 columns x 12 lanes every frame would be 7200 rects; this is
-  // one drawImage and twelve — the waterfall trick.)
+  // Push one 20Hz sample into the numeric history and repaint the ribbon
+  // offscreen. The old version scrolled a BITMAP one pixel per sample — cheap,
+  // but a bitmap can only ever be rectangles: the history had no geometry to
+  // bend. Flowing ribbons need numbers, so the history is a ring of floats
+  // now, and the repaint happens HERE at 20Hz (not per frame): ~36 gradient
+  // fills per repaint amortized to a third of the frames.
   _pushRibbon() {
+    for (let pc = 0; pc < 12; pc++) {
+      this.ribHist[pc * RIB_COLS + this._ribIdx] = this.chroma.chroma[pc];
+    }
+    this._ribIdx = (this._ribIdx + 1) % RIB_COLS;
+    this._ribCount++;
+    this._ribDirty = true;
+  }
+
+  _repaintRibbon() {
+    if (!this._ribDirty) return;
+    this._ribDirty = false;
     const c = this.rib.getContext("2d");
     const w = this.rib.width, h = this.rib.height;
-    c.globalCompositeOperation = "copy";
-    c.drawImage(this.rib, -1, 0);
-    c.globalCompositeOperation = "source-over";
     const pal = this._pal();
+    c.globalCompositeOperation = "source-over";
+    c.fillStyle = `rgb(${pal.bg})`;
+    c.fillRect(0, 0, w, h);
+
+    // dashed 10s gridlines, like the reference
+    c.strokeStyle = `rgba(${pal.dim},0.28)`;
+    c.lineWidth = 1;
+    c.setLineDash([2, 5]);
+    for (let i = 1; i < 3; i++) {
+      const gx = Math.round((i / 3) * w) + 0.5;
+      c.beginPath();
+      c.moveTo(gx, 0);
+      c.lineTo(gx, h);
+      c.stroke();
+    }
+    c.setLineDash([]);
+
+    // Downsample 600 samples to ~75 control points per ribbon and draw each
+    // pitch class as a flowing band: THICKNESS and BRIGHTNESS carry its
+    // energy, a gentle undulation (phase-locked to absolute sample time, so
+    // it scrolls WITH the music instead of wriggling in place) makes the
+    // braid organic, and neighbours overlap additively.
+    const SEG = 75, STEP = RIB_COLS / SEG;
     const laneH = h / 12;
+    const xs = new Float32Array(SEG);
+    const vs = new Float32Array(SEG);
+    const ys = new Float32Array(SEG);
+    const hw = new Float32Array(SEG);
+    c.globalCompositeOperation = "lighter";
     for (let slot = 0; slot < 12; slot++) {
       const pc = FIFTHS[slot];
-      const v = this.chroma.chroma[pc];
-      c.fillStyle = v > 0.04 ? pal.pc(pc, v) : `rgb(${pal.bg})`;
-      c.fillRect(w - 1, slot * laneH, 1, laneH + 0.5);
+      const base = pc * RIB_COLS;
+      const yc = (slot + 0.5) * laneH;
+      let maxV = 0;
+      for (let i = 0; i < SEG; i++) {
+        let sum = 0;
+        const s0 = Math.floor(i * STEP);
+        for (let k = 0; k < STEP; k++) sum += this.ribHist[base + (this._ribIdx + s0 + k) % RIB_COLS];
+        vs[i] = sum / STEP;
+      }
+      // 5-tap smoothing: the reference's waves are long and LAZY. Raw 20Hz
+      // control points showed every flicker of the chroma and the strands
+      // read as nervous scribble rather than flowing ribbon.
+      for (let pass = 0; pass < 2; pass++) {
+        let prev = vs[0];
+        for (let i = 1; i < SEG - 1; i++) {
+          const cur = vs[i];
+          vs[i] = (prev + cur * 2 + vs[i + 1]) / 4;
+          prev = cur;
+        }
+      }
+      for (let i = 0; i < SEG; i++) {
+        const v = vs[i];
+        if (v > maxV) maxV = v;
+        xs[i] = (i / (SEG - 1)) * w;
+        // absolute sample index -> the wave travels with the data
+        const absT = (this._ribCount - RIB_COLS + Math.floor(i * STEP)) / RIB_HZ;
+        ys[i] = yc + Math.sin(absT * 0.5 + slot * 1.31) * laneH * 0.38 * (0.25 + 0.75 * v);
+        hw[i] = laneH * (0.05 + 0.78 * v);
+      }
+      if (maxV < 0.03) continue; // a silent class stays dark, not a grey hairline
+
+      const [r, g, b] = pal.pcRGB(pc);
+      // brightness follows energy ALONG the ribbon via one x-gradient per pass
+      const grad = (aScale) => {
+        const gr = c.createLinearGradient(0, 0, w, 0);
+        for (let i = 0; i < SEG; i += 6) {
+          gr.addColorStop(i / (SEG - 1), `rgba(${r},${g},${b},${(0.1 + vs[i] * 0.85) * aScale})`);
+        }
+        gr.addColorStop(1, `rgba(${r},${g},${b},${(0.1 + vs[SEG - 1] * 0.85) * aScale})`);
+        return gr;
+      };
+      // the band: smoothed top edge out, smoothed bottom edge back (reversed)
+      c.beginPath();
+      c.moveTo(xs[0], ys[0] - hw[0]);
+      for (let i = 1; i < SEG; i++) {
+        const mx = (xs[i - 1] + xs[i]) / 2;
+        const my = ((ys[i - 1] - hw[i - 1]) + (ys[i] - hw[i])) / 2;
+        c.quadraticCurveTo(xs[i - 1], ys[i - 1] - hw[i - 1], mx, my);
+      }
+      c.lineTo(xs[SEG - 1], ys[SEG - 1] - hw[SEG - 1]);
+      c.lineTo(xs[SEG - 1], ys[SEG - 1] + hw[SEG - 1]);
+      for (let i = SEG - 2; i >= 0; i--) {
+        const mx = (xs[i + 1] + xs[i]) / 2;
+        const my = ((ys[i + 1] + hw[i + 1]) + (ys[i] + hw[i])) / 2;
+        c.quadraticCurveTo(xs[i + 1], ys[i + 1] + hw[i + 1], mx, my);
+      }
+      c.lineTo(xs[0], ys[0] + hw[0]);
+      c.closePath();
+      c.fillStyle = grad(0.6);
+      c.fill();
+
+      // hot core along the centreline + a bright top-edge highlight
+      const line = (yOff, width, aScale) => {
+        c.beginPath();
+        c.moveTo(xs[0], ys[0] + yOff(0));
+        for (let i = 1; i < SEG; i++) {
+          const mx = (xs[i - 1] + xs[i]) / 2;
+          const my = (ys[i - 1] + yOff(i - 1) + ys[i] + yOff(i)) / 2;
+          c.quadraticCurveTo(xs[i - 1], ys[i - 1] + yOff(i - 1), mx, my);
+        }
+        c.strokeStyle = grad(aScale);
+        c.lineWidth = width;
+        c.stroke();
+      };
+      line(() => 0, 2.2, 1.0); // core
+      line((i) => -hw[i] * 0.85, 1, 0.7); // glinting top edge
+      // loose echo filaments below, like the reference's trailing hairs
+      line((i) => hw[i] * 1.7, 1, 0.22);
+      line((i) => hw[i] * 2.6, 1, 0.12);
     }
+    c.globalCompositeOperation = "source-over";
   }
 
   _drawRibbon(ctx, x, y, w, h) {
     const pal = this._pal();
+    this._repaintRibbon();
     ctx.drawImage(this.rib, x, y, w, h);
-    // lane labels + the fifths ladder
+    // lane labels: the fifths ladder, lit by the class's current energy
     ctx.font = "11px ui-monospace, Menlo, monospace";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
@@ -164,12 +301,33 @@ export class Harmony {
     ctx.strokeStyle = `rgba(${pal.dim},0.25)`;
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    ctx.fillStyle = `rgba(${pal.dim},0.7)`;
+    this._header(ctx, `${RIB_SECONDS}s of harmony`, x, y - 10);
     ctx.font = "9px ui-monospace, Menlo, monospace";
-    ctx.textAlign = "left";
-    ctx.fillText(`${RIB_SECONDS}s of harmony`, x, y - 8);
     ctx.textAlign = "right";
-    ctx.fillText("now", x + w, y - 8);
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = `rgba(${pal.dim},0.7)`;
+    ctx.fillText("NOW", x + w, y - 10);
+
+    // the NOW dot: rides the strongest ribbon at the right edge, glowing
+    let bestPc = 0, bestV = 0;
+    for (let pc = 0; pc < 12; pc++) if (this.chroma.chroma[pc] > bestV) { bestV = this.chroma.chroma[pc]; bestPc = pc; }
+    if (bestV > 0.1) {
+      const slot = SLOT_OF[bestPc];
+      const absT = this._ribCount / RIB_HZ;
+      const dy = (slot + 0.5) * (h / 12) + Math.sin(absT * 0.9 + slot * 1.31) * (h / 12) * 0.34 * (0.25 + 0.75 * bestV);
+      const [r, g, b] = pal.pcRGB(bestPc);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = `rgba(${r},${g},${b},0.25)`;
+      ctx.beginPath();
+      ctx.arc(x + w, y + dy, 8 + bestV * 4, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${0.5 + bestV * 0.4})`;
+      ctx.beginPath();
+      ctx.arc(x + w, y + dy, 2.6, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   _drawWheel(ctx, cx, cy, R) {
@@ -533,7 +691,7 @@ export class Harmony {
     ctx.fillStyle = `rgb(${pal.bg})`;
     ctx.fillRect(0, 0, w, h);
 
-    this._ensureRibbon(h);
+    this._ensureRibbon(w * 0.34, h * 0.76);
     this._ribAcc += dt;
     while (this._ribAcc >= 1 / RIB_HZ) { this._ribAcc -= 1 / RIB_HZ; this._pushRibbon(); }
     this._tenAcc += dt;

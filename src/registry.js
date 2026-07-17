@@ -239,6 +239,16 @@ export const REGISTRY = [
     needsChroma: true,
   },
   {
+    id: "inkfluid",
+    name: "Ink Fluid",
+    category: "scenes",
+    stable: false, // real 2D fluid solver — needs a perf pass on the Pi
+    presets: ["Bioluminescent", "Nebula", "Sumi-e", "Lava"],
+    idle: true, // the ink fades to black over ~20s, then near-still darkness
+    // self-governing: SilenceGate + per-band peaks + contrast-stretched energy
+    auto: null,
+  },
+  {
     id: "vectorcrt",
     name: "Vector CRT",
     category: "scenes",

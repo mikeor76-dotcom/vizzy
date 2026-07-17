@@ -40,6 +40,16 @@ const FIFTHS = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
 const SLOT_OF = new Array(12);
 FIFTHS.forEach((pc, slot) => { SLOT_OF[pc] = slot; });
 
+// the English scale for the tension number: a listener shouldn't need to
+// know what 0.49 means — the display says "moderate" for them
+const TENSION_WORDS = [[0.15, "Serene"], [0.3, "Calm"], [0.45, "Mild"], [0.6, "Moderate"], [0.75, "Tense"], [2, "Dissonant"]];
+function tensionWord(t) {
+  for (const [max, wrd] of TENSION_WORDS) if (t < max) return wrd;
+  return "Dissonant";
+}
+const MAJ_SCALE = [0, 2, 4, 5, 7, 9, 11];
+const MIN_SCALE = [0, 2, 3, 5, 7, 8, 10];
+
 const RIB_SECONDS = 30;
 const RIB_HZ = 20; // ribbon columns per second
 const RIB_COLS = RIB_SECONDS * RIB_HZ;
@@ -79,7 +89,7 @@ export class Harmony {
     this._ribAcc = 0;
     this.keyHistory = []; // {label, at}
     this._lastKey = null;
-    this._tenHist = new Float32Array(180); // ~6s tension sparkline
+    this._tenHist = new Float32Array(450); // 30s of tension at 15Hz
     this._tenIdx = 0;
     this._tenAcc = 0;
     this.homeSlot = 0; // the tonic marker glides rather than jumps
@@ -290,61 +300,221 @@ export class Harmony {
     }
   }
 
-  _drawTension(ctx, x, y, w, h, sparkW) {
+  // small-caps section header, letter-spaced like an instrument faceplate
+  _header(ctx, text, x, y) {
     const pal = this._pal();
-    const t = this.chroma.tension;
-    ctx.strokeStyle = `rgba(${pal.dim},0.3)`;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    // the column fills from the bottom; dissonance climbs, resolution drops
-    const fh = h * Math.min(1, t * 1.25);
-    const g = ctx.createLinearGradient(0, y + h, 0, y);
-    g.addColorStop(0, `rgba(${pal.accent},0.5)`);
-    g.addColorStop(0.65, "rgba(255,170,60,0.6)");
-    g.addColorStop(1, "rgba(255,80,70,0.85)");
-    ctx.fillStyle = g;
-    ctx.fillRect(x + 1, y + h - fh, w - 2, fh);
-    ctx.fillStyle = `rgba(${pal.ink},0.85)`;
-    ctx.fillRect(x + 1, y + h - fh - 1, w - 2, 2);
-    ctx.font = "9px ui-monospace, Menlo, monospace";
-    ctx.textAlign = "center";
-    ctx.fillStyle = `rgba(${pal.dim},0.75)`;
-    ctx.fillText("TENSION", x + w / 2, y - 8);
-    ctx.fillText(t.toFixed(2), x + w / 2, y + h + 12);
-
-    // a short sparkline: you can see a suspension resolve
-    const sx = x + w + 16, sw = sparkW, sh = h;
-    ctx.strokeStyle = `rgba(${pal.dim},0.2)`;
-    ctx.strokeRect(sx + 0.5, y + 0.5, sw - 1, sh - 1);
-    ctx.beginPath();
-    for (let i = 0; i < this._tenHist.length; i++) {
-      const idx = (this._tenIdx + i) % this._tenHist.length;
-      const px = sx + (i / (this._tenHist.length - 1)) * sw;
-      const py = y + sh - Math.min(1, this._tenHist[idx] * 1.25) * sh;
-      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
-    }
-    ctx.strokeStyle = `rgba(${pal.accent},0.75)`;
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    ctx.font = "9px ui-monospace, Menlo, monospace";
+    ctx.font = "600 11px -apple-system, 'Segoe UI', sans-serif";
     ctx.textAlign = "left";
-    ctx.fillStyle = `rgba(${pal.dim},0.7)`;
-    ctx.fillText("dissonance rises · resolution falls", sx, y - 8);
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = `rgba(${pal.dim},0.9)`;
+    const prev = ctx.letterSpacing;
+    try { ctx.letterSpacing = "1.5px"; } catch {}
+    ctx.fillText(text.toUpperCase(), x, y);
+    try { ctx.letterSpacing = prev || "0px"; } catch {}
   }
 
-  _drawKeyHistory(ctx, x, y) {
+  // the tension gauge: labelled scale, cold-to-hot fill, a pointer at the
+  // value, and the number said in ENGLISH underneath — "0.49" means nothing
+  // to a listener until the display admits it means "moderate"
+  _drawGauge(ctx, x, y, w, h) {
     const pal = this._pal();
-    ctx.font = "9px ui-monospace, Menlo, monospace";
+    const t = Math.min(1, this.chroma.tension * 1.25);
+    this._header(ctx, "Harmonic Tension", x, y - 14);
+
+    // frame + faint well
+    ctx.fillStyle = `rgba(${pal.ink},0.04)`;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = `rgba(${pal.dim},0.4)`;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+    // scale: major ticks + labels at quarters, minor ticks at eighths
+    ctx.font = "10px ui-monospace, Menlo, monospace";
     ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillStyle = `rgba(${pal.dim},0.75)`;
-    ctx.fillText("KEY", x, y - 12);
-    this.keyHistory.slice(0, 6).forEach((k, i) => {
-      const a = i === 0 ? 0.95 : Math.max(0.12, 0.6 - i * 0.14);
-      ctx.font = i === 0 ? "600 17px -apple-system, sans-serif" : "13px -apple-system, sans-serif";
-      ctx.fillStyle = `rgba(${i === 0 ? pal.ink : pal.dim},${a})`;
-      ctx.fillText(k.label, x, y + i * 21);
-    });
+    ctx.textBaseline = "middle";
+    for (let i = 0; i <= 8; i++) {
+      const v = i / 8;
+      const ty = y + h - v * h;
+      const major = i % 2 === 0;
+      ctx.strokeStyle = `rgba(${pal.dim},${major ? 0.55 : 0.28})`;
+      ctx.beginPath();
+      ctx.moveTo(x + w + 4, ty + 0.5);
+      ctx.lineTo(x + w + (major ? 11 : 8), ty + 0.5);
+      ctx.stroke();
+      if (major) {
+        ctx.fillStyle = `rgba(${pal.dim},0.8)`;
+        ctx.fillText(v === 0 ? "0.00" : v === 1 ? "1.0" : v.toFixed(2), x + w + 15, ty);
+      }
+    }
+
+    // the fill: cold blue at rest, gold under strain. The gradient spans the
+    // FULL scale and gets clipped by the fill height, so colours live at
+    // absolute tension levels rather than stretching with the value.
+    const fh = Math.max(2, t * h);
+    const g = ctx.createLinearGradient(0, y + h, 0, y);
+    g.addColorStop(0, "rgba(24,52,120,0.9)");
+    g.addColorStop(0.35, "rgba(52,84,150,0.9)");
+    g.addColorStop(0.62, "rgba(190,140,80,0.92)");
+    g.addColorStop(1, "rgba(255,198,112,0.95)");
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x + 1, y + h - fh, w - 2, fh);
+    ctx.clip();
+    ctx.fillStyle = g;
+    ctx.fillRect(x + 1, y, w - 2, h);
+    ctx.restore();
+    // bright cap + soft bloom above it
+    const capY = y + h - fh;
+    ctx.fillStyle = "rgba(255,226,170,0.28)";
+    ctx.fillRect(x + 1, capY - 4, w - 2, 4);
+    ctx.fillStyle = "rgba(255,236,190,0.95)";
+    ctx.fillRect(x + 1, capY - 1.25, w - 2, 2.5);
+    // pointer riding the scale side
+    ctx.fillStyle = `rgba(${pal.ink},0.9)`;
+    ctx.beginPath();
+    ctx.moveTo(x + w + 3, capY);
+    ctx.lineTo(x + w + 10, capY - 4);
+    ctx.lineTo(x + w + 10, capY + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // the number, and what it MEANS
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = "700 26px -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "rgba(255,198,112,0.95)";
+    ctx.fillText(this.chroma.tension.toFixed(2), x, y + h + 32);
+    this._header(ctx, tensionWord(this.chroma.tension), x, y + h + 50);
+  }
+
+  _drawChart(ctx, x, y, w, h) {
+    const pal = this._pal();
+    const labW = 36;
+    const px0 = x + labW, pw = w - labW;
+    this._header(ctx, "Tension Over Time", px0, y - 14);
+
+    // y scale + gridlines at quarters
+    ctx.font = "10px ui-monospace, Menlo, monospace";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i <= 4; i++) {
+      const v = i / 4;
+      const gy2 = y + h - v * h;
+      ctx.strokeStyle = `rgba(${pal.dim},${i === 0 ? 0.4 : 0.16})`;
+      ctx.beginPath();
+      ctx.moveTo(px0, gy2 + 0.5);
+      ctx.lineTo(px0 + pw, gy2 + 0.5);
+      ctx.stroke();
+      ctx.textAlign = "right";
+      ctx.fillStyle = `rgba(${pal.dim},0.8)`;
+      ctx.fillText(v === 0 ? "0.00" : v === 1 ? "1.0" : v.toFixed(2), px0 - 6, gy2);
+    }
+    // time axis: gridlines + labels every 10s
+    ctx.textBaseline = "alphabetic";
+    for (let i = 0; i <= 3; i++) {
+      const gx = px0 + (i / 3) * pw;
+      if (i > 0 && i < 3) {
+        ctx.strokeStyle = `rgba(${pal.dim},0.12)`;
+        ctx.beginPath();
+        ctx.moveTo(gx + 0.5, y);
+        ctx.lineTo(gx + 0.5, y + h);
+        ctx.stroke();
+      }
+      ctx.textAlign = i === 0 ? "left" : i === 3 ? "right" : "center";
+      ctx.fillStyle = `rgba(${pal.dim},0.8)`;
+      ctx.fillText(i === 3 ? "NOW" : `-${30 - i * 10}s`, gx, y + h + 16);
+    }
+    ctx.strokeStyle = `rgba(${pal.dim},0.35)`;
+    ctx.strokeRect(px0 + 0.5, y + 0.5, pw - 1, h - 1);
+
+    // the curve: one path, used three ways — gradient fill underneath, a wide
+    // soft glow pass, then the hot core (the additive-glow house style)
+    const n = this._tenHist.length;
+    const pts = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const idx = (this._tenIdx + i) % n;
+      pts[i] = [px0 + (i / (n - 1)) * pw, y + h - Math.min(1, this._tenHist[idx] * 1.25) * h];
+    }
+    const trace = () => {
+      ctx.beginPath();
+      pts.forEach(([ax, ay], i) => (i ? ctx.lineTo(ax, ay) : ctx.moveTo(ax, ay)));
+    };
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px0, y, pw, h);
+    ctx.clip();
+    trace();
+    ctx.lineTo(px0 + pw, y + h);
+    ctx.lineTo(px0, y + h);
+    ctx.closePath();
+    const fg = ctx.createLinearGradient(0, y, 0, y + h);
+    fg.addColorStop(0, "rgba(255,198,112,0.30)");
+    fg.addColorStop(0.6, "rgba(200,150,90,0.10)");
+    fg.addColorStop(1, "rgba(60,60,80,0)");
+    ctx.fillStyle = fg;
+    ctx.fill();
+    trace();
+    ctx.strokeStyle = "rgba(255,190,110,0.18)";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    trace();
+    ctx.strokeStyle = "rgba(255,222,160,0.92)";
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // how much of the harmony sits inside the detected key's scale — the word
+  // under the key ("Diatonic" / "Chromatic") is this number speaking English
+  _diatonicity() {
+    const pc = this.chroma.keyPc;
+    if (pc < 0) return null;
+    const scale = this.chroma.keyMode === "minor" ? MIN_SCALE : MAJ_SCALE;
+    let inScale = 0, all = 1e-6;
+    for (let i = 0; i < 12; i++) {
+      all += this.chroma.chroma[i];
+      if (scale.includes((i - pc + 12) % 12)) inScale += this.chroma.chroma[i];
+    }
+    return inScale / all;
+  }
+
+  _drawKeyPanel(ctx, x, y, w) {
+    const pal = this._pal();
+    this._header(ctx, "Key", x, y - 14);
+    ctx.strokeStyle = `rgba(${pal.dim},0.4)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 6.5);
+    ctx.lineTo(x + w, y - 6.5);
+    ctx.stroke();
+
+    const label = this.chroma.keyLabel();
+    const conf = this.chroma.keyConfidence;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    if (label) {
+      ctx.font = "600 27px -apple-system, 'Segoe UI', sans-serif";
+      ctx.fillStyle = `rgba(${pal.ink},${0.35 + conf * 0.6})`;
+      ctx.fillText(label, x, y + 76);
+      const d = this._diatonicity();
+      const word = d === null ? "" : d > 0.82 ? "Diatonic" : d > 0.62 ? "Mostly diatonic" : "Chromatic";
+      ctx.font = "13px -apple-system, 'Segoe UI', sans-serif";
+      ctx.fillStyle = `rgba(${pal.dim},0.95)`;
+      ctx.fillText(word, x, y + 98);
+    } else {
+      ctx.font = "13px ui-monospace, Menlo, monospace";
+      ctx.fillStyle = `rgba(${pal.dim},0.6)`;
+      ctx.fillText("listening…", x, y + 76);
+    }
+
+    // a live 12-bar chroma glyph — the mock's little mark, but real data
+    const gw2 = 4, gap = 2.5;
+    const gx0 = x + 2, gy0 = y + 150;
+    ctx.fillStyle = "rgba(255,198,112,0.75)";
+    for (let pc = 0; pc < 12; pc++) {
+      const v = this.chroma.chroma[pc];
+      const bh = 3 + v * 15;
+      ctx.fillRect(gx0 + pc * (gw2 + gap), gy0 - bh, gw2, bh);
+    }
   }
 
   render(ctx, analyser, w, h, now) {
@@ -367,7 +537,7 @@ export class Harmony {
     this._ribAcc += dt;
     while (this._ribAcc >= 1 / RIB_HZ) { this._ribAcc -= 1 / RIB_HZ; this._pushRibbon(); }
     this._tenAcc += dt;
-    if (this._tenAcc >= 1 / 30) {
+    if (this._tenAcc >= 1 / 15) { // 450 samples = the chart's 30 seconds
       this._tenAcc = 0;
       this._tenHist[this._tenIdx] = this.chroma.tension;
       this._tenIdx = (this._tenIdx + 1) % this._tenHist.length;
@@ -388,9 +558,10 @@ export class Harmony {
     const ribH = h * 0.76, ribW = w * 0.34;
     this._drawRibbon(ctx, w * 0.028, (h - ribH) / 2, ribW, ribH);
     this._drawWheel(ctx, w * 0.545, h * 0.5, Math.min(h * 0.43, w * 0.12));
-    const gy = h * 0.17, gh = h * 0.6;
-    this._drawTension(ctx, w * 0.685, gy, 28, gh, w * 0.185);
-    this._drawKeyHistory(ctx, w * 0.895, gy);
+    const gy = h * 0.2, gh = h * 0.55;
+    this._drawGauge(ctx, w * 0.672, gy, 34, gh);
+    this._drawChart(ctx, w * 0.732, gy, w * 0.16, gh);
+    this._drawKeyPanel(ctx, w * 0.918, gy, w * 0.055);
 
     this.ms += (performance.now() - t0 - this.ms) * 0.05;
   }

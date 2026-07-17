@@ -19,10 +19,11 @@
 //   silence       the ribbon narrows to a dim hairline and the label hides —
 //                 it never freezes or jumps.
 //
-// Responsibilities are split as the spec asks: push() owns history, _derive()
-// owns transformation/smoothing, _repaint() owns geometry+drawing into an
-// offscreen (at the 20Hz sample rate, not per frame), draw() blits and adds
-// the crisp live text. Zero allocations on the hot paths after warm-up.
+// Responsibilities are split as the spec asks: push() owns history (and
+// decides each sample's dominant, immutably), _derive() owns transformation/
+// smoothing into TARGETS at the 20Hz sample rate, _ease() glides the display
+// geometry toward those targets every frame, _paint() draws. Targets may step;
+// the screen never does. Zero allocations on the hot paths after warm-up.
 
 const PC_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FIFTHS = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
@@ -47,6 +48,15 @@ function circDist(a, b) {
 export class HarmonicRibbon {
   constructor() {
     this.hist = new Float32Array(12 * RIB_COLS);
+    // The dominant is decided ONCE, at push time, and stored — history is
+    // immutable, like the audio it represents. The first version re-ran the
+    // sticky argmax over the whole window on every repaint, chaining from the
+    // left edge; as old samples fell off the ring the chain re-resolved
+    // differently and lane assignments MID-RIBBON flipped retroactively —
+    // the "odd movements" the user reported. A note that was the strongest
+    // at 14:03:07 stays the strongest at 14:03:07 forever.
+    this.domRing = new Int8Array(RIB_COLS);
+    this._lastDom = -1;
     this.idx = 0;
     this.count = 0;
     this._eMax = 0.05; // slow-decaying energy scale (thickness normalizer)
@@ -55,24 +65,32 @@ export class HarmonicRibbon {
     this._m12 = new Float32Array(12 * SEG); // per-class downsampled weights
     this._tot = new Float32Array(SEG);
     this._dom = new Int8Array(SEG);
-    this._y = new Float32Array(SEG);
+    this._y = new Float32Array(SEG); // derived TARGETS
     this._hw = new Float32Array(SEG);
+    this._yD = new Float32Array(SEG); // eased DISPLAY geometry (what's drawn)
+    this._hwD = new Float32Array(SEG);
     this._tmp = new Float32Array(SEG);
-
-    this.rib = null; // offscreen
-    this._key = "";
+    this._warm = false;
+    this._sinceDraw = 0;
     this._dirty = true;
   }
 
   push(chroma12) {
-    let tot = 0;
+    let tot = 0, best = 0, bestV = -1;
     for (let pc = 0; pc < 12; pc++) {
       const v = chroma12[pc];
       this.hist[pc * RIB_COLS + this.idx] = v;
       tot += v;
+      if (v > bestV) { bestV = v; best = pc; }
     }
+    // sticky: the incumbent keeps the lane unless clearly beaten — decided
+    // NOW, stored forever (see the constructor note)
+    if (this._lastDom >= 0 && chroma12[this._lastDom] >= bestV * 0.9) best = this._lastDom;
+    this.domRing[this.idx] = best;
+    this._lastDom = best;
     this.idx = (this.idx + 1) % RIB_COLS; // ring: history never exceeds 30s
     this.count++;
+    this._sinceDraw++;
     this._eMax = Math.max(this._eMax * (1 - 1 / (RIB_HZ * 20)), tot, 0.05);
     this._dirty = true;
   }
@@ -119,19 +137,12 @@ export class HarmonicRibbon {
     }
     for (let pc = 0; pc < 12; pc++) this._smooth(m.subarray(pc * SEG, pc * SEG + SEG), 2);
 
-    // dominant per point, STICKY: argmax flickers on near-ties, and a ribbon
-    // that trills between two lanes on every tie reads as broken. The
-    // incumbent keeps the lane unless a challenger clearly beats it.
-    let prev = -1;
+    // dominant per control point: read from the immutable per-sample ring
+    // (the bucket's most recent sample). The window sliding only removes at
+    // the left and appends at the right — the middle can never change.
     for (let i = 0; i < SEG; i++) {
-      let best = 0, bestV = -1;
-      for (let pc = 0; pc < 12; pc++) {
-        const v = m[pc * SEG + i];
-        if (v > bestV) { bestV = v; best = pc; }
-      }
-      if (prev >= 0 && m[prev * SEG + i] >= bestV * 0.9) best = prev;
-      this._dom[i] = best;
-      prev = best;
+      const sEnd = (this.idx + Math.floor(i * STEP) + STEP - 1) % RIB_COLS;
+      this._dom[i] = this.domRing[sEnd];
     }
 
     // lane -> y, then heavy smoothing: chord changes are steps in the data,
@@ -151,23 +162,32 @@ export class HarmonicRibbon {
     this._smooth(this._hw, 2);
   }
 
-  _repaint(w, h, style) {
-    if (!this._dirty && this.rib && this._key === `${w}x${h}|${style.id}`) return;
-    const key = `${w}x${h}|${style.id}`;
-    if (!this.rib || this._key !== key) {
-      this.rib = document.createElement("canvas");
-      this.rib.width = Math.max(2, Math.round(w));
-      this.rib.height = Math.max(2, Math.round(h));
-      this._key = key;
+  // Ease the display geometry toward the derived targets. Targets step at
+  // the 20Hz sample rate; the SCREEN must not. Each frame the drawn curve
+  // glides a fraction toward the target, so a chord change is a 60fps sweep
+  // into the new lane instead of a 20Hz lurch. When samples arrive in bulk
+  // with no draws between (benches, a backgrounded tab), easing would lag by
+  // seconds — snap instead.
+  _ease(dt) {
+    if (!this._warm || this._sinceDraw > 10) {
+      this._yD.set(this._y);
+      this._hwD.set(this._hw);
+      this._warm = true;
+    } else {
+      const k = Math.min(1, dt * 9);
+      for (let i = 0; i < SEG; i++) {
+        this._yD[i] += (this._y[i] - this._yD[i]) * k;
+        this._hwD[i] += (this._hw[i] - this._hwD[i]) * k;
+      }
     }
-    this._dirty = false;
-    this._derive(h);
+    this._sinceDraw = 0;
+  }
 
-    const c = this.rib.getContext("2d");
-    c.clearRect(0, 0, w, h); // the panel keeps the mode's dark background
+  _paint(c, w, h, style) {
     const xs = this._tmp;
     for (let i = 0; i < SEG; i++) xs[i] = (i / (SEG - 1)) * w;
     const recency = (i) => 0.42 + 0.58 * Math.pow(i / (SEG - 1), 1.6);
+    const yD = this._yD, hwD = this._hwD;
 
     c.globalCompositeOperation = "lighter";
 
@@ -184,7 +204,6 @@ export class HarmonicRibbon {
       const grad = c.createLinearGradient(0, 0, w, 0);
       let any = false;
       for (let i = 0; i < SEG; i += 5) {
-        // rank this class at point i
         let stronger = 0;
         for (let q = 0; q < 12; q++) if (this._m12[q * SEG + i] > row[i]) stronger++;
         const on = stronger < 5 && this._dom[i] !== pc && row[i] > 0.05;
@@ -195,15 +214,13 @@ export class HarmonicRibbon {
       if (!any) continue;
       c.beginPath();
       for (let i = 0; i < SEG; i++) {
-        // hover around the main ribbon, offset by harmonic distance: close
-        // relatives hug it, remote classes sit visibly apart
         const off = (circDist(SLOT_OF[pc], SLOT_OF[this._dom[i]]) / 6) * h * 0.3;
-        const py = this._y[i] + off;
+        const py = yD[i] + off;
         const px = xs[i];
         if (i === 0) c.moveTo(px, py);
         else {
           const offP = (circDist(SLOT_OF[pc], SLOT_OF[this._dom[i - 1]]) / 6) * h * 0.3;
-          c.quadraticCurveTo(xs[i - 1], this._y[i - 1] + offP, (xs[i - 1] + px) / 2, (this._y[i - 1] + offP + py) / 2);
+          c.quadraticCurveTo(xs[i - 1], yD[i - 1] + offP, (xs[i - 1] + px) / 2, (yD[i - 1] + offP + py) / 2);
         }
       }
       c.strokeStyle = grad;
@@ -222,50 +239,55 @@ export class HarmonicRibbon {
       }
       return gr;
     };
-    const edgePath = (sign) => {
-      c.moveTo(xs[0], this._y[0] + sign * this._hw[0]);
-      for (let i = 1; i < SEG; i++) {
-        const mx = (xs[i - 1] + xs[i]) / 2;
-        const my = (this._y[i - 1] + sign * this._hw[i - 1] + this._y[i] + sign * this._hw[i]) / 2;
-        c.quadraticCurveTo(xs[i - 1], this._y[i - 1] + sign * this._hw[i - 1], mx, my);
-      }
-      c.lineTo(xs[SEG - 1], this._y[SEG - 1] + sign * this._hw[SEG - 1]);
-    };
     c.beginPath();
-    edgePath(-1);
+    c.moveTo(xs[0], yD[0] - hwD[0]);
+    for (let i = 1; i < SEG; i++) {
+      const mx = (xs[i - 1] + xs[i]) / 2;
+      const my = (yD[i - 1] - hwD[i - 1] + yD[i] - hwD[i]) / 2;
+      c.quadraticCurveTo(xs[i - 1], yD[i - 1] - hwD[i - 1], mx, my);
+    }
+    c.lineTo(xs[SEG - 1], yD[SEG - 1] - hwD[SEG - 1]);
+    c.lineTo(xs[SEG - 1], yD[SEG - 1] + hwD[SEG - 1]);
     for (let i = SEG - 2; i >= 0; i--) {
       const mx = (xs[i + 1] + xs[i]) / 2;
-      const my = (this._y[i + 1] + this._hw[i + 1] + this._y[i] + this._hw[i]) / 2;
-      c.quadraticCurveTo(xs[i + 1], this._y[i + 1] + this._hw[i + 1], mx, my);
+      const my = (yD[i + 1] + hwD[i + 1] + yD[i] + hwD[i]) / 2;
+      c.quadraticCurveTo(xs[i + 1], yD[i + 1] + hwD[i + 1], mx, my);
     }
-    c.lineTo(xs[0], this._y[0] + this._hw[0]);
+    c.lineTo(xs[0], yD[0] + hwD[0]);
     c.closePath();
     c.fillStyle = mainGrad(0.6);
     c.fill();
-    // hot core + a glinting upper edge — restrained bloom, no shadowBlur
     const line = (off, width, aScale) => {
       c.beginPath();
-      c.moveTo(xs[0], this._y[0] + off(0));
+      c.moveTo(xs[0], yD[0] + off(0));
       for (let i = 1; i < SEG; i++) {
         const mx = (xs[i - 1] + xs[i]) / 2;
-        const my = (this._y[i - 1] + off(i - 1) + this._y[i] + off(i)) / 2;
-        c.quadraticCurveTo(xs[i - 1], this._y[i - 1] + off(i - 1), mx, my);
+        const my = (yD[i - 1] + off(i - 1) + yD[i] + off(i)) / 2;
+        c.quadraticCurveTo(xs[i - 1], yD[i - 1] + off(i - 1), mx, my);
       }
       c.strokeStyle = mainGrad(aScale);
       c.lineWidth = width;
       c.stroke();
     };
     line(() => 0, 2.4, 1.0);
-    line((i) => -this._hw[i] * 0.8, 1, 0.55);
+    line((i) => -hwD[i] * 0.8, 1, 0.55);
     c.globalCompositeOperation = "source-over";
   }
 
   // rect: {x, y, w, h} of the plot area. style: {id, pcRGB(pc)->[r,g,b],
-  // dim:[r,g,b], ink:[r,g,b]}
-  draw(ctx, rect, style) {
+  // dim:[r,g,b], ink:[r,g,b]}. dt: seconds since the caller's last frame.
+  draw(ctx, rect, style, dt = 1 / 60) {
     const { x, y, w, h } = rect;
-    this._repaint(w, h, style);
-    ctx.drawImage(this.rib, x, y);
+    if (this._dirty) { this._derive(h); this._dirty = false; }
+    this._ease(dt);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y - 2, w + 1, h + 4); // strands may wander; never the neighbours
+    ctx.clip();
+    ctx.translate(x, y);
+    this._paint(ctx, w, h, style);
+    ctx.restore();
 
     // restrained time scale: small ticks + labels, no grid
     ctx.font = "10px ui-monospace, Menlo, monospace";
@@ -289,26 +311,28 @@ export class HarmonicRibbon {
     ctx.lineTo(x + w + 0.5, y + h);
     ctx.stroke();
 
-    // endpoint: brighter, defined, and named — hidden in silence
-    const st = { dom: this._dom[SEG - 1], y: this._y[SEG - 1], e: Math.min(1, this._tot[SEG - 1] / Math.max(0.05, this._eMax)) };
-    if (st.e > 0.06) {
-      const [r, g, b] = style.pcRGB(st.dom);
+    // endpoint: brighter, defined, and named — hidden in silence. Uses the
+    // EASED geometry so the dot glides with the ribbon it sits on.
+    const e = Math.min(1, this._tot[SEG - 1] / Math.max(0.05, this._eMax));
+    if (e > 0.06) {
+      const dom = this._dom[SEG - 1];
+      const [r, g, b] = style.pcRGB(dom);
+      const ey = this._yD[SEG - 1];
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.fillStyle = `rgba(${r},${g},${b},0.3)`;
       ctx.beginPath();
-      ctx.arc(x + w, y + st.y, 7 + st.e * 5, 0, TAU);
+      ctx.arc(x + w, y + ey, 7 + e * 5, 0, TAU);
       ctx.fill();
-      ctx.fillStyle = `rgba(255,255,255,${0.55 + st.e * 0.4})`;
+      ctx.fillStyle = `rgba(255,255,255,${0.55 + e * 0.4})`;
       ctx.beginPath();
-      ctx.arc(x + w, y + st.y, 2.4, 0, TAU);
+      ctx.arc(x + w, y + ey, 2.4, 0, TAU);
       ctx.fill();
       ctx.restore();
       ctx.font = "600 13px -apple-system, 'Segoe UI', sans-serif";
       ctx.textAlign = "right";
-      ctx.fillStyle = `rgba(${style.ink},${0.5 + st.e * 0.45})`;
-      // tucked inside the panel so it never clips at the display edge
-      ctx.fillText(PC_NAMES[st.dom], x + w - 8, y + st.y - 10);
+      ctx.fillStyle = `rgba(${style.ink},${0.5 + e * 0.45})`;
+      ctx.fillText(PC_NAMES[dom], x + w - 8, y + ey - 10);
     }
   }
 }

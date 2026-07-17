@@ -520,7 +520,7 @@ export class Harmony {
     ctx.fillStyle = `rgba(${pal.dim},0.7)`;
     ctx.fillText(`last ${RIB_SECONDS} seconds`, ribX + ribW, ribY - 14);
     this.ribbon.draw(ctx, { x: ribX, y: ribY, w: ribW, h: ribH },
-      { id: this.cfg.preset, pcRGB: pal.pcRGB, dim: pal.dim, ink: pal.ink });
+      { id: this.cfg.preset, pcRGB: pal.pcRGB, dim: pal.dim, ink: pal.ink }, dt);
     this._drawWheel(ctx, w * 0.545, h * 0.5, Math.min(h * 0.43, w * 0.12));
     const gy = h * 0.2, gh = h * 0.55;
     this._drawGauge(ctx, w * 0.672, gy, 34, gh);

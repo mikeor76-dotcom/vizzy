@@ -80,3 +80,81 @@ export class SilenceGate {
     return Math.max(0, sum / ((hi - lo) * 255) - this.sub);
   }
 }
+
+// EnergyJump — "did the song just tear upward?" (a drop, a chorus arrival).
+//
+// Shared by Murmuration's chorus flash and Cymatics' plate rupture, and built
+// for every future mode that wants a drop moment (Ink Fluid is next). Every
+// clause is a measured lesson:
+//
+// - TWO SMOOTHED TRACKERS, ~0.6s vs ~4.5s. The fast one must bridge kick
+//   gaps: at a 0.14s time constant the EDM drop's fast/slow ratio only spiked
+//   for 0.18s, so a sustain requirement missed the drop and no sustain fired
+//   on every lone kick pulse.
+// - SUSTAIN. A drop stays loud; a kick pulse doesn't. 0.4s default.
+// - RELATIVE LOUDNESS FLOORS. An absolute floor tuned on a hot EDM render
+//   (0.22) meant a real ballad's chorus (fast tracker peaking 0.18, ratio
+//   1.83) could never fire. Floors scale with the mode's own loudness peak.
+// - SEEDED BASELINE. The slow tracker starting from zero inflates the ratio
+//   for the first ~10s of any song — measured, a QUIET VERSE fired a "drop"
+//   at 5.8s. On gate-open (after >2s of silence), both trackers snap to the
+//   current level — deferred 0.5s so the analyser's own attack ramp isn't
+//   recorded as the song's floor. Brief mid-song gate dips do NOT re-seed.
+export class EnergyJump {
+  // ratio 1.15 is CALIBRATED TO dB SPACE, not linear energy: `loud` is a
+  // mean of the analyser's byte values, which are dB-scaled, so a doubling
+  // of amplitude (+6dB) only reads ~1.3x here. Measured: the song bank's EDM
+  // drop = 1.29 sustained, a ballad's chorus arrival = 1.83, steady drums
+  // after seeding = 0.85..1.05. 1.45 "looked right" and was unreachable by a
+  // real drop — it only ever fired off the unconverged zero baseline.
+  constructor({ ratio = 1.15, sustain = 0.4, cooldown = 8 } = {}) {
+    this.ratio = ratio;
+    this.sustain = sustain;
+    this.cooldown = cooldown;
+    this.fast = 0;
+    this.slow = 0;
+    this._arm = 2.1; // >2 = will re-seed on next open (starts armed)
+    this._openFor = 0;
+    this._seeded = false;
+    this._hot = 0;
+    this._last = -1e9;
+    this._t = 0;
+  }
+
+  // loud: raw broadband level. peak: the mode's own slow loudness peak.
+  // open/gateEnv: from SilenceGate. Returns true exactly once per firing.
+  update(loud, peak, open, gateEnv, dt) {
+    this._t += dt;
+    if (!open) {
+      this._arm += dt;
+      this._openFor = 0;
+    } else {
+      this._openFor += dt;
+      if (this._arm > 2) {
+        if (this._openFor > 0.5) {
+          this.fast = this.slow = loud;
+          this._seeded = true;
+          this._arm = 0;
+        }
+      } else this._arm = 0;
+    }
+    this.fast += (loud - this.fast) * Math.min(1, dt * 1.7);
+    this.slow += (loud - this.slow) * Math.min(1, dt * 0.22);
+    const hot = this._seeded && this._arm === 0 && gateEnv > 0.5 &&
+      this.slow > peak * 0.15 &&
+      this.fast > this.slow * this.ratio &&
+      this.fast > Math.max(0.08, peak * 0.25);
+    // DRAIN on cold frames, don't zero: a seeded baseline leaves a real
+    // drop's ratio nearer the line (measured 1.55 on the EDM drop), and kick
+    // ripple dips it under for a frame or two — a hard reset erased 0.3s of
+    // genuine accumulation each time and the drop was never detected.
+    // Sustained cold still drains to zero in half the sustain window.
+    this._hot = hot ? this._hot + dt : Math.max(0, this._hot - dt * 2);
+    if (this._hot > this.sustain && this._t - this._last > this.cooldown) {
+      this._hot = 0;
+      this._last = this._t;
+      return true;
+    }
+    return false;
+  }
+}

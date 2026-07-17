@@ -21,7 +21,7 @@
 // The field lives on a coarse grid (97x25), recomputed ONLY on retarget;
 // grains bilinear-sample |F| and take the gradient from the same grid.
 
-import { SilenceGate } from "./silencegate.js";
+import { SilenceGate, EnergyJump } from "./silencegate.js";
 import { hiResOf } from "./chroma.js";
 
 // mode ladder, coarse -> fine; pitch height selects the rung. Unordered pairs
@@ -86,9 +86,7 @@ export class Cymatics {
     this._prevBass = 0;
     this._bassPeak = 0.04;
     this._sinceTap = 9;
-    this._eFast = 0;
-    this._eSlow = 0;
-    this._lastRup = -99;
+    this.jump = new EnergyJump({ cooldown: 5 });
     this.flash = 0;
 
     this.freq = new Uint8Array(1024);
@@ -257,7 +255,6 @@ export class Cymatics {
 
   _rupture() {
     this.ruptures++;
-    this._lastRup = this.t;
     this.flash = 1;
     this._boost = 1.1; // ~1.5s of chaos, then the new figure assembles
     for (let i = 0; i < this._act; i++) {
@@ -372,22 +369,10 @@ export class Cymatics {
     }
 
     // drop / rupture: fast energy tearing away from the recent average
-    // Rupture = the ~0.6s energy average tearing away from the ~4.5s one,
-    // SUSTAINED. Both time constants are load-bearing (measured on the song
-    // bank): a fast tracker under ~0.5s dips between 128bpm kicks, so at the
-    // actual EDM drop the ratio only spiked for ~0.18s and either the
-    // detector missed the drop (with a sustain requirement) or fired on lone
-    // kick pulses (without one). 0.6s bridges kicks; a drop then holds the
-    // ratio up for >1s while the slow baseline catches up.
-    this._eFast += (loud - this._eFast) * Math.min(1, dt * 1.7);
-    this._eSlow += (loud - this._eSlow) * Math.min(1, dt * 0.22);
-    const hot = g.gate > 0.5 && this._eSlow > 0.05 &&
-      this._eFast > this._eSlow * 1.45 && this._eFast > 0.22;
-    this._rupHot = hot ? (this._rupHot || 0) + dt : 0;
-    if (this._rupHot > 0.4 && this.t - this._lastRup > 5) {
-      this._rupHot = 0;
-      this._rupture();
-    }
+    // drop / rupture: the shared EnergyJump detector (silencegate.js) — kick-
+    // bridging fast/slow trackers, sustain, relative loudness floors, seeded
+    // baseline. Its lessons were measured here and in murmuration; one home.
+    if (this.jump.update(loud, this._loudPeak, g.open, g.gate, dt)) this._rupture();
 
     // a clear pitch alone (no broadband mix) still vibrates the plate at
     // half strength — a signal generator is the classic way to play one

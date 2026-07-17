@@ -8,6 +8,7 @@ import { Lasers } from "./lasers.js";
 import { VectorCrt } from "./vectorcrt.js";
 import { Harmony } from "./harmony.js";
 import { NoteFall } from "./notefall.js";
+import { installPqLab } from "./pixelquest-harness.js";
 import { Cymatics } from "./cymatics.js";
 import { InkFluid } from "./inkfluid.js";
 import { Spectrum } from "./spectrum.js";
@@ -416,6 +417,18 @@ window.vizzy = {
 // 1-5 = force a specific biome, J = force the current biome's arrival now.
 window.pqAdventure = pixelquest.adventure;
 
+// Pixel Quest real-music pacing harness (debug-only). `pqLab.feed(url)` or
+// `pqLab.feedSong('medley')` routes a decoded track into the shared analyser
+// so the whole game reacts to real song dynamics, then timestamps every
+// notable moment; `pqLab.report()` prints the per-5s density record. The
+// harness needs the full audio render path, so it flips micActive itself.
+installPqLab({
+  beginHarnessAudio: () => { ensureAudioContext(); micActive = true; return { audioCtx, analyser }; },
+  endHarnessAudio: () => { if (!micStream) micActive = false; },
+  controller,
+  pixelquest,
+});
+
 // MilkDrop QA: milkdrop.next() hard-cuts to the next preset immediately;
 // milkdrop.status() reports real fps, the governor's internal scale, and the
 // GL-submit vs blit split (?mdebug=1 puts the same thing on screen — the Pi is
@@ -672,6 +685,7 @@ function draw(now = performance.now()) {
   // pitch/harmony modes read `analyser.hiRes`; benches inject their own
   if (entry.needsChroma) analyser.hiRes = ensureHiRes();
   entry.render(ctx, analyser, w, h, now);
+  if (window.pqLab?.running) window.pqLab.tick(now); // pacing harness observer
 }
 
 function frame(now) {

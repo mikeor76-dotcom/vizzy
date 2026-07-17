@@ -7,6 +7,7 @@ import { Skyline } from "./skyline.js";
 import { Lasers } from "./lasers.js";
 import { VectorCrt } from "./vectorcrt.js";
 import { Harmony } from "./harmony.js";
+import { NoteFall } from "./notefall.js";
 import { Spectrum } from "./spectrum.js";
 import { Wave } from "./wave.js";
 import { Classical } from "./classical.js";
@@ -193,6 +194,7 @@ const skyline = new Skyline();
 const lasers = new Lasers();
 const vectorcrt = new VectorCrt();
 const harmony = new Harmony();
+const notefall = new NoteFall();
 const spectrum = new Spectrum();
 const wave = new Wave();
 const classical = new Classical();
@@ -222,6 +224,7 @@ const INSTANCES = {
   lasers,
   vectorcrt,
   harmony,
+  notefall,
   pixelquest,
   synthwave,
   milkdrop,
@@ -333,6 +336,7 @@ const BINDINGS = {
   vectorcrt: { render: (c, a, w, h, now) => vectorcrt.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },
   // harmony paints its own opaque background every frame
   harmony: { render: (c, a, w, h, now) => harmony.render(c, a, w, h, now), fade: "rgb(6, 7, 14)" },
+  notefall: { render: (c, a, w, h, now) => notefall.render(c, a, w, h, now), fade: "rgb(5, 6, 12)" },
   pixelquest: { render: (c, a, w, h, now) => pixelquest.render(c, a, w, h, now), fade: "rgb(4, 4, 8)" },
   // milkdrop blits an opaque WebGL frame over the whole canvas every frame
   milkdrop: { render: (c, a, w, h, now) => milkdrop.render(c, a, w, h, now), fade: "rgb(0, 0, 0)" },

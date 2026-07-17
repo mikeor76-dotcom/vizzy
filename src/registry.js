@@ -115,6 +115,18 @@ export const REGISTRY = [
     needsChroma: true,
   },
   {
+    id: "notefall",
+    name: "Note-Fall",
+    category: "meters",
+    stable: false, // needs a look on the Pi panel
+    presets: ["Pitch Hue", "Register", "Mono Gold"],
+    idle: true, // the keyboard breathes over an empty roll before any audio
+    // self-governing like harmony: chroma's tonality gate + note confidences
+    // decide what appears — AutoGain has no note to say about pitch
+    auto: null,
+    needsChroma: true,
+  },
+  {
     id: "waterfall",
     name: "Waterfall",
     category: "meters",

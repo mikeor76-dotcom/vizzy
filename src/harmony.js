@@ -422,18 +422,23 @@ export class Harmony {
     ctx.restore();
   }
 
-  // how much of the harmony sits inside the detected key's scale — the word
-  // under the key ("Diatonic" / "Chromatic") is this number speaking English
-  _diatonicity() {
-    const pc = this.chroma.keyPc;
-    if (pc < 0) return null;
-    const scale = this.chroma.keyMode === "minor" ? MIN_SCALE : MAJ_SCALE;
-    let inScale = 0, all = 1e-6;
-    for (let i = 0; i < 12; i++) {
-      all += this.chroma.chroma[i];
-      if (scale.includes((i - pc + 12) % 12)) inScale += this.chroma.chroma[i];
-    }
-    return inScale / all;
+  // The MODE word, with HYSTERESIS. It reads chroma.diatonicity() — measured
+  // over the ~11s key histogram, not the instant chroma, so a classical run's
+  // 100ms chromatic neighbours stop flapping it — and then only changes when
+  // the value moves clearly past a boundary, so hovering at 0.81 doesn't
+  // flicker "Diatonic"/"Mostly diatonic" forever.
+  _modeWord() {
+    const d = this.chroma.diatonicity();
+    if (d === null) return "";
+    const pick = d > 0.82 ? "Diatonic" : d > 0.62 ? "Mostly diatonic" : "Chromatic";
+    const cur = this._modeWordState;
+    if (!cur) return (this._modeWordState = pick);
+    const leave =
+      (cur === "Diatonic" && d < 0.78) ||
+      (cur === "Mostly diatonic" && (d > 0.86 || d < 0.58)) ||
+      (cur === "Chromatic" && d > 0.66);
+    if (leave) this._modeWordState = pick;
+    return this._modeWordState;
   }
 
   _drawKeyPanel(ctx, x, y, w) {
@@ -479,11 +484,10 @@ export class Harmony {
     ctx.fillStyle = `rgba(${pal.ink},${0.3 + conf * 0.4})`;
     ctx.fillText(this.chroma.relativeLabel(), x, y + 118);
 
-    const d = this._diatonicity();
     this._header(ctx, "Mode", x, y + 166);
     ctx.font = "15px -apple-system, 'Segoe UI', sans-serif";
     ctx.fillStyle = `rgba(${pal.dim},0.95)`;
-    ctx.fillText(d === null ? "" : d > 0.82 ? "Diatonic" : d > 0.62 ? "Mostly diatonic" : "Chromatic", x, y + 188);
+    ctx.fillText(this._modeWord(), x, y + 188);
   }
 
   render(ctx, analyser, w, h, now) {

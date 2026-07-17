@@ -268,7 +268,11 @@ export const SONGS = {
   // detector — it must find the first key, find the second, and not flap in
   // between (the hysteresis assertion has nothing to bite on otherwise).
   "jazz-keychange": () => {
-    const bpm = 96, beat = 60 / bpm, bar = beat * 4, bars = 12;
+    // 16 bars, not 12: the B section must be LONG enough to observe a
+    // keys-are-rare detector committing to the new key (the ~11s histogram
+    // has to swing, then the challenger must hold ~7s — a 15s B section
+    // ended before that could finish, through no fault of the detector)
+    const bpm = 96, beat = 60 / bpm, bar = beat * 4, bars = 16;
     const A = ["Dm", "Gm", "A7", "Dm"], Bp = ["F", "Bbmaj", "C", "F"];
     const chords = [], notes = [], bassHits = [];
     const build = (out) => {

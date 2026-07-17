@@ -274,22 +274,39 @@ export class Chroma {
     this._keyT = (this._keyT || 0) + dt;
     if (this._keyT < 1.5) return; // needs some history before it means anything
 
-    let bestScore = -2, bestPc = 0, bestMode = "major", second = -2, incScore = -2;
+    if (!this._scores) this._scores = new Float32Array(24); // [pc*2 + isMinor]
+    let bestScore = -2, bestPc = 0, bestMode = "major", incScore = -2;
     const rot = new Float32Array(12);
     for (let pc = 0; pc < 12; pc++) {
       for (const [prof, mode] of [[KS_MAJOR, "major"], [KS_MINOR, "minor"]]) {
         for (let i = 0; i < 12; i++) rot[i] = prof[(i - pc + 12) % 12];
         const s = corr(avg, rot);
+        this._scores[pc * 2 + (mode === "minor" ? 1 : 0)] = s;
         if (pc === this.keyPc && mode === this.keyMode) incScore = s;
-        if (s > bestScore) { second = bestScore; bestScore = s; bestPc = pc; bestMode = mode; }
-        else if (s > second) second = s;
+        if (s > bestScore) { bestScore = s; bestPc = pc; bestMode = mode; }
       }
     }
     this._best = { pc: bestPc, mode: bestMode, score: bestScore };
-    // Confidence is for the DISPLAY: how much daylight over the field. A vague
-    // passage correlates decently with several keys at once, and the wheel's
-    // halo should say so.
-    const conf = Math.max(0, Math.min(1, (bestScore - second) * 3.5)) * Math.min(1, Math.max(0, bestScore) * 1.6);
+    // CONFIDENCE, measured against STRANGERS, not family. The old formula was
+    // margin over the runner-up — but the runner-up is ALWAYS a close relation
+    // (the relative shares all seven notes; the dominant shares six), so the
+    // margin was structurally tiny and confidence could never read high, on
+    // any music, however tonal. That punishes the detector for a property of
+    // tonal music itself. Family — relative, parallel, dominant, subdominant —
+    // is excluded; beating every UNRELATED key decisively means "I am sure
+    // about this neighbourhood", which is the thing the number should say.
+    const isMin = bestMode === "minor" ? 1 : 0;
+    const famRel = bestMode === "major" ? ((bestPc + 9) % 12) * 2 + 1 : ((bestPc + 3) % 12) * 2;
+    const fam = new Set([
+      bestPc * 2 + isMin,
+      bestPc * 2 + (1 - isMin), // parallel
+      famRel, // relative
+      ((bestPc + 7) % 12) * 2 + isMin, // dominant
+      ((bestPc + 5) % 12) * 2 + isMin, // subdominant
+    ]);
+    let rival = -2;
+    for (let k = 0; k < 24; k++) if (!fam.has(k) && this._scores[k] > rival) rival = this._scores[k];
+    const conf = Math.max(0, Math.min(1, (bestScore - rival) * 2.2)) * Math.min(1, Math.max(0, bestScore) * 1.8);
     this._provConf = conf; // the CURRENT best's confidence, locked or not
 
     if (this.keyPc === bestPc && this.keyMode === bestMode) {
@@ -309,10 +326,16 @@ export class Chroma {
     // sustained — margin over the field is not the challenger's problem.
     const same = this._cand && this._cand.pc === bestPc && this._cand.mode === bestMode;
     this._cand = { pc: bestPc, mode: bestMode };
-    this._candFor = same && bestScore > incScore + 0.02 ? this._candFor + dt : 0;
-    // First lock is quick; after that a challenger must hold ~4s or the label
-    // flickers between relatives on every passing chord.
-    const settleFor = this.key === null ? 1.2 : 4;
+    // KEY CHANGES ARE RARE EVENTS. Real songs almost never change key; what
+    // they do constantly — classical piano especially — is TONICIZE: visit
+    // the dominant or relative for a phrase and come home. The old rule
+    // (beat the incumbent by 0.02 for 4s) chased every one of those visits
+    // and the label flipped all song. A detector that assumes "the key stays
+    // put" is right far more often than one that follows every excursion, so
+    // a challenger now needs a real margin held for a long phrase. True
+    // modulations still land — a few seconds later, once, correctly.
+    this._candFor = same && bestScore > incScore + 0.035 ? this._candFor + dt : 0;
+    const settleFor = this.key === null ? 1.2 : 7;
     if (this._candFor >= settleFor && bestScore > 0.1) {
       this.keyPc = bestPc;
       this.key = PC_NAMES[bestPc];
@@ -400,6 +423,22 @@ export class Chroma {
       this.notes.sort((a, b) => b.conf - a.conf);
       this.notes.length = 8;
     }
+  }
+
+  // Share of harmony inside the detected key's scale, measured over the KEY
+  // HISTOGRAM (~11s), not the instant chroma — passing tones made the MODE
+  // word flap between "Diatonic" and "Chromatic" several times a phrase.
+  // Classical piano runs are full of chromatic neighbours that last 100ms;
+  // the word should describe the passage, not the ornament.
+  diatonicity() {
+    if (this.keyPc < 0) return null;
+    const scale = this.keyMode === "minor" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+    let inS = 0, all = 1e-6;
+    for (let i = 0; i < 12; i++) {
+      all += this._keyAcc[i];
+      if (scale.includes((i - this.keyPc + 12) % 12)) inS += this._keyAcc[i];
+    }
+    return inS / all;
   }
 
   // The best CURRENT guess before the lock. The detector always has a

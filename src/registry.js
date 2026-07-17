@@ -225,6 +225,20 @@ export const REGISTRY = [
     auto: null,
   },
   {
+    id: "cymatics",
+    name: "Cymatics",
+    category: "scenes",
+    stable: false, // 10k-grain sim — needs a perf pass on the Pi
+    presets: ["Gold Sand", "Iron Filings", "Neon Cyan", "Ember"],
+    idle: true, // the last figure holds, museum-still, glow breathing
+    // self-governing: SilenceGate + own contrast-stretched energy ranging
+    auto: null,
+    // asks for the 8192-fft analyser (not the Chroma class): the plate's mode
+    // is picked by the dominant peak quantized to SEMITONES, and the shared
+    // 2048 can't resolve a semitone below ~C5
+    needsChroma: true,
+  },
+  {
     id: "vectorcrt",
     name: "Vector CRT",
     category: "scenes",

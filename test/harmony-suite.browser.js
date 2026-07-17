@@ -250,13 +250,38 @@ async function harmonySuite() {
     rctx.fillStyle = "#000"; rctx.fillRect(0, 0, 700, 360);
     rb2.draw(rctx, { x: 8, y: 8, w: 660, h: 320 }, style);
     const litSilence = lit();
+    // THE PAST TRANSLATES, NEVER DEFORMS — the user's "the past changes and
+    // bounces" report, stated as an assertion. Derive the geometry, advance
+    // by exactly one control point's worth of samples (STEP=6), re-derive:
+    // every interior point must now hold what its right-hand neighbour held.
+    // The two ways history used to deform (symmetric spatial smoothing
+    // bleeding new chords backward; a global energy max rescaling old
+    // thickness) both fail this.
+    const rb4 = new HarmonicRibbon();
+    const cG = new Float32Array(12); cG[7] = 1; cG[2] = 0.5;
+    const cD = new Float32Array(12); cD[2] = 1; cD[9] = 0.5;
+    for (let i = 0; i < 700; i++) rb4.push(i % 200 < 100 ? cG : cD); // real movement
+    rb4._derive(300);
+    const yBefore = Float32Array.from(rb4._y);
+    const hwBefore = Float32Array.from(rb4._hw);
+    const LOUD = new Float32Array(12).fill(1); // also try to trigger a rescale
+    for (let i = 0; i < 6; i++) rb4.push(LOUD);
+    rb4._derive(300);
+    let worstY = 0, worstHW = 0;
+    for (let i = 2; i < 96; i++) {
+      worstY = Math.max(worstY, Math.abs(rb4._y[i] - yBefore[i + 1]));
+      worstHW = Math.max(worstHW, Math.abs(rb4._hw[i] - hwBefore[i + 1]));
+    }
+    const translates = worstY < 0.01 && worstHW < 0.01;
+
     results.ribbon = {
       pass: trimOk && domA === "G" && domB === "G" && sil.energy < 0.05 && sil.halfW < 8 &&
-        litMusic > 0.01 && litSilence < litMusic * 0.25,
+        litMusic > 0.01 && litSilence < litMusic * 0.25 && translates,
       trimOk, dominant: domA, dominantUnderFlicker: domB,
       silenceEnergy: +sil.energy.toFixed(3), silenceHalfW: +sil.halfW.toFixed(1),
       litMusic: +litMusic.toFixed(4), litSilence: +litSilence.toFixed(4),
-      note: "30s cap, sticky dominant, graceful silence, and it actually paints",
+      pastTranslates: translates, worstRetroDeformPx: +Math.max(worstY, worstHW).toFixed(4),
+      note: "30s cap, sticky dominant, graceful silence, paints, and the past NEVER deforms",
     };
   }
 

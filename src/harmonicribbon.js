@@ -56,6 +56,19 @@ export class HarmonicRibbon {
     // the "odd movements" the user reported. A note that was the strongest
     // at 14:03:07 stays the strongest at 14:03:07 forever.
     this.domRing = new Int8Array(RIB_COLS);
+    // The drawn PAST is write-once. v1.0.18 froze the lane CHOICE, but the
+    // geometry still deformed retroactively two ways: (1) the y-smoothing was
+    // a symmetric spatial filter, so a new chord's influence bled ~2s BACKWARD
+    // into drawn history; (2) thickness was normalized by a global rolling
+    // max, so one loud hit rescaled the entire past ribbon at once — the
+    // "past bounces" the user saw. Now the glide and the thickness are
+    // computed CAUSALLY at push time (one-pole smoothers that only ever see
+    // older samples) and stored per sample. History translates; it never
+    // deforms.
+    this.ySmRing = new Float32Array(RIB_COLS); // lane fraction 0..1, smoothed
+    this.eSmRing = new Float32Array(RIB_COLS); // normalized energy, smoothed
+    this._ySm = -1;
+    this._eSm = 0;
     this._lastDom = -1;
     this.idx = 0;
     this.count = 0;
@@ -64,6 +77,7 @@ export class HarmonicRibbon {
     // derived control-point tracks (preallocated; filled by _derive)
     this._m12 = new Float32Array(12 * SEG); // per-class downsampled weights
     this._tot = new Float32Array(SEG);
+    this._eS = new Float32Array(SEG); // per-point normalized energy (immutable source)
     this._dom = new Int8Array(SEG);
     this._y = new Float32Array(SEG); // derived TARGETS
     this._hw = new Float32Array(SEG);
@@ -88,10 +102,20 @@ export class HarmonicRibbon {
     if (this._lastDom >= 0 && chroma12[this._lastDom] >= bestV * 0.9) best = this._lastDom;
     this.domRing[this.idx] = best;
     this._lastDom = best;
+    // causal glide + causal energy: each sample's stored value depends only
+    // on itself and OLDER samples, so it can never change once written
+    this._eMax = Math.max(this._eMax * (1 - 1 / (RIB_HZ * 20)), tot, 0.05);
+    const laneFrac = SLOT_OF[best] / 11;
+    if (this._ySm < 0) this._ySm = laneFrac;
+    this._ySm += (laneFrac - this._ySm) * 0.09; // ~0.55s glide: fast enough to
+    // follow a chord change, slow enough that a melody alternating dominants
+    // every beat reads as a wave, not a zigzag
+    this._eSm += (Math.min(1, tot / this._eMax) - this._eSm) * 0.25;
+    this.ySmRing[this.idx] = this._ySm;
+    this.eSmRing[this.idx] = this._eSm;
     this.idx = (this.idx + 1) % RIB_COLS; // ring: history never exceeds 30s
     this.count++;
     this._sinceDraw++;
-    this._eMax = Math.max(this._eMax * (1 - 1 / (RIB_HZ * 20)), tot, 0.05);
     this._dirty = true;
   }
 
@@ -102,7 +126,7 @@ export class HarmonicRibbon {
     return {
       domPc: this._dom[i],
       domName: PC_NAMES[this._dom[i]],
-      energy: this._tot[i] / Math.max(0.05, this._eMax),
+      energy: this._eS[i],
       halfW: this._hw[i],
     };
   }
@@ -135,7 +159,6 @@ export class HarmonicRibbon {
       }
       this._tot[i] = tot;
     }
-    for (let pc = 0; pc < 12; pc++) this._smooth(m.subarray(pc * SEG, pc * SEG + SEG), 2);
 
     // dominant per control point: read from the immutable per-sample ring
     // (the bucket's most recent sample). The window sliding only removes at
@@ -145,21 +168,26 @@ export class HarmonicRibbon {
       this._dom[i] = this.domRing[sEnd];
     }
 
-    // lane -> y, then heavy smoothing: chord changes are steps in the data,
-    // and the easing turns them into the glide the spec asks for while a real
-    // modulation still reads as a decisive move
+    // geometry from the IMMUTABLE per-sample rings: bucket averages of values
+    // that were finalized at push time. No spatial smoothing — a symmetric
+    // filter here is exactly what let new chords bend the drawn past. The
+    // glide already happened, causally, when the samples were written; the
+    // window sliding makes these values TRANSLATE left, never deform.
     const pad = plotH * 0.1;
-    const laneH = (plotH - pad * 2) / 11;
-    for (let i = 0; i < SEG; i++) this._y[i] = pad + SLOT_OF[this._dom[i]] * laneH;
-    this._smooth(this._y, 4);
-
-    // thickness: total energy against the rolling scale — silence thins to a
-    // hairline instead of freezing
+    const span = plotH - pad * 2;
     for (let i = 0; i < SEG; i++) {
-      const e = Math.min(1, this._tot[i] / Math.max(0.05, this._eMax));
+      const s0 = Math.floor(i * STEP);
+      let ySum = 0, eSum = 0;
+      for (let k = 0; k < STEP; k++) {
+        const idx = (this.idx + s0 + k) % RIB_COLS;
+        ySum += this.ySmRing[idx];
+        eSum += this.eSmRing[idx];
+      }
+      this._y[i] = pad + (ySum / STEP) * span;
+      const e = eSum / STEP;
+      this._eS[i] = e;
       this._hw[i] = plotH * (0.012 + 0.16 * e);
     }
-    this._smooth(this._hw, 2);
   }
 
   // Ease the display geometry toward the derived targets. Targets step at
@@ -234,7 +262,7 @@ export class HarmonicRibbon {
       const gr = c.createLinearGradient(0, 0, w, 0);
       for (let i = 0; i < SEG; i += 5) {
         const [r, g, b] = style.pcRGB(this._dom[i]);
-        const e = Math.min(1, this._tot[i] / Math.max(0.05, this._eMax));
+        const e = this._eS[i]; // immutable: brightness of the past never re-scales
         gr.addColorStop(i / (SEG - 1), `rgba(${r},${g},${b},${((0.1 + e * 0.8) * recency(i) * aScale).toFixed(3)})`);
       }
       return gr;
@@ -341,7 +369,7 @@ export class HarmonicRibbon {
 
     // endpoint: brighter, defined, and named — hidden in silence. Uses the
     // EASED geometry so the dot glides with the ribbon it sits on.
-    const e = Math.min(1, this._tot[SEG - 1] / Math.max(0.05, this._eMax));
+    const e = this._eS[SEG - 1];
     if (e > 0.06) {
       const dom = this._dom[SEG - 1];
       const [r, g, b] = style.pcRGB(dom);

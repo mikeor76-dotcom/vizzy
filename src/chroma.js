@@ -272,7 +272,7 @@ export class Chroma {
     const keyW = dt * (1 - this.percussive * 0.65);
     for (let i = 0; i < 12; i++) avg[i] = avg[i] * decay + this._accKey[i] * keyW;
     this._keyT = (this._keyT || 0) + dt;
-    if (this._keyT < 2.5) return; // needs some history before it means anything
+    if (this._keyT < 1.5) return; // needs some history before it means anything
 
     let bestScore = -2, bestPc = 0, bestMode = "major", second = -2, incScore = -2;
     const rot = new Float32Array(12);
@@ -290,10 +290,13 @@ export class Chroma {
     // passage correlates decently with several keys at once, and the wheel's
     // halo should say so.
     const conf = Math.max(0, Math.min(1, (bestScore - second) * 3.5)) * Math.min(1, Math.max(0, bestScore) * 1.6);
+    this._provConf = conf; // the CURRENT best's confidence, locked or not
 
     if (this.keyPc === bestPc && this.keyMode === bestMode) {
       this._candFor = 0;
-      this.keyConfidence += (conf - this.keyConfidence) * Math.min(1, dt * 0.7);
+            // 1.6/s, not 0.7: the number was taking ~3s to reflect a margin the
+      // detector had already measured — report what you know when you know it
+      this.keyConfidence += (conf - this.keyConfidence) * Math.min(1, dt * 1.6);
       return;
     }
     // SWITCHING is a different question from confidence, and conflating them
@@ -397,6 +400,20 @@ export class Chroma {
       this.notes.sort((a, b) => b.conf - a.conf);
       this.notes.length = 8;
     }
+  }
+
+  // The best CURRENT guess before the lock. The detector always has a
+  // leading candidate with a measured margin; hiding it behind "listening…"
+  // for the first several seconds threw that information away. Displays show
+  // it dimmed as an estimate — confidence is understood from the first bars,
+  // and the eventual lock reads as the estimate firming up rather than a
+  // verdict from nowhere.
+  provisional() {
+    if (this.key || !this._open || this._best.pc < 0 || (this._provConf ?? 0) <= 0.02) return null;
+    return {
+      label: `${PC_NAMES[this._best.pc]} ${this._best.mode === "minor" ? "MINOR" : "MAJOR"}`,
+      confidence: this._provConf,
+    };
   }
 
   // The relative key (A major <-> F# minor). Relatives share all seven notes,

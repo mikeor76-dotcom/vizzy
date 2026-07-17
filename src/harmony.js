@@ -240,9 +240,20 @@ export class Harmony {
       ctx.fillStyle = `rgba(${pal.dim},${0.5 + conf * 0.4})`;
       ctx.fillText(`${Math.round(conf * 100)}% confidence`, cx, cy + 13);
     } else {
-      ctx.font = "12px ui-monospace, Menlo, monospace";
-      ctx.fillStyle = `rgba(${pal.dim},0.5)`;
-      ctx.fillText("listening…", cx, cy);
+      const prov = this.chroma.provisional();
+      if (prov) {
+        // the detector's best current guess, visibly tentative
+        ctx.font = "600 20px -apple-system, 'Segoe UI', sans-serif";
+        ctx.fillStyle = `rgba(${pal.ink},${0.16 + prov.confidence * 0.3})`;
+        ctx.fillText(prov.label, cx, cy - 8);
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.fillStyle = `rgba(${pal.dim},0.7)`;
+        ctx.fillText(`estimating… ${Math.round(prov.confidence * 100)}%`, cx, cy + 13);
+      } else {
+        ctx.font = "12px ui-monospace, Menlo, monospace";
+        ctx.fillStyle = `rgba(${pal.dim},0.5)`;
+        ctx.fillText("listening…", cx, cy);
+      }
     }
   }
 
@@ -440,9 +451,19 @@ export class Harmony {
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     if (!label) {
-      ctx.font = "13px ui-monospace, Menlo, monospace";
-      ctx.fillStyle = `rgba(${pal.dim},0.6)`;
-      ctx.fillText("listening…", x, y + 40);
+      const prov = this.chroma.provisional();
+      if (prov) {
+        ctx.font = "600 20px -apple-system, 'Segoe UI', sans-serif";
+        ctx.fillStyle = `rgba(${pal.ink},${0.16 + prov.confidence * 0.3})`;
+        ctx.fillText(prov.label, x, y + 42);
+        ctx.font = "11px ui-monospace, Menlo, monospace";
+        ctx.fillStyle = `rgba(${pal.dim},0.7)`;
+        ctx.fillText("estimating…", x, y + 62);
+      } else {
+        ctx.font = "13px ui-monospace, Menlo, monospace";
+        ctx.fillStyle = `rgba(${pal.dim},0.6)`;
+        ctx.fillText("listening…", x, y + 40);
+      }
       return;
     }
     ctx.font = "600 24px -apple-system, 'Segoe UI', sans-serif";
@@ -502,7 +523,13 @@ export class Harmony {
     // width — the two readouts that genuinely want to be wide get the rest.
     // A first pass centred the wheel and left the right third as dead space
     // around a thin gauge; everything now earns its width.
-    this._header(ctx, "Harmony Wheel", w * 0.51 - 46, h * 0.09);
+    {
+      // centred properly (headers are left-aligned): measure, then offset —
+      // and at the very top so the ring's C label never runs into it
+      ctx.font = "600 11px -apple-system, 'Segoe UI', sans-serif";
+      const tw = ctx.measureText("H A R M O N Y   W H E E L").width;
+      this._header(ctx, "Harmony Wheel", w * 0.51 - tw / 2, h * 0.055);
+    }
     const ribH = h * 0.72, ribW = w * 0.34, ribX = w * 0.028, ribY = (h - ribH) / 2;
     this._header(ctx, "Harmonic History", ribX, ribY - 14);
     ctx.font = "9px ui-monospace, Menlo, monospace";
@@ -512,7 +539,7 @@ export class Harmony {
     ctx.fillText(`last ${RIB_SECONDS} seconds`, ribX + ribW, ribY - 14);
     this.ribbon.draw(ctx, { x: ribX, y: ribY, w: ribW, h: ribH },
       { id: this.cfg.preset, pcRGB: pal.pcRGB, dim: pal.dim, ink: pal.ink }, dt);
-    this._drawWheel(ctx, w * 0.51, h * 0.52, Math.min(h * 0.38, w * 0.11));
+    this._drawWheel(ctx, w * 0.51, h * 0.545, Math.min(h * 0.35, w * 0.105));
     const gy = h * 0.22, gh = h * 0.52;
     this._drawGauge(ctx, w * 0.675, gy, 34, gh);
     this._drawChart(ctx, w * 0.745, gy, w * 0.15, gh);

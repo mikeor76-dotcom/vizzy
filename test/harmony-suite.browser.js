@@ -202,6 +202,64 @@ async function harmonySuite() {
     };
   }
 
+  // --- 6b. the Harmonic Ribbon module (the user-spec'd 30s panel):
+  // history trimming, dominant selection with stickiness, silence behaviour,
+  // and that the component actually puts light in its panel.
+  {
+    const { HarmonicRibbon, RIB_COLS } = await import(`/src/harmonicribbon.js?v=${V}`);
+    const style = {
+      id: "t", dim: [90, 105, 140], ink: [225, 232, 248],
+      pcRGB: (pc) => [200, 180 - pc * 5, 120 + pc * 8],
+    };
+    const rb = new HarmonicRibbon();
+    // trimming: push 900 samples (45s) — the window must stay capped at 30s
+    const gShaped = new Float32Array(12);
+    gShaped[7] = 1; gShaped[2] = 0.6; gShaped[11] = 0.5; gShaped[4] = 0.25; // G D B E
+    for (let i = 0; i < 900; i++) rb.push(gShaped);
+    const trimOk = rb.windowSamples() === RIB_COLS && rb.hist.length === 12 * RIB_COLS;
+    // dominant selection: newest point must say G, and stay G under a
+    // near-tie flicker (the stickiness contract)
+    const domA = rb.status().domName;
+    const flicker = Float32Array.from(gShaped);
+    for (let i = 0; i < 80; i++) {
+      flicker[2] = 0.95 + (i % 2) * 0.06; // D flickers just around G's level
+      rb.push(flicker);
+    }
+    const domB = rb.status().domName;
+    // silence: energy and thickness collapse gracefully, never freeze
+    const zero = new Float32Array(12);
+    for (let i = 0; i < 240; i++) rb.push(zero); // 12s of room
+    const sil = rb.status();
+    // rendering: the component lights its panel with music, and goes near-dark
+    // in silence (measured by pixels, colour not alpha)
+    const rcv = document.createElement("canvas");
+    rcv.width = 700; rcv.height = 360;
+    const rctx = rcv.getContext("2d", { willReadFrequently: true });
+    const lit = () => {
+      const d = rctx.getImageData(0, 0, 700, 330).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 40) if (d[i] + d[i + 1] + d[i + 2] > 40) n++;
+      return n / (d.length / 40);
+    };
+    const rb2 = new HarmonicRibbon();
+    for (let i = 0; i < 600; i++) rb2.push(gShaped);
+    rctx.fillStyle = "#000"; rctx.fillRect(0, 0, 700, 360);
+    rb2.draw(rctx, { x: 8, y: 8, w: 660, h: 320 }, style);
+    const litMusic = lit();
+    for (let i = 0; i < 600; i++) rb2.push(zero);
+    rctx.fillStyle = "#000"; rctx.fillRect(0, 0, 700, 360);
+    rb2.draw(rctx, { x: 8, y: 8, w: 660, h: 320 }, style);
+    const litSilence = lit();
+    results.ribbon = {
+      pass: trimOk && domA === "G" && domB === "G" && sil.energy < 0.05 && sil.halfW < 8 &&
+        litMusic > 0.01 && litSilence < litMusic * 0.25,
+      trimOk, dominant: domA, dominantUnderFlicker: domB,
+      silenceEnergy: +sil.energy.toFixed(3), silenceHalfW: +sil.halfW.toFixed(1),
+      litMusic: +litMusic.toFixed(4), litSilence: +litSilence.toFixed(4),
+      note: "30s cap, sticky dominant, graceful silence, and it actually paints",
+    };
+  }
+
   // --- 7. perf
   {
     const { pcm } = renderSong("rock-e-minor");

@@ -247,6 +247,9 @@ export const REGISTRY = [
     idle: true, // the ink fades to black over ~20s, then near-still darkness
     // self-governing: SilenceGate + per-band peaks + contrast-stretched energy
     auto: null,
+    // asks for the 8192-fft analyser: note onsets bloom ink at their pitch
+    // position — sparse music (solo piano) is note EVENTS, not bands
+    needsChroma: true,
   },
   {
     id: "vectorcrt",

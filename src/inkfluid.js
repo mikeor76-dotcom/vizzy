@@ -24,6 +24,7 @@
 // per-frame allocation.
 
 import { SilenceGate, EnergyJump } from "./silencegate.js";
+import { Chroma, hiResOf } from "./chroma.js";
 
 const PALETTES = {
   Bioluminescent: {
@@ -58,7 +59,10 @@ export class InkFluid {
     this.cfg = { preset: "Bioluminescent" }; // self-governing (auto:null)
     this.gate = new SilenceGate();
     this.jump = new EnergyJump({ cooldown: 10 });
+    this.chroma = new Chroma(); // note events — sparse music is NOTES, not bands
     this.freq = new Uint8Array(1024);
+    this.notePuffs = 0; // bench counter
+    this.puffs = []; // bench log: {midi, x} of recent blooms
 
     this._alloc(240, 60);
     this.iters = 12;
@@ -366,6 +370,10 @@ export class InkFluid {
     if (analyser) analyser.getByteFrequencyData(this.freq);
     else this.freq.fill(0);
     const g = this._analyze(dt);
+    this.chroma.update(hiResOf(analyser), dt);
+    // sparse tonal material (solo piano) barely moves the broadband gate —
+    // the chroma tonality gate is the co-equal driver (the cymatics lesson)
+    const drive = Math.max(g.gate, this.chroma._gateEnv * 0.85);
     const pal = PALETTES[this.cfg.preset] || PALETTES.Bioluminescent;
 
     // ---- inject: emitters breathe with their bands
@@ -380,6 +388,28 @@ export class InkFluid {
         const up = lvl * inj * (EMIT_BAND[e] === 0 ? 34 : 22) * dt * 60;
         this._stamp(cx, this.gh - 3, 1, r / 255, gg / 255, b / 255, amt, up * 0.016);
       }
+    }
+    // NOTE BLOOMS — the "quiet piano is boring" fix. Band emitters gave a
+    // solo piano the same two anonymous bass puffs whatever was played; now
+    // every tracked note blooms its own ink at its PITCH position (low notes
+    // left, high right, like the keyboard) colored by register, so a melody
+    // literally paints across the tank. Dense mixes cap at chroma's 8
+    // strongest voices, so this stays texture there, not spray.
+    for (const nt of this.chroma.notes) {
+      if (nt.state !== "on" || nt._seenByInk || nt.conf < 0.2) continue;
+      nt._seenByInk = true;
+      this.notePuffs++;
+      const t2 = Math.max(0, Math.min(1, (nt.midi - 36) / 60));
+      const cx = Math.round((0.06 + t2 * 0.88) * this.gw);
+      if (this.puffs.push({ midi: nt.midi, x: cx }) > 64) this.puffs.shift();
+      const f3 = Math.min(2.999, t2 * 3), i0 = f3 | 0, fr = f3 - i0;
+      const c0 = pal.bands[i0], c1 = pal.bands[i0 + 1];
+      const amt = (0.3 + nt.vel * 0.5) * (0.5 + nt.conf * 0.5);
+      this._stamp(cx, this.gh - 6, 1,
+        (c0[0] + (c1[0] - c0[0]) * fr) / 255,
+        (c0[1] + (c1[1] - c0[1]) * fr) / 255,
+        (c0[2] + (c1[2] - c0[2]) * fr) / 255,
+        amt, 0.55);
     }
     if (this._kickNow) this._kickVortex(pal);
     if (this._ruptureNow) this._rupture(pal);
@@ -401,7 +431,7 @@ export class InkFluid {
     // fading ink drifts upward as it goes, which is most of the beauty.
     {
       const { gw, gh, v, dr, dg, db } = this;
-      const bk = dt * (1.5 + g.gate * 3.5);
+      const bk = dt * (1.5 + drive * 3.5);
       for (let j = 1; j < gh - 1; j++) {
         const row = j * gw;
         for (let i = 1; i < gw - 1; i++) {
@@ -413,7 +443,7 @@ export class InkFluid {
 
     // ---- solve. dye decays to ~nothing in ~20s once injection stops
     this._dyeDecay = 1 - dt * 0.155;
-    const eps = (1.4 + this.mid * 3.2) * g.gate + 0.25;
+    const eps = (1.4 + this.mid * 3.2) * drive + 0.25;
     this.step(dt, eps);
     const tSolve = performance.now();
 

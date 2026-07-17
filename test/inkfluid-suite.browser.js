@@ -32,13 +32,15 @@ async function inkSuite() {
 
   const mkRun = (pcm) => {
     const inst = new InkFluid();
+    const hi = new AnalyserSim(pcm, { fftSize: 8192, smoothingTimeConstant: 0.35, sampleRate: SR });
     const lo = new AnalyserSim(pcm, { fftSize: 2048, smoothingTimeConstant: 0.55, sampleRate: SR });
-    return { inst, lo, now: 1000, frame: 0 };
+    lo.hiRes = hi; // exactly what main.js attaches for `needsChroma` modes
+    return { inst, lo, hi, now: 1000, frame: 0 };
   };
   const drive = (r, secs, onFrame) => {
     const end = r.frame + Math.round(secs * 60);
     while (r.frame < end) {
-      r.lo.seek(r.frame / 60); r.now += 1000 / 60; r.frame++;
+      r.lo.seek(r.frame / 60); r.hi.seek(r.frame / 60); r.now += 1000 / 60; r.frame++;
       r.inst.render(ctx, r.lo, W, H, r.now);
       if (onFrame) onFrame(r.inst, r.frame / 60);
     }
@@ -193,6 +195,30 @@ async function inkSuite() {
       pass: r.inst.wakes > wakesBefore && wokeDye > dyeBefore * 3 + 5,
       wakePlumes: r.inst.wakes - wakesBefore,
       dyeBefore: +dyeBefore.toFixed(2), dyeAfter: +wokeDye.toFixed(1),
+    };
+  }
+
+  // --- 5b. NOTE BLOOMS (user: "quiet piano seemed a bit boring") — sparse
+  // solo piano must paint per-note blooms at PITCH positions, not just leak
+  // anonymous bass puffs from two emitters
+  {
+    const { pcm, truth } = renderSong("solo-piano-melody");
+    const r = mkRun(pcm);
+    drive(r, Math.min(truth.duration + 1, pcm.length / SR));
+    const puffs = r.inst.puffs;
+    // pitch -> x must be order-true: the highest note blooms right of the
+    // lowest, and every equal-midi pair lands at the same x
+    let orderOk = true;
+    for (const a of puffs) for (const b of puffs) {
+      if (a.midi < b.midi && a.x >= b.x) orderOk = false;
+      if (a.midi === b.midi && a.x !== b.x) orderOk = false;
+    }
+    results.pianoBlooms = {
+      pass: r.inst.notePuffs >= 12 && orderOk,
+      notePuffs: r.inst.notePuffs,
+      truthNotes: truth.notes.length,
+      pitchOrderOk: orderOk,
+      xSpanCells: puffs.length ? Math.max(...puffs.map(p => p.x)) - Math.min(...puffs.map(p => p.x)) : 0,
     };
   }
 

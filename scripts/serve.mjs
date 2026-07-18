@@ -65,7 +65,26 @@ const inputClients = new Set();
 const INPUT_ACTIONS = new Set([
   "mode:next", "mode:prev", "mode:set", "category:next", "category:prev",
   "favorite:toggle", "preset:cycle", "lock:toggle", "controls:toggle", "mic:toggle",
+  "np:toggle", // now-playing overlay on/off (encoder long-press)
 ]);
+
+// NOW PLAYING recognition (recognition/ → scripts/recognizer.bundle.mjs, built
+// by `bun run build:recognizer`). Lazy-imported so the app still serves fine if
+// the bundle is absent — recognition then reports 503 and the UI shows idle.
+let recognizerPromise = null;
+function recognizer() {
+  if (!recognizerPromise) {
+    recognizerPromise = import(join(dirname(fileURLToPath(import.meta.url)), "recognizer.bundle.mjs"))
+      .catch((e) => { recognizerPromise = null; throw e; });
+  }
+  return recognizerPromise;
+}
+
+// Now-playing overlay visibility persists like last-mode: kiosk Chromium can
+// drop localStorage, and the knob's long-press toggle must survive reboots.
+const NP_OVERLAY_FILE = join(STATE_DIR, "np-overlay");
+function readNpOverlay() { try { return readFileSync(NP_OVERLAY_FILE, "utf8").trim() !== "off"; } catch { return true; } }
+function writeNpOverlay(on) { try { mkdirSync(STATE_DIR, { recursive: true }); writeFileSync(NP_OVERLAY_FILE, on ? "on" : "off"); return true; } catch { return false; } }
 const isLoopback = (req) => /^(::1|::ffff:127\.|127\.)/.test(req.socket.remoteAddress || "");
 function broadcastInput(action, arg) {
   const line = `data: ${JSON.stringify(arg === undefined ? { action } : { action, arg })}\n\n`;
@@ -100,7 +119,7 @@ function sendIndex(res) {
   let html;
   try { html = readFileSync(join(DIST, "index.html"), "utf8"); }
   catch { res.writeHead(404); return res.end("not found"); }
-  const inject = `<script>window.__vizzyLastMode=${JSON.stringify(readLastMode())};</script>`;
+  const inject = `<script>window.__vizzyLastMode=${JSON.stringify(readLastMode())};window.__vizzyNpOverlay=${readNpOverlay()};</script>`;
   html = html.includes("</head>") ? html.replace("</head>", `  ${inject}\n</head>`) : inject + html;
   res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
   res.end(html);
@@ -166,6 +185,73 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ ok: !!action, action, clients }));
     });
     return;
+  }
+
+  // NOW PLAYING: identify a PCM clip (s16le mono body; ?sampleRate=&capturedAtMs=)
+  if (pathname === "/api/identify" && req.method === "POST") {
+    const params = new URL(req.url, "http://localhost").searchParams;
+    const sampleRate = Math.max(8000, Math.min(96000, Number(params.get("sampleRate")) || 16000));
+    const capturedAtMs = Number(params.get("capturedAtMs")) || Date.now();
+    const chunks = [];
+    let size = 0;
+    req.on("data", (c) => { size += c.length; if (size > 4e6) req.destroy(); else chunks.push(c); });
+    req.on("end", async () => {
+      res.setHeader("content-type", "application/json");
+      res.setHeader("cache-control", "no-store");
+      try {
+        const { identifyAndEnrich } = await recognizer();
+        const buf = Buffer.concat(chunks);
+        if (buf.length < 32000) { res.writeHead(400); return res.end(JSON.stringify({ error: "clip too short" })); }
+        const pcm = new Int16Array(buf.buffer, buf.byteOffset, Math.floor(buf.length / 2));
+        const out = await identifyAndEnrich(pcm, sampleRate, capturedAtMs);
+        if (out.match) console.log(`[vizzy] now-playing: ${out.match.artist} — ${out.match.title} (offset ${out.match.matchOffsetSec ?? "?"}s, ${out.timingMs.identify}ms)`);
+        res.writeHead(200);
+        res.end(JSON.stringify(out));
+      } catch (e) {
+        console.error(`[vizzy] identify failed: ${e.message}`);
+        res.writeHead(503);
+        res.end(JSON.stringify({ error: "recognizer unavailable (run: bun run build:recognizer)" }));
+      }
+    });
+    return;
+  }
+
+  // NOW PLAYING: album-art proxy — served same-origin so canvas drawImage never
+  // taints. Allowlisted CDNs only (the allowlist lives in the bundle).
+  if (pathname === "/api/art") {
+    const u = new URL(req.url, "http://localhost").searchParams.get("u") || "";
+    recognizer()
+      .then(async ({ isAllowedArtUrl }) => {
+        if (!isAllowedArtUrl(u)) { res.writeHead(400); return res.end("bad art url"); }
+        const upstream = await fetch(u);
+        if (!upstream.ok) { res.writeHead(502); return res.end("art fetch failed"); }
+        const body = Buffer.from(await upstream.arrayBuffer());
+        res.writeHead(200, {
+          "content-type": upstream.headers.get("content-type") || "image/jpeg",
+          "cache-control": "public, max-age=86400",
+        });
+        res.end(body);
+      })
+      .catch(() => { res.writeHead(503); res.end("recognizer unavailable"); });
+    return;
+  }
+
+  // NOW PLAYING overlay visibility (read on boot, written on every toggle)
+  if (pathname === "/api/np-overlay") {
+    res.setHeader("access-control-allow-origin", "*");
+    res.setHeader("cache-control", "no-store");
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 16) req.destroy(); });
+      req.on("end", () => {
+        writeNpOverlay(body.trim() !== "off");
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ on: readNpOverlay() }));
+      });
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    return res.end(JSON.stringify({ on: readNpOverlay() }));
   }
 
   // AutoGain baselines (read on boot, written when a listen window locks)

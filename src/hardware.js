@@ -10,8 +10,9 @@
 // and EventSource reconnects on its own if the daemon or server restarts.
 //
 // Physical mapping (deploy/encoder-setup.sh):
-//   Encoder rotate → mode:prev / mode:next   (the whole lineup, wrapping)
-//   Encoder press  → favorite:toggle         (star the one you like)
+//   Encoder rotate     → mode:prev / mode:next   (the whole lineup, wrapping)
+//   Encoder press      → favorite:toggle         (star the one you like)
+//   Encoder hold ~0.6s → np:toggle               (song-info overlay on/off)
 // Room to grow — every action below is already dispatchable, so a second
 // encoder or a switch only needs the daemon to name it:
 //   category:next/prev · preset:cycle · lock:toggle · controls:toggle · mic:toggle
@@ -27,6 +28,7 @@ const ACTION_MAP = {
   "favorite:toggle": (c) => c.toggleFavorite(),
   "lock:toggle": (c) => c.toggleLock(),
   "controls:toggle": (c) => c.toggleControlsVisible(),
+  "np:toggle": (c) => c.toggleNpOverlay(),
 };
 
 export function createHardwareInput(controller, { toggleMic, onEvent } = {}) {

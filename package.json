@@ -19,11 +19,13 @@
     "version:bump": "bun scripts/bump-version.mjs",
     "update:cancel": "bun scripts/updater/cancel.mjs",
     "update:clear-bad": "bun scripts/updater/clear-bad.mjs",
-    "test:updater": "bun test/updater.test.mjs"
+    "test:updater": "bun test/updater.test.mjs",
+    "build:recognizer": "bun run scripts/build-recognizer.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.3",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "node-shazam": "^1.2.7"
   },
   "dependencies": {
     "butterchurn": "^2.6.7",

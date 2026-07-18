@@ -26,6 +26,9 @@ import { AutoGain } from "./autogain.js";
 import { VisualizerController } from "./controller.js";
 import { initKeyboardControls } from "./keyboard.js";
 import { createHardwareInput } from "./hardware.js";
+import { nowplaying } from "./nowplaying.js";
+import { NowPlayingMode } from "./nowplayingmode.js";
+import { installNpOverlay } from "./npoverlay.js";
 
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -121,6 +124,7 @@ function ensureHiRes() {
 }
 
 function stopMic() {
+  nowplaying.detach();
   if (micStream) {
     micStream.getTracks().forEach((t) => t.stop());
     micStream = null;
@@ -130,6 +134,7 @@ function stopMic() {
     micSource = null;
   }
   micActive = false;
+  updateNpActivity();
   micBtn.classList.remove("active");
   micBtn.textContent = "Start Mic";
   nowPlaying.textContent = "";
@@ -162,7 +167,9 @@ async function startMic() {
     micSource = audioCtx.createMediaStreamSource(stream);
     micSource.connect(analyser);
     if (hiResAnalyser) micSource.connect(hiResAnalyser); // if chroma asked first
+    nowplaying.attach(audioCtx, micSource); // song-ID tap (no second getUserMedia)
     micActive = true;
+    updateNpActivity();
     micBtn.classList.add("active");
     micBtn.textContent = "Stop Mic";
     nowPlaying.textContent = "";
@@ -210,6 +217,7 @@ const blueMeters = new BlueMeters();
 const oscilloscope = new Oscilloscope();
 const waterfall = new Waterfall();
 const studioMonitor = new StudioMonitor();
+const nowPlayingMode = new NowPlayingMode();
 
 // the raw-analyser views (plain draw functions below) get tiny cfg holders so
 // AutoGain can drive their sensitivity exactly like the class-based modes
@@ -244,6 +252,7 @@ const INSTANCES = {
   oscilloscope,
   waterfall,
   "studio-monitor": studioMonitor,
+  nowplaying: nowPlayingMode,
 };
 
 const freqData = new Uint8Array(1024);
@@ -355,6 +364,8 @@ const BINDINGS = {
   oscilloscope: { render: (c, a, w, h, now) => oscilloscope.render(c, a, w, h, now), fade: "rgba(4, 7, 6, 0.3)" },
   waterfall: { render: (c, a, w, h, now) => waterfall.render(c, a, w, h, now), fade: "rgb(5, 6, 10)" },
   "studio-monitor": { render: (c, a, w, h, now) => studioMonitor.render(c, a, w, h, now), fade: "rgb(6, 7, 9)" },
+  // now playing repaints fully every frame (opaque gradient background)
+  nowplaying: { render: (c, a, w, h, now) => nowPlayingMode.render(c, a, w, h, now), fade: "rgb(7, 7, 12)" },
 };
 for (const entry of REGISTRY) Object.assign(entry, BINDINGS[entry.id]);
 
@@ -581,6 +592,26 @@ function saveLastMode(mode) {
 
 initKeyboardControls(controller, { toggleMic, pixelquest });
 
+// --- Now Playing: overlay layer + recognition activity -----------------------
+// The DOM overlay (song info over other modes) mounts itself; recognition runs
+// only while the mic is live AND something on screen consumes it — the Now
+// Playing mode, or an enabled overlay on a mode that places one. QA:
+// __np.status() / __np.mock() / __np.identify() in the console; N toggles.
+installNpOverlay(controller);
+function updateNpActivity() {
+  const entry = controller.currentEntry;
+  const wantsOverlay = controller.npOverlay && entry.nowPlaying && entry.nowPlaying.style !== "off";
+  nowplaying.setActive(micActive && (controller.currentModeId === "nowplaying" || !!wantsOverlay));
+}
+controller.onChange((what) => {
+  if (what === "mode") updateNpActivity();
+  if (what === "npoverlay") {
+    updateNpActivity();
+    // persist like last-mode: server survives kiosk reboots (no-op in dev)
+    try { fetch("/api/np-overlay", { method: "POST", body: controller.npOverlay ? "on" : "off", keepalive: true }).catch(() => {}); } catch {}
+  }
+});
+
 // Kiosk support (e.g. Raspberry Pi driving an LED wall):
 //   ?mode=galaxy      first-boot default mode; once you switch modes the app
 //                     remembers your last choice and that wins over this param
@@ -649,6 +680,7 @@ applyAutoSens(autogain.sens);
 applyPreset();
 applyControlsVisible();
 buildPanel();
+updateNpActivity();
 
 prevModeId = controller.currentModeId; // the intro starts on mic-listen, not here
 

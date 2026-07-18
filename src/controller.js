@@ -11,6 +11,7 @@ const STORE = {
   category: "vizzy-category",
   favorites: "vizzy-favorites",
   controls: "vizzy-controls-visible",
+  npOverlay: "vizzy-np-overlay",
 };
 
 export class VisualizerController {
@@ -28,6 +29,13 @@ export class VisualizerController {
     if (!CATEGORIES.some((c) => c.id === this.currentCategory)) this.currentCategory = byId(this.currentModeId).category;
     this.currentPreset = byId(this.currentModeId).presets[0];
     this.controlsVisible = localStorage.getItem(STORE.controls) !== "false";
+    // now-playing overlay visibility. Like last-mode, the SERVER-injected value
+    // wins on the appliance (kiosk Chromium drops localStorage); localStorage
+    // drives it in a normal browser. Default: on.
+    this.npOverlay =
+      typeof window !== "undefined" && typeof window.__vizzyNpOverlay === "boolean"
+        ? window.__vizzyNpOverlay
+        : localStorage.getItem(STORE.npOverlay) !== "false";
     this.locked = false; // never persisted: a fresh boot is always unlocked
     this.overlayData = null;
     this.overlayUntil = 0;
@@ -163,6 +171,15 @@ export class VisualizerController {
     this.controlsVisible = !this.controlsVisible;
     this.#persist();
     this.#emit("controls");
+  }
+  toggleNpOverlay() {
+    this.npOverlay = !this.npOverlay;
+    localStorage.setItem(STORE.npOverlay, this.npOverlay);
+    this.showTemporaryOverlay({
+      line1: this.npOverlay ? "♪ SONG INFO ON" : "SONG INFO OFF",
+      line2: this.npOverlay ? "now-playing overlay enabled" : "hold the knob (or press N) to re-enable",
+    });
+    this.#emit("npoverlay");
   }
 
   // -------------------------------------------------------------- overlay

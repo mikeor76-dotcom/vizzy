@@ -9,6 +9,7 @@
 //   F         toggle favorite
 //   L         lock/unlock the current visualization
 //   H         show / hide the debug control panel
+//   N         toggle the now-playing (song info) overlay
 //   Space     start / stop the microphone
 //
 // Pixel Quest only (Biome System v1), while it's the active mode:
@@ -64,6 +65,10 @@ export function initKeyboardControls(controller, { toggleMic, pixelquest }) {
       case "h":
       case "H":
         controller.toggleControlsVisible();
+        break;
+      case "n":
+      case "N":
+        controller.toggleNpOverlay();
         break;
       case " ":
         e.preventDefault();

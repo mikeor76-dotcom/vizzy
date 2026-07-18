@@ -64,8 +64,8 @@ function writeAutogain(j) { try { mkdirSync(STATE_DIR, { recursive: true }); wri
 const inputClients = new Set();
 const INPUT_ACTIONS = new Set([
   "mode:next", "mode:prev", "mode:set", "category:next", "category:prev",
-  "favorite:toggle", "preset:cycle", "lock:toggle", "controls:toggle", "mic:toggle",
-  "np:toggle", // now-playing overlay on/off (encoder long-press)
+  "preset:cycle", "lock:toggle", "controls:toggle", "mic:toggle",
+  "np:toggle", // now-playing overlay on/off (encoder press)
 ]);
 
 // NOW PLAYING recognition (recognition/ → scripts/recognizer.bundle.mjs, built

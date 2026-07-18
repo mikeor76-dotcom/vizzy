@@ -46,7 +46,7 @@ Canvas 2D + Vite, run with bun** (no Node on the dev Mac, no TypeScript in
   placement). UI/keyboard/encoder all read this.
 - `src/controller.js` — central state; all inputs call controller methods.
   Inputs: `src/keyboard.js`, `src/hardware.js` (encoder via SSE from serve.mjs;
-  daemon `deploy/vizzy-encoder.py`: rotate=mode, press=favorite, hold=np:toggle).
+  daemon `deploy/vizzy-encoder.py`: rotate=mode, press=np:toggle).
 - `src/silencegate.js` — use in every self-governing mode; music may only pull
   the noise floor DOWN. `src/chroma.js` — pitch/key/notes (see file comments).
 - `scripts/serve.mjs` — dependency-free appliance server: static dist, /health,

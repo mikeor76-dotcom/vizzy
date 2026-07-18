@@ -9,14 +9,12 @@ import { CATEGORIES, REGISTRY, byId } from "./registry.js";
 const STORE = {
   mode: "vizzy-mode",
   category: "vizzy-category",
-  favorites: "vizzy-favorites",
   controls: "vizzy-controls-visible",
   npOverlay: "vizzy-np-overlay",
 };
 
 export class VisualizerController {
   constructor() {
-    this.favorites = this.#loadJSON(STORE.favorites, []);
     // true if a mode was previously chosen + saved — lets a kiosk ?mode= URL act
     // as a first-boot default only, so the remembered last mode wins after that.
     this.hadSavedMode = localStorage.getItem(STORE.mode) != null && byId(localStorage.getItem(STORE.mode)) != null;
@@ -60,7 +58,6 @@ export class VisualizerController {
   #persist() {
     localStorage.setItem(STORE.mode, this.currentModeId);
     localStorage.setItem(STORE.category, this.currentCategory);
-    localStorage.setItem(STORE.favorites, JSON.stringify(this.favorites));
     localStorage.setItem(STORE.controls, this.controlsVisible);
   }
 
@@ -72,16 +69,12 @@ export class VisualizerController {
     return CATEGORIES.find((c) => c.id === id)?.name || id;
   }
   modesInCategory(catId = this.currentCategory) {
-    if (catId === "favorites") return this.favorites.map(byId).filter(Boolean);
     return REGISTRY.filter((m) => m.category === catId);
   }
   // navigable = has at least one mode (Hi-Fi stays visible in the panel but
   // the knobs skip it until it has instruments)
   #navigableCategories() {
     return CATEGORIES.filter((c) => this.modesInCategory(c.id).length > 0);
-  }
-  isFavorite(id = this.currentModeId) {
-    return this.favorites.includes(id);
   }
 
   // ---------------------------------------------------------- navigation
@@ -118,8 +111,8 @@ export class VisualizerController {
     const entry = byId(modeId);
     if (!entry) return;
     this.currentModeId = modeId;
-    // follow the mode into its home category (unless it lives in favorites)
-    if (this.currentCategory !== "favorites" || !this.isFavorite(modeId)) this.currentCategory = entry.category;
+    // the panel follows each mode into its home category
+    this.currentCategory = entry.category;
     this.currentPreset = entry.presets[0];
     this.#persist();
     this.#announce();
@@ -147,17 +140,6 @@ export class VisualizerController {
     this.currentPreset = presets[(ix + 1) % presets.length];
     this.#announce();
     this.#emit("preset");
-  }
-  toggleFavorite() {
-    const id = this.currentModeId;
-    if (this.isFavorite(id)) this.favorites = this.favorites.filter((f) => f !== id);
-    else this.favorites.push(id);
-    this.#persist();
-    this.showTemporaryOverlay({
-      line1: this.isFavorite(id) ? "★ FAVORITE" : "☆ UNFAVORITED",
-      line2: this.currentEntry.name,
-    });
-    this.#emit("favorites");
   }
   toggleLock() {
     this.locked = !this.locked;
@@ -187,7 +169,7 @@ export class VisualizerController {
   #announce() {
     this.showTemporaryOverlay({
       line1: this.categoryName().toUpperCase(),
-      line2: this.currentEntry.name + (this.isFavorite() ? " ★" : ""),
+      line2: this.currentEntry.name,
       line3: `Preset: ${this.currentPreset}`,
     });
   }

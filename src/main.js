@@ -548,19 +548,19 @@ function buildPanel() {
   for (const m of controller.modesInCategory()) {
     const b = document.createElement("button");
     b.className = "mode-btn" + (m.id === controller.currentModeId ? " active" : "");
-    b.textContent = m.name + (controller.isFavorite(m.id) ? " ★" : "");
+    b.textContent = m.name;
     b.addEventListener("click", () => controller.setMode(m.id));
     modeGroup.appendChild(b);
   }
   actionGroup.innerHTML = "";
   const actions = [
-    [controller.isFavorite() ? "★" : "☆", "favorite (F)", () => controller.toggleFavorite()],
-    ["P", `preset: ${controller.currentPreset} (P)`, () => controller.cyclePreset()],
-    [controller.locked ? "🔒" : "🔓", "lock (L)", () => controller.toggleLock()],
+    ["♪", controller.npOverlay ? "song info: on (N)" : "song info: off (N)", () => controller.toggleNpOverlay(), controller.npOverlay],
+    ["P", `preset: ${controller.currentPreset} (P)`, () => controller.cyclePreset(), false],
+    [controller.locked ? "🔒" : "🔓", "lock (L)", () => controller.toggleLock(), controller.locked],
   ];
-  for (const [label, title, fn] of actions) {
+  for (const [label, title, fn, active] of actions) {
     const b = document.createElement("button");
-    b.className = "mode-btn" + (label === "🔒" ? " active" : "");
+    b.className = "mode-btn" + (active ? " active" : "");
     b.textContent = label;
     b.title = title;
     b.addEventListener("click", fn);
@@ -581,7 +581,7 @@ controller.onChange((what) => {
     if (prevModeId === "pixelquest" && controller.currentModeId !== "pixelquest") pixelquest.opening.onExitMode();
     prevModeId = controller.currentModeId;
   }
-  if (what === "mode" || what === "favorites" || what === "lock" || what === "preset") buildPanel();
+  if (what === "mode" || what === "npoverlay" || what === "lock" || what === "preset") buildPanel();
 });
 
 // mirror the chosen mode to the server so it survives the browser dropping

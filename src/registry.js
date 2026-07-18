@@ -17,13 +17,11 @@
 // chosen per mode so song info lands where the composition can afford it.
 //
 // Two content categories: METERS (analytical readouts that show you the
-// signal) and SCENES (immersive artistic visuals). `favorites` is the special
-// starred-modes view.
+// signal) and SCENES (immersive artistic visuals).
 
 export const CATEGORIES = [
   { id: "meters", name: "Meters" },
   { id: "scenes", name: "Scenes" },
-  { id: "favorites", name: "Favorites" },
 ];
 
 export const REGISTRY = [
@@ -215,7 +213,7 @@ export const REGISTRY = [
     id: "ferrofluid",
     name: "Ferrofluid",
     category: "scenes",
-    nowPlaying: { style: "chip", pos: "ml" },
+    nowPlaying: { style: "sides" },
     stable: true,
     presets: ["Chrome Cyan", "Magma", "Violet", "Mercury"],
     idle: true, // the mass breathes softly before any audio

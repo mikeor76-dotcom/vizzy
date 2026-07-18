@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time: enable the EC11 rotary encoder as Vizzy's physical control.
-#   rotate -> previous / next visualization      press -> favorite it
+#   rotate -> previous / next visualization      press -> toggle song info
 #
 # Run on the Pi from a checkout of this repo:  sudo bash deploy/encoder-setup.sh
 # Re-run any time to change pins (see the env below) — it's idempotent.
@@ -105,7 +105,7 @@ echo "==> vizzy-encoder.service enabled + started"
 sleep 3
 if systemctl is-active --quiet vizzy-encoder.service; then
   echo
-  echo "    Ready. Turn the knob to change visualization; press to favorite."
+  echo "    Ready. Turn the knob to change visualization; press to toggle song info."
   echo "    Watch it:   journalctl -u vizzy-encoder -f"
   echo "    Change pins: sudo nano $ENV_FILE  &&  sudo systemctl restart vizzy-encoder"
 else

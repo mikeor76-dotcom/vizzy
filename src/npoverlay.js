@@ -108,7 +108,8 @@ const CSS = `
   font-size: 2.3vh; color: rgba(139,148,167,0.55); letter-spacing: 0.12em;
 }
 
-/* ---- sides: radial's empty margins — art left, identity right. The card
+/* ---- sides: the empty side margins of a centered visualization — art left,
+   identity + current lyric right (radial, ferrofluid). The card
    spans the screen as a flex row (no transform: a transformed ancestor would
    become the containing block and break fixed/absolute children). */
 #np-overlay.np-style-sides .np-card {
@@ -117,9 +118,11 @@ const CSS = `
   background: transparent; border: none; backdrop-filter: none;
   text-shadow: 0 1px 8px rgba(0,0,0,0.9);
 }
-#np-overlay.np-style-sides .np-art { width: 26vh; height: 26vh; box-shadow: 0 2px 14px rgba(0,0,0,0.6); }
-#np-overlay.np-style-sides .np-text { text-align: right; max-width: 26vw; }
-#np-overlay.np-style-sides .np-line { display: none; }
+#np-overlay.np-style-sides .np-art { width: 34vh; height: 34vh; box-shadow: 0 2px 14px rgba(0,0,0,0.6); }
+#np-overlay.np-style-sides .np-text { text-align: right; max-width: 32vw; }
+#np-overlay.np-style-sides .np-title { font-size: 5.2vh; }
+#np-overlay.np-style-sides .np-artist { font-size: 3.8vh; }
+#np-overlay.np-style-sides .np-line { font-size: 3.4vh; }
 `;
 
 export function installNpOverlay(controller) {

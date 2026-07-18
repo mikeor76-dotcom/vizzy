@@ -6,7 +6,6 @@
 //             across categories — one knob, every mode)
 //   ↑ / ↓     previous / next category
 //   P         cycle preset
-//   F         toggle favorite
 //   L         lock/unlock the current visualization
 //   H         show / hide the debug control panel
 //   N         toggle the now-playing (song info) overlay
@@ -53,10 +52,6 @@ export function initKeyboardControls(controller, { toggleMic, pixelquest }) {
       case "p":
       case "P":
         controller.cyclePreset();
-        break;
-      case "f":
-      case "F":
-        controller.toggleFavorite();
         break;
       case "l":
       case "L":

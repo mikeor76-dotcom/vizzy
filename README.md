@@ -115,7 +115,8 @@ Pi 5 notes:
 ## Physical controls (EC11 rotary encoder)
 
 One knob runs the whole device: **rotate** = previous / next visualization
-(the full lineup, wrapping across categories), **press** = favorite it.
+(the full lineup, wrapping across categories), **press** = toggle the
+now-playing song-info overlay on/off.
 
 Wiring — bare EC11, common pin to GND so the Pi's internal pull-ups do the
 work (no `+` wire, no resistors):

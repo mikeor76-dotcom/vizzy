@@ -2,8 +2,7 @@
 """Vizzy EC11 rotary-encoder daemon — the physical controls for the appliance.
 
   rotate       ->  previous / next visualization (the whole lineup, wrapping)
-  press        ->  favorite the current visualization (star it)
-  hold ~0.6s   ->  toggle the now-playing song-info overlay on/off
+  press        ->  toggle the now-playing song-info overlay on/off
 
 It reads the encoder with gpiozero and POSTs an action to the Vizzy app server,
 which relays it to the browser over SSE (see scripts/serve.mjs /api/input and
@@ -125,24 +124,10 @@ def main():
     encoder.when_rotated_clockwise = lambda: rotated(1)
     encoder.when_rotated_counter_clockwise = lambda: rotated(-1)
 
-    # Press vs hold share one switch, so favorite fires on RELEASE (not press):
-    # a hold marks itself and swallows the release, otherwise a long-press
-    # would both toggle the overlay AND star the mode.
-    held = {"v": False}
-
-    def on_held():
-        held["v"] = True
-        send("np:toggle")
-
-    def on_released():
-        if held["v"]:
-            held["v"] = False
-            return
-        send("favorite:toggle")
-
-    button.hold_time = 0.6
-    button.when_held = on_held
-    button.when_released = on_released
+    # A press toggles the now-playing song-info overlay: fire on press-down so
+    # it feels immediate. The switch has no other gesture, so no hold/release
+    # bookkeeping is needed.
+    button.when_pressed = lambda: send("np:toggle")
 
     try:
         from gpiozero import Device
@@ -150,7 +135,7 @@ def main():
         print(f"[vizzy-encoder] pin factory: {type(Device.pin_factory).__name__}", flush=True)
     except Exception:  # noqa: BLE001
         pass
-    print("[vizzy-encoder] ready — rotate to change, press to favorite, hold for song info", flush=True)
+    print("[vizzy-encoder] ready — rotate to change, press to toggle song info", flush=True)
     from signal import pause
 
     pause()

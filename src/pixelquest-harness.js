@@ -117,7 +117,11 @@ export function installPqLab(hooks) {
         encounterMajor: !!adv.encounters?.active?.def?.major,
         chapter: pq.events?.chapter ? pq.events.chapter.def.id : null,
         cameoIds: pq.events?.active ? pq.events.active.map((s) => s.def.id) : [],
-        charge: adv.charge || 0,
+        // orb charge lives on the OrbCompanion, and a fragment absorb spikes
+        // its absorbFlash — a clean discrete signal (charge also drifts down
+        // via decay, so a raw charge-delta would miss slow-decay frames)
+        absorb: adv.orb?.absorbFlash || 0,
+        charge: adv.orb?.charge || 0,
       };
       const prev = this._prev;
       if (prev) {
@@ -129,8 +133,8 @@ export function installPqLab(hooks) {
           this._emit(t, "encounter", cur.encounter + (cur.encounterMajor ? " (major)" : ""), cur.encounterMajor);
         if (cur.chapter && cur.chapter !== prev.chapter) this._emit(t, "chapter", cur.chapter);
         for (const id of cur.cameoIds) if (!prev.cameoIds.includes(id)) this._emit(t, "cameo", id);
-        // a fragment absorb bumps charge up against its steady decay
-        if (cur.charge - prev.charge > 0.02) this._emit(t, "fragment", `charge→${cur.charge.toFixed(2)}`);
+        // a fragment absorb spikes absorbFlash (rising edge = one collect)
+        if (cur.absorb > 0.5 && prev.absorb <= 0.5) this._emit(t, "fragment", `charge ${cur.charge.toFixed(2)}`);
       }
       this._prev = cur;
     },
@@ -141,6 +145,10 @@ export function installPqLab(hooks) {
       const majorGap = isMajor ? t - this._lastMajorT : null;
       if (isMajor) this._lastMajorT = t;
       this.log.push({ t: +t.toFixed(2), kind, detail, major: isMajor, gap: +gap.toFixed(2) });
+      // fragments are ambient texture, not pacing beats — they'd flood the live
+      // console (hundreds a song) and bury the meaningful moments. Keep them in
+      // the log (report() shows their per-bucket density) but don't print each.
+      if (kind === "fragment") return;
       const tag = isMajor ? "%c●" : "%c·";
       const color = isMajor ? "color:#ffd15c;font-weight:bold" : "color:#8bd";
       console.log(`${tag} %c${fmt(t)}  ${kind.padEnd(11)} ${detail}${majorGap != null ? `   (+${majorGap.toFixed(1)}s)` : ""}`,

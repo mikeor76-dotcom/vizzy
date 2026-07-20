@@ -157,7 +157,7 @@ export const REGISTRY = [
     id: "studio-monitor",
     name: "Studio Monitor",
     category: "meters",
-    nowPlaying: { style: "label", pos: "tl" }, // house rule: info biases LEFT
+    nowPlaying: { style: "off" }, // user: the monitor face stays clean
     stable: true,
     presets: ["Mastering", "Minimal", "Blue Studio", "Amber Studio"],
     idle: true,
@@ -188,7 +188,7 @@ export const REGISTRY = [
     id: "milkdrop",
     name: "MilkDrop",
     category: "scenes",
-    nowPlaying: { style: "lower", transient: true },
+    nowPlaying: { style: "off" }, // user: MilkDrop stays pure
     stable: false, // butterchurn/WebGL2 — needs a perf pass on the Pi
     presets: ["Auto Cycle", "Hard Cuts", "Hold"],
     idle: true, // presets keep flowing before audio arrives
@@ -258,7 +258,7 @@ export const REGISTRY = [
     id: "cymatics",
     name: "Cymatics",
     category: "scenes",
-    nowPlaying: { style: "label", pos: "ml" }, // house rule: info biases LEFT
+    nowPlaying: { style: "off" }, // user: the plate stays a museum piece
     stable: false, // 10k-grain sim — needs a perf pass on the Pi
     presets: ["Gold Sand", "Iron Filings", "Neon Cyan", "Ember"],
     idle: true, // the last figure holds, museum-still, glow breathing

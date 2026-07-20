@@ -64,12 +64,12 @@ export class NowPlayingMode {
     // pulsing listening ring (additive halo, thin core)
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.strokeStyle = `rgba(111, 214, 207, ${0.10 + phase * 0.12})`;
+    ctx.strokeStyle = `rgba(106, 92, 254, ${0.10 + phase * 0.12})`;
     ctx.lineWidth = h * 0.02;
     ctx.beginPath();
     ctx.arc(cx, cy - h * 0.08, r * (1 + phase * 0.25), 0, Math.PI * 2);
     ctx.stroke();
-    ctx.strokeStyle = `rgba(160, 235 , 229, ${0.5 + phase * 0.4})`;
+    ctx.strokeStyle = `rgba(255, 106, 90, ${0.5 + phase * 0.4})`;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(cx, cy - h * 0.08, r * (1 + phase * 0.25), 0, Math.PI * 2);
@@ -111,8 +111,8 @@ export class NowPlayingMode {
       artX + art / 2, artY + art / 2, art * 0.2,
       artX + art / 2, artY + art / 2, art * (0.75 + this._bass * 0.25)
     );
-    glow.addColorStop(0, `rgba(90, 140, 200, ${0.10 + this._bass * 0.12})`);
-    glow.addColorStop(1, "rgba(90, 140, 200, 0)");
+    glow.addColorStop(0, `rgba(106, 92, 254, ${0.10 + this._bass * 0.12})`);
+    glow.addColorStop(1, "rgba(106, 92, 254, 0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w * 0.5, h);
     ctx.restore();
@@ -126,11 +126,11 @@ export class NowPlayingMode {
     let y = h * 0.24;
 
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "rgba(240, 243, 250, 0.97)";
+    ctx.fillStyle = "rgba(246, 244, 241, 0.97)";
     ctx.font = `700 ${Math.round(h * 0.115)}px ${FONT}`;
     ctx.fillText(this._fit(ctx, m.title, textW), textX, y);
     y += h * 0.135;
-    ctx.fillStyle = "rgba(111, 214, 207, 0.95)";
+    ctx.fillStyle = "rgba(246, 244, 241, 0.65)";
     ctx.font = `600 ${Math.round(h * 0.078)}px ${FONT}`;
     ctx.fillText(this._fit(ctx, m.artist, textW), textX, y);
     y += h * 0.105;
@@ -171,7 +171,7 @@ export class NowPlayingMode {
         ctx.arc(cx, cy, size * (0.18 + i * 0.055), 0, Math.PI * 2);
         ctx.stroke();
       }
-      ctx.fillStyle = "rgba(111, 214, 207, 0.5)";
+      ctx.fillStyle = "rgba(106, 92, 254, 0.55)";
       ctx.beginPath();
       ctx.arc(cx, cy, size * 0.13, 0, Math.PI * 2);
       ctx.fill();
@@ -229,7 +229,7 @@ export class NowPlayingMode {
         const isCurrent = i === index;
         const dist = Math.min(3, Math.abs(y - centerY) / lineH);
         const alpha = isCurrent ? 1 : Math.max(0.14, 0.55 - dist * 0.14);
-        ctx.fillStyle = isCurrent ? "rgba(255, 222, 137, 1)" : `rgba(214, 220, 232, ${alpha})`;
+        ctx.fillStyle = isCurrent ? "rgba(255, 106, 90, 1)" : `rgba(214, 220, 232, ${alpha})`;
         ctx.font = `${isCurrent ? 650 : 400} ${Math.round(h * (isCurrent ? 0.075 : 0.06))}px ${FONT}`;
         ctx.textBaseline = "middle";
         ctx.fillText(this._fit(ctx, lines[i].text || "♪", width), x0, y);

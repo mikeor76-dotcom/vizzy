@@ -31,10 +31,9 @@ export const REGISTRY = [
     id: "bars",
     name: "Bars",
     category: "meters",
-    // faceplate: the hi-fi treatment — ARTIST/TITLE/elapsed floating at the
-    // left, OVER the full-bleed bars (user: the visualization takes all the
-    // space possible; the info is a pure overlay on top)
-    nowPlaying: { style: "faceplate" },
+    // faceplate tl: full-bleed bars cap at 75% height, so the top band is the
+    // analyzer's only structurally-quiet air — mid-left sat on the bass wall
+    nowPlaying: { style: "faceplate", pos: "tl" },
     stable: true,
     presets: ["Default"],
     idle: false, // draws only while the mic is live (raw analyser view)
@@ -44,7 +43,7 @@ export const REGISTRY = [
     id: "colorbars",
     name: "Color Bars",
     category: "meters",
-    nowPlaying: { style: "faceplate" },
+    nowPlaying: { style: "faceplate", pos: "tl" },
     stable: true,
     presets: ["Default"],
     idle: false,
@@ -54,7 +53,7 @@ export const REGISTRY = [
     id: "spectrum",
     name: "Spectrum",
     category: "meters",
-    nowPlaying: { style: "faceplate" },
+    nowPlaying: { style: "faceplate", pos: "tl" },
     stable: true,
     presets: ["Default"],
     idle: false,
@@ -110,7 +109,7 @@ export const REGISTRY = [
     id: "flames",
     name: "Flame Spectrum",
     category: "meters",
-    nowPlaying: { style: "banner" },
+    nowPlaying: { style: "chip", pos: "tl" }, // the sky above the fire is free
     stable: false, // heat automaton — needs a perf pass on the Pi
     presets: ["Inferno", "Blue Gas", "Witchfire Green", "White Heat"],
     idle: true, // pilot flames gutter along the hearth before any audio
@@ -219,7 +218,8 @@ export const REGISTRY = [
     id: "ferrofluid",
     name: "Ferrofluid",
     category: "scenes",
-    nowPlaying: { style: "sides" },
+    // the mass is centered; a compact art+text cluster owns the left margin
+    nowPlaying: { style: "chip", pos: "ml" },
     stable: true,
     presets: ["Chrome Cyan", "Magma", "Violet", "Mercury"],
     idle: true, // the mass breathes softly before any audio
@@ -311,7 +311,10 @@ export const REGISTRY = [
     id: "pixelquest",
     name: "Pixel Quest",
     category: "scenes",
-    nowPlaying: { style: "lower", transient: true },
+    // quiet text only, no art tile, floating in the empty night sky, then
+    // gone — a smooth-font media card in the pixel world broke it, and the
+    // bottom edge belongs to the mode's own status label (debugLabel)
+    nowPlaying: { style: "faceplate", pos: "tl", transient: true },
     stable: false,
     presets: ["Default"],
     idle: true,

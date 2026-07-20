@@ -597,7 +597,7 @@ initKeyboardControls(controller, { toggleMic, pixelquest });
 // only while the mic is live AND something on screen consumes it — the Now
 // Playing mode, or an enabled overlay on a mode that places one. QA:
 // __np.status() / __np.mock() / __np.identify() in the console; N toggles.
-installNpOverlay(controller);
+const npOverlayApi = installNpOverlay(controller);
 function updateNpActivity() {
   const entry = controller.currentEntry;
   const wantsOverlay = controller.npOverlay && entry.nowPlaying && entry.nowPlaying.style !== "off";
@@ -700,6 +700,7 @@ document.getElementById("controls-close").addEventListener("click", () => contro
 
 // --- Render loop -------------------------------------------------------------
 
+let npInset = 0; // eased faceplate inset (px) — see the draw loop
 function draw(now = performance.now()) {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -716,7 +717,21 @@ function draw(now = performance.now()) {
   applyAutoSens(autogain.update(analyser, now)); // the automated sensitivity hand
   // pitch/harmony modes read `analyser.hiRes`; benches inject their own
   if (entry.needsChroma) analyser.hiRes = ensureHiRes();
-  entry.render(ctx, analyser, w, h, now);
+  // faceplate inset: analyzers that declare `nowPlaying.inset` CEDE the left
+  // column to the song info instead of being covered by it. Eased, so a song
+  // being recognized slides the view over rather than snapping it.
+  const wantInset = entry.nowPlaying?.inset && npOverlayApi.visible() ? w * 0.27 : 0;
+  npInset += (wantInset - npInset) * 0.06;
+  if (npInset < 0.5 && !wantInset) npInset = 0;
+  const iw = Math.round(npInset);
+  if (iw > 0) {
+    ctx.save();
+    ctx.translate(iw, 0);
+    entry.render(ctx, analyser, w - iw, h, now);
+    ctx.restore();
+  } else {
+    entry.render(ctx, analyser, w, h, now);
+  }
   if (window.pqLab?.running) window.pqLab.tick(now); // pacing harness observer
 }
 

@@ -8,7 +8,9 @@
 //
 // Placement is declared per mode in the registry (`nowPlaying: { style, pos,
 // transient }`) per the integration analysis:
-//   hairline pure typography, no art, top-right sky      (bars/spectrum)
+//   faceplate hi-fi left column: ARTIST / TITLE / elapsed (bars/spectrum/radial)
+//             — analyzers also carry `inset: true`, and main.js eases their
+//             render region rightward so the text column is CEDED, not covered
 //   dock    right-side panel: art + identity + current lyric
 //   chip    small corner card: art + identity            (wave/ferrofluid/…)
 //   label   text only, instrument-styled                 (scope/faceplates)
@@ -56,6 +58,7 @@ const CSS = `
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #np-overlay .np-line:empty { display: none; }
+#np-overlay .np-time { display: none; } /* only faceplate shows elapsed time */
 
 /* ---- chip: corner card, identity only */
 #np-overlay.np-style-chip .np-card { max-width: 34vw; }
@@ -109,36 +112,38 @@ const CSS = `
   font-size: 2.3vh; color: rgba(139,148,167,0.55); letter-spacing: 0.12em;
 }
 
-/* ---- hairline: pure typography in the analyzer's structurally-free sky.
-   bars/colorbars cap bar height at 75% of the panel and spectrum at ~72%
-   below y=8%, and all three run low→high left→right — so the top-right
-   corner is the quietest air the composition has. NOTHING may cover the
-   visualization: no card, no scrim, no backdrop, no artwork. Legibility
-   comes from text-shadow alone, and the one flourish is a right-anchored
-   hairline rule that fades leftward under the artist — the overlay's
-   namesake. */
-#np-overlay.np-style-hairline .np-card {
-  top: 2.4vh; right: 2.8vh; left: auto; bottom: auto;
+/* ---- faceplate: the hi-fi appliance treatment (user's reference art) —
+   a quiet left column of letterspaced caps: ARTIST above TITLE, elapsed
+   time beneath. No card, no scrim, no artwork, no lyric. The analyzers
+   that use it also declare inset:true in the registry: main.js eases
+   their render region rightward, so the text owns a clean left column
+   instead of floating over the bass bars. (NB: this comment lives inside
+   a JS template literal — backticks here would terminate it.) */
+#np-overlay.np-style-faceplate .np-card {
+  left: 3.2vw; top: 50%; transform: translateY(-50%); right: auto; bottom: auto;
   background: transparent; border: none; backdrop-filter: none; padding: 0;
-  max-width: 44vw;
-  text-shadow: 0 1px 10px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.9);
+  max-width: 23vw;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
 }
-#np-overlay.np-style-hairline .np-art { display: none; }
-#np-overlay.np-style-hairline .np-text { text-align: right; }
-#np-overlay.np-style-hairline .np-title {
-  font-size: 5vh; font-weight: 650; letter-spacing: -0.01em;
-  color: rgba(244, 246, 252, 0.97);
+#np-overlay.np-style-faceplate .np-art { display: none; }
+#np-overlay.np-style-faceplate .np-line { display: none; }
+#np-overlay.np-style-faceplate .np-text { display: flex; flex-direction: column; }
+#np-overlay.np-style-faceplate .np-artist {
+  order: -1; /* the reference reads ARTIST first, then title */
+  font-size: 3.6vh; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.2em; color: rgba(236, 241, 248, 0.96);
 }
-#np-overlay.np-style-hairline .np-artist {
-  font-size: 2.7vh; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.22em; color: rgba(111, 214, 207, 0.92);
-  padding-bottom: 1vh; margin-bottom: 0.3vh;
-  border-bottom: 1px solid transparent;
-  border-image: linear-gradient(to left, rgba(111,214,207,0.75), rgba(111,214,207,0)) 1;
+#np-overlay.np-style-faceplate .np-title {
+  font-size: 3.6vh; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.18em; color: rgba(196, 204, 216, 0.88);
+  margin-top: 1.2vh; white-space: normal; line-height: 1.35; max-height: 10vh;
 }
-#np-overlay.np-style-hairline .np-line {
-  font-size: 3.2vh; font-style: italic; color: rgba(255, 222, 137, 0.92);
+#np-overlay.np-style-faceplate .np-time {
+  display: block; font-size: 3.2vh; font-weight: 500;
+  letter-spacing: 0.12em; font-variant-numeric: tabular-nums;
+  color: rgba(148, 157, 172, 0.85); margin-top: 2.2vh;
 }
+#np-overlay.np-style-faceplate .np-time:empty { display: none; }
 
 /* ---- sides: the empty side margins of a centered visualization — art left,
    identity + current lyric right (radial, ferrofluid). The card
@@ -172,6 +177,7 @@ export function installNpOverlay(controller) {
         <div class="np-title"></div>
         <div class="np-artist"></div>
         <div class="np-line"></div>
+        <div class="np-time"></div>
       </div>
     </div>`;
   document.body.appendChild(root);
@@ -180,6 +186,7 @@ export function installNpOverlay(controller) {
   const titleEl = root.querySelector(".np-title");
   const artistEl = root.querySelector(".np-artist");
   const lineEl = root.querySelector(".np-line");
+  const timeEl = root.querySelector(".np-time");
 
   let transientUntil = 0;
   let lastTrackKey = null;
@@ -209,6 +216,16 @@ export function installNpOverlay(controller) {
       synced && index != null && index >= 0 ? synced[index].text || "♪" : "";
   }
 
+  // elapsed track time (matchOffsetSec + wall clock since the clip) — the
+  // faceplate's third line; collapses when the match carried no offset
+  function refreshTime() {
+    const p = nowplaying.positionSec?.();
+    timeEl.textContent =
+      typeof p === "number" && isFinite(p) && p >= 0
+        ? `${(p / 60) | 0}:${String(Math.floor(p % 60)).padStart(2, "0")}`
+        : "";
+  }
+
   function update() {
     const cfg = hint();
     const matched = nowplaying.status === "matched" && nowplaying.match;
@@ -219,6 +236,7 @@ export function installNpOverlay(controller) {
     if (visible) {
       refreshContent();
       refreshLyricLine();
+      refreshTime();
     }
   }
 
@@ -250,11 +268,15 @@ export function installNpOverlay(controller) {
     }
   });
 
-  // the current-line ticker only does work while a synced line is on screen
+  // tickers only do work while the overlay is on screen
   setInterval(() => {
-    if (root.classList.contains("np-visible") && nowplaying.lyrics?.synced) refreshLyricLine();
+    if (!root.classList.contains("np-visible")) return;
+    if (nowplaying.lyrics?.synced) refreshLyricLine();
+    refreshTime();
   }, 300);
 
   update();
-  return { update };
+  // `visible` lets main.js drive the faceplate render inset off the overlay's
+  // real state (match present + toggle on), not a guess
+  return { update, visible: () => root.classList.contains("np-visible") };
 }

@@ -13,8 +13,10 @@
 // clamp. `auto: null` = self-governing/fixed — AutoGain leaves it alone.
 //
 // `nowPlaying` is the now-playing overlay placement (src/npoverlay.js):
-// style dock/chip/label/banner/lower/sides/off + optional pos/transient —
-// chosen per mode so song info lands where the composition can afford it.
+// style faceplate/dock/chip/label/banner/lower/sides/off + optional
+// pos/transient — chosen per mode so song info lands where the composition
+// can afford it. `inset: true` (faceplate analyzers) makes main.js ease the
+// mode's render region rightward so the text column is ceded, not covered.
 //
 // Two content categories: METERS (analytical readouts that show you the
 // signal) and SCENES (immersive artistic visuals).
@@ -30,9 +32,9 @@ export const REGISTRY = [
     id: "bars",
     name: "Bars",
     category: "meters",
-    // hairline: bars cap at 75% height, so the top band is structurally free —
-    // song info floats there as pure typography, covering nothing
-    nowPlaying: { style: "hairline" },
+    // faceplate: the hi-fi treatment — ARTIST/TITLE/elapsed in a quiet left
+    // column; `inset` makes main.js ease the bars rightward to cede it
+    nowPlaying: { style: "faceplate", inset: true },
     stable: true,
     presets: ["Default"],
     idle: false, // draws only while the mic is live (raw analyser view)
@@ -42,7 +44,7 @@ export const REGISTRY = [
     id: "colorbars",
     name: "Color Bars",
     category: "meters",
-    nowPlaying: { style: "hairline" },
+    nowPlaying: { style: "faceplate", inset: true },
     stable: true,
     presets: ["Default"],
     idle: false,
@@ -52,7 +54,7 @@ export const REGISTRY = [
     id: "spectrum",
     name: "Spectrum",
     category: "meters",
-    nowPlaying: { style: "hairline" },
+    nowPlaying: { style: "faceplate", inset: true },
     stable: true,
     presets: ["Default"],
     idle: false,
@@ -74,7 +76,9 @@ export const REGISTRY = [
     id: "radial",
     name: "Radial",
     category: "meters",
-    nowPlaying: { style: "sides" },
+    // faceplate like the other analyzers (the user's reference shows the ring
+    // with the same left column); the ring is centered, so no inset needed
+    nowPlaying: { style: "faceplate" },
     stable: true,
     presets: ["Default"],
     idle: false,

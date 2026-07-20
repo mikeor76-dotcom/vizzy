@@ -8,15 +8,18 @@
 //
 // Placement is declared per mode in the registry (`nowPlaying: { style, pos,
 // transient }`) per the integration analysis:
+// HOUSE RULE (user directive): song info biases LEFT of the display unless
+// there's an articulable reason — reading order, and the hi-fi reference art.
+// Known good exceptions: the Now Playing MODE's own balanced composition.
 //   faceplate hi-fi left column: ARTIST / TITLE / elapsed (bars/spectrum/radial)
 //             — analyzers also carry `inset: true`, and main.js eases their
 //             render region rightward so the text column is CEDED, not covered
-//   dock    right-side panel: art + identity + current lyric
-//   chip    small corner card: art + identity            (wave/ferrofluid/…)
+//   dock    left-side panel: art + identity + current lyric (unused)
+//   chip    small corner card: art + identity            (wave/skyline/…)
 //   label   text only, instrument-styled                 (scope/faceplates)
-//   banner  top strip in unused dark sky                 (flames)
+//   banner  top-left strip in unused dark sky            (flames)
 //   lower   transient lower-third, movie-credit style    (cinematic scenes)
-//   sides   art left margin / text right margin          (radial)
+//   sides   text left margin / art right margin          (ferrofluid)
 //   off     never                                        (dense instruments)
 // `transient: true` shows for a few seconds on song change then fades.
 // The Now Playing MODE never shows the overlay — it IS the information.
@@ -78,9 +81,10 @@ const CSS = `
 }
 #np-overlay.np-style-lower .np-art { width: 14vh; height: 14vh; box-shadow: 0 2px 14px rgba(0,0,0,0.6); }
 
-/* ---- dock: right-side panel, full height */
+/* ---- dock: left-side panel, full height (currently unused; kept for future
+   modes — flipped from right to left per the house info-bias rule) */
 #np-overlay.np-style-dock .np-card {
-  top: 0; right: 0; bottom: 0; border-radius: 0; border-width: 0 0 0 1px;
+  top: 0; left: 0; bottom: 0; border-radius: 0; border-width: 0 1px 0 0;
   flex-direction: column; justify-content: center; text-align: center;
   width: 24vw; max-width: 24vw; padding: 2vh;
   background: rgba(7, 8, 13, 0.82);
@@ -89,9 +93,9 @@ const CSS = `
 #np-overlay.np-style-dock .np-title { font-size: 4vh; white-space: normal; max-height: 10.4vh; }
 #np-overlay.np-style-dock .np-artist { font-size: 3vh; }
 
-/* ---- banner: top strip in the dark sky */
+/* ---- banner: top strip in the dark sky — left-anchored (house rule) */
 #np-overlay.np-style-banner .np-card {
-  top: 2.4vh; left: 50%; transform: translateX(-50%);
+  top: 2.4vh; left: 3vh;
   max-width: 72vw; background: rgba(7,8,13,0.55);
 }
 #np-overlay.np-style-banner .np-art { width: 9vh; height: 9vh; }
@@ -145,10 +149,12 @@ const CSS = `
 }
 #np-overlay.np-style-faceplate .np-time:empty { display: none; }
 
-/* ---- sides: the empty side margins of a centered visualization — art left,
-   identity + current lyric right (radial, ferrofluid). The card
-   spans the screen as a flex row (no transform: a transformed ancestor would
-   become the containing block and break fixed/absolute children). */
+/* ---- sides: the empty side margins of a centered visualization — TEXT in
+   the left margin, art in the right (ferrofluid). House rule: song info
+   biases LEFT of the display; the art is decoration and can hold the right.
+   The card spans the screen as a flex row (no transform: a transformed
+   ancestor would become the containing block and break fixed/absolute
+   children). */
 #np-overlay.np-style-sides .np-card {
   inset: 0; max-width: none; padding: 0 5vh;
   justify-content: space-between;
@@ -156,7 +162,7 @@ const CSS = `
   text-shadow: 0 1px 8px rgba(0,0,0,0.9);
 }
 #np-overlay.np-style-sides .np-art { width: 34vh; height: 34vh; box-shadow: 0 2px 14px rgba(0,0,0,0.6); }
-#np-overlay.np-style-sides .np-text { text-align: right; max-width: 32vw; }
+#np-overlay.np-style-sides .np-text { order: -1; text-align: left; max-width: 32vw; }
 #np-overlay.np-style-sides .np-title { font-size: 5.2vh; }
 #np-overlay.np-style-sides .np-artist { font-size: 3.8vh; }
 #np-overlay.np-style-sides .np-line { font-size: 3.4vh; }

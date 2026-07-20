@@ -33,6 +33,9 @@ Canvas 2D + Vite, run with bun** (no Node on the dev Mac, no TypeScript in
   sliding window, no live-max renormalization.
 - Sanity-check visuals at **1920×480** — fine detail that reads on a desktop
   disappears on the 8.8" panel; nothing may clip at the bezel.
+- **Song info biases LEFT of the display** (overlay styles + registry
+  `nowPlaying` hints) unless there's an articulable reason — e.g. the mode's
+  own composition already owns the left. Center only when symmetry demands.
 - Benches assert **ground truth** (heat fields, lit fractions, note events),
   not pixels, and must include a compressed-music legibility test.
 

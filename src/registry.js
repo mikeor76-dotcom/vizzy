@@ -88,7 +88,7 @@ export const REGISTRY = [
     id: "blue-power-meters",
     name: "Blue Meters",
     category: "meters",
-    nowPlaying: { style: "label", pos: "tr" },
+    nowPlaying: { style: "label", pos: "tl" }, // house rule: info biases LEFT
     stable: true,
     presets: ["Classic Blue", "Dark Glass", "Minimal", "Night Mode"],
     idle: true,
@@ -158,7 +158,7 @@ export const REGISTRY = [
     id: "studio-monitor",
     name: "Studio Monitor",
     category: "meters",
-    nowPlaying: { style: "label", pos: "tr" },
+    nowPlaying: { style: "label", pos: "tl" }, // house rule: info biases LEFT
     stable: true,
     presets: ["Mastering", "Minimal", "Blue Studio", "Amber Studio"],
     idle: true,
@@ -231,7 +231,9 @@ export const REGISTRY = [
     id: "skyline",
     name: "City Skyline",
     category: "scenes",
-    nowPlaying: { style: "chip", pos: "tr" },
+    // tl, doubly: the house left-bias rule, AND the moon lives at 0.82w/0.16h —
+    // the old tr chip sat right on it
+    nowPlaying: { style: "chip", pos: "tl" },
     stable: false, // batched-rect city — needs a perf pass on the Pi
     presets: ["Midnight Amber", "Cyberpunk Neon", "Blackout Storm", "Dawn"],
     idle: true, // the sleeping city: night owls + stars before any audio
@@ -256,7 +258,7 @@ export const REGISTRY = [
     id: "cymatics",
     name: "Cymatics",
     category: "scenes",
-    nowPlaying: { style: "label", pos: "mr" },
+    nowPlaying: { style: "label", pos: "ml" }, // house rule: info biases LEFT
     stable: false, // 10k-grain sim — needs a perf pass on the Pi
     presets: ["Gold Sand", "Iron Filings", "Neon Cyan", "Ember"],
     idle: true, // the last figure holds, museum-still, glow breathing

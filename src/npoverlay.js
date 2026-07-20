@@ -8,7 +8,8 @@
 //
 // Placement is declared per mode in the registry (`nowPlaying: { style, pos,
 // transient }`) per the integration analysis:
-//   dock    right-side panel: art + identity + current lyric (bars/spectrum)
+//   hairline pure typography, no art, top-right sky      (bars/spectrum)
+//   dock    right-side panel: art + identity + current lyric
 //   chip    small corner card: art + identity            (wave/ferrofluid/…)
 //   label   text only, instrument-styled                 (scope/faceplates)
 //   banner  top strip in unused dark sky                 (flames)
@@ -106,6 +107,37 @@ const CSS = `
 #np-overlay.np-style-label .np-artist {
   font-family: ui-monospace, Menlo, monospace; font-weight: 400;
   font-size: 2.3vh; color: rgba(139,148,167,0.55); letter-spacing: 0.12em;
+}
+
+/* ---- hairline: pure typography in the analyzer's structurally-free sky.
+   bars/colorbars cap bar height at 75% of the panel and spectrum at ~72%
+   below y=8%, and all three run low→high left→right — so the top-right
+   corner is the quietest air the composition has. NOTHING may cover the
+   visualization: no card, no scrim, no backdrop, no artwork. Legibility
+   comes from text-shadow alone, and the one flourish is a right-anchored
+   hairline rule that fades leftward under the artist — the overlay's
+   namesake. */
+#np-overlay.np-style-hairline .np-card {
+  top: 2.4vh; right: 2.8vh; left: auto; bottom: auto;
+  background: transparent; border: none; backdrop-filter: none; padding: 0;
+  max-width: 44vw;
+  text-shadow: 0 1px 10px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.9);
+}
+#np-overlay.np-style-hairline .np-art { display: none; }
+#np-overlay.np-style-hairline .np-text { text-align: right; }
+#np-overlay.np-style-hairline .np-title {
+  font-size: 5vh; font-weight: 650; letter-spacing: -0.01em;
+  color: rgba(244, 246, 252, 0.97);
+}
+#np-overlay.np-style-hairline .np-artist {
+  font-size: 2.7vh; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.22em; color: rgba(111, 214, 207, 0.92);
+  padding-bottom: 1vh; margin-bottom: 0.3vh;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(to left, rgba(111,214,207,0.75), rgba(111,214,207,0)) 1;
+}
+#np-overlay.np-style-hairline .np-line {
+  font-size: 3.2vh; font-style: italic; color: rgba(255, 222, 137, 0.92);
 }
 
 /* ---- sides: the empty side margins of a centered visualization — art left,

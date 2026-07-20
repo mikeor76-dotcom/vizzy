@@ -30,7 +30,9 @@ export const REGISTRY = [
     id: "bars",
     name: "Bars",
     category: "meters",
-    nowPlaying: { style: "dock" },
+    // hairline: bars cap at 75% height, so the top band is structurally free —
+    // song info floats there as pure typography, covering nothing
+    nowPlaying: { style: "hairline" },
     stable: true,
     presets: ["Default"],
     idle: false, // draws only while the mic is live (raw analyser view)
@@ -40,7 +42,7 @@ export const REGISTRY = [
     id: "colorbars",
     name: "Color Bars",
     category: "meters",
-    nowPlaying: { style: "dock" },
+    nowPlaying: { style: "hairline" },
     stable: true,
     presets: ["Default"],
     idle: false,
@@ -50,7 +52,7 @@ export const REGISTRY = [
     id: "spectrum",
     name: "Spectrum",
     category: "meters",
-    nowPlaying: { style: "dock" },
+    nowPlaying: { style: "hairline" },
     stable: true,
     presets: ["Default"],
     idle: false,

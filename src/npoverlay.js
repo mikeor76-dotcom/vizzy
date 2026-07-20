@@ -12,8 +12,8 @@
 // there's an articulable reason — reading order, and the hi-fi reference art.
 // Known good exceptions: the Now Playing MODE's own balanced composition.
 //   faceplate hi-fi left column: ARTIST / TITLE / elapsed (bars/spectrum/radial)
-//             — analyzers also carry `inset: true`, and main.js eases their
-//             render region rightward so the text column is CEDED, not covered
+//             — floats OVER the full-bleed visualization (user: the viz takes
+//             all the space possible; the info is a pure overlay on top)
 //   dock    left-side panel: art + identity + current lyric (unused)
 //   chip    small corner card: art + identity            (wave/skyline/…)
 //   label   text only, instrument-styled                 (scope/faceplates)
@@ -118,16 +118,18 @@ const CSS = `
 
 /* ---- faceplate: the hi-fi appliance treatment (user's reference art) —
    a quiet left column of letterspaced caps: ARTIST above TITLE, elapsed
-   time beneath. No card, no scrim, no artwork, no lyric. The analyzers
-   that use it also declare inset:true in the registry: main.js eases
-   their render region rightward, so the text owns a clean left column
-   instead of floating over the bass bars. (NB: this comment lives inside
-   a JS template literal — backticks here would terminate it.) */
+   time beneath. No card, no scrim, no artwork, no lyric. It floats OVER
+   the full-bleed visualization (the viz takes every pixel; the info is a
+   pure overlay), so the text-shadow is doubled — it is the ONLY thing
+   keeping caps legible over bright animated bass bars. (NB: this comment
+   lives inside a JS template literal — backticks here would terminate
+   it.) */
 #np-overlay.np-style-faceplate .np-card {
   left: 3.2vw; top: 50%; transform: translateY(-50%); right: auto; bottom: auto;
   background: transparent; border: none; backdrop-filter: none; padding: 0;
   max-width: 23vw;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.95), 0 0 4px rgba(0, 0, 0, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.95);
 }
 #np-overlay.np-style-faceplate .np-art { display: none; }
 #np-overlay.np-style-faceplate .np-line { display: none; }

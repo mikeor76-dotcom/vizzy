@@ -15,8 +15,7 @@
 // `nowPlaying` is the now-playing overlay placement (src/npoverlay.js):
 // style faceplate/dock/chip/label/banner/lower/sides/off + optional
 // pos/transient — chosen per mode so song info lands where the composition
-// can afford it. `inset: true` (faceplate analyzers) makes main.js ease the
-// mode's render region rightward so the text column is ceded, not covered.
+// can afford it. HOUSE RULE: info biases LEFT unless there's a good reason.
 //
 // Two content categories: METERS (analytical readouts that show you the
 // signal) and SCENES (immersive artistic visuals).
@@ -32,9 +31,10 @@ export const REGISTRY = [
     id: "bars",
     name: "Bars",
     category: "meters",
-    // faceplate: the hi-fi treatment — ARTIST/TITLE/elapsed in a quiet left
-    // column; `inset` makes main.js ease the bars rightward to cede it
-    nowPlaying: { style: "faceplate", inset: true },
+    // faceplate: the hi-fi treatment — ARTIST/TITLE/elapsed floating at the
+    // left, OVER the full-bleed bars (user: the visualization takes all the
+    // space possible; the info is a pure overlay on top)
+    nowPlaying: { style: "faceplate" },
     stable: true,
     presets: ["Default"],
     idle: false, // draws only while the mic is live (raw analyser view)
@@ -44,7 +44,7 @@ export const REGISTRY = [
     id: "colorbars",
     name: "Color Bars",
     category: "meters",
-    nowPlaying: { style: "faceplate", inset: true },
+    nowPlaying: { style: "faceplate" },
     stable: true,
     presets: ["Default"],
     idle: false,
@@ -54,7 +54,7 @@ export const REGISTRY = [
     id: "spectrum",
     name: "Spectrum",
     category: "meters",
-    nowPlaying: { style: "faceplate", inset: true },
+    nowPlaying: { style: "faceplate" },
     stable: true,
     presets: ["Default"],
     idle: false,
